@@ -1,0 +1,31 @@
+# Chess Coach configuration
+
+engine:
+  # Path to the chess engine binary
+  path: "C:/src/blunder/build/dev/blunder.exe"
+  # Protocol: "xboard" or "uci" (uci coming soon)
+  protocol: "xboard"
+  # Extra arguments passed to the engine
+  args: ["--xboard", "--nnue", "C:/src/blunder/weights/nnue_v002.bin"]
+  # Analysis depth (plies)
+  depth: 18
+  # Analysis time limit in seconds (overrides depth if set)
+  # time_limit: 5.0
+
+llm:
+  # Provider: "ollama" or "openai_compat"
+  provider: "ollama"
+  # Model name (as known by the provider)
+  model: "qwen3:8b"
+  # Base URL for the LLM API
+  base_url: "http://localhost:11434"
+  # Max tokens for the coaching response
+  max_tokens: 512
+  # Temperature (lower = more focused, higher = more creative)
+  temperature: 0.7
+
+coaching:
+  # Number of top moves to analyze and explain
+  top_moves: 3
+  # Coaching style: "beginner", "intermediate", "advanced"
+  level: "intermediate"
