@@ -39,3 +39,86 @@ def build_coaching_prompt(analysis_text: str, level: str = "intermediate") -> st
         level=level,
         analysis=analysis_text,
     )
+
+
+MOVE_EVALUATION_PROMPT = """\
+{system}
+
+Student level: {level}
+
+The student played a move in this position. Evaluate it briefly.
+
+Position before the move (FEN): {fen_before}
+Student's move: {user_move}
+Position after the move (FEN): {fen_after}
+
+Engine evaluation before the move: {eval_before} centipawns
+Engine evaluation after the move: {eval_after} centipawns
+Evaluation drop: {eval_drop} centipawns
+Classification: {classification}
+
+{analysis}
+
+Based on this analysis, give brief feedback on the student's move. \
+If the move was good, say so. If it was an inaccuracy or blunder, \
+explain what was missed and suggest a better alternative. \
+Keep your response concise (under 100 words).\
+"""
+
+ENGINE_MOVE_EXPLANATION_PROMPT = """\
+{system}
+
+Student level: {level}
+
+The engine played a move. Explain the idea behind it.
+
+Position before the move (FEN): {fen_before}
+Engine's move: {engine_move}
+
+{analysis}
+
+Briefly explain why this move is good and what the engine's plan is. \
+Keep your response concise (under 100 words).\
+"""
+
+
+def build_move_evaluation_prompt(
+    fen_before: str,
+    fen_after: str,
+    user_move: str,
+    eval_before: int,
+    eval_after: int,
+    eval_drop: int,
+    classification: str,
+    analysis_text: str,
+    level: str = "intermediate",
+) -> str:
+    """Build the prompt for evaluating a user's move."""
+    return MOVE_EVALUATION_PROMPT.format(
+        system=SYSTEM_PROMPT,
+        level=level,
+        fen_before=fen_before,
+        fen_after=fen_after,
+        user_move=user_move,
+        eval_before=eval_before,
+        eval_after=eval_after,
+        eval_drop=eval_drop,
+        classification=classification,
+        analysis=analysis_text,
+    )
+
+
+def build_engine_move_explanation_prompt(
+    fen_before: str,
+    engine_move: str,
+    analysis_text: str,
+    level: str = "intermediate",
+) -> str:
+    """Build the prompt for explaining an engine move."""
+    return ENGINE_MOVE_EXPLANATION_PROMPT.format(
+        system=SYSTEM_PROMPT,
+        level=level,
+        fen_before=fen_before,
+        engine_move=engine_move,
+        analysis=analysis_text,
+    )

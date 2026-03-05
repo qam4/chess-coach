@@ -12,7 +12,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TextIO
+from typing import IO
 
 
 @dataclass
@@ -57,11 +57,17 @@ class EngineProtocol(ABC):
     def stop(self) -> None: ...
 
     @abstractmethod
-    def analyze(self, fen: str, depth: int = 18,
-                time_limit: float | None = None) -> AnalysisResult: ...
+    def analyze(
+        self, fen: str, depth: int = 18, time_limit: float | None = None
+    ) -> AnalysisResult: ...
 
     @abstractmethod
     def is_ready(self) -> bool: ...
+
+    @abstractmethod
+    def play(self, fen: str, depth: int = 18, time_limit: float | None = None) -> str:
+        """Return the engine's chosen move in coordinate notation."""
+        ...
 
 
 class XboardEngine(EngineProtocol):
@@ -71,8 +77,8 @@ class XboardEngine(EngineProtocol):
         self._path = str(path)
         self._args = args or []
         self._proc: subprocess.Popen[str] | None = None
-        self._stdin: TextIO | None = None
-        self._stdout: TextIO | None = None
+        self._stdin: IO[str] | None = None
+        self._stdout: IO[str] | None = None
 
     def start(self) -> None:
         cmd = [self._path] + self._args
@@ -100,8 +106,7 @@ class XboardEngine(EngineProtocol):
     def is_ready(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
 
-    def analyze(self, fen: str, depth: int = 18,
-                time_limit: float | None = None) -> AnalysisResult:
+    def analyze(self, fen: str, depth: int = 18, time_limit: float | None = None) -> AnalysisResult:
         result = AnalysisResult(fen=fen)
 
         self._send("force")
@@ -119,9 +124,9 @@ class XboardEngine(EngineProtocol):
             parsed = self._parse_thinking_line(line)
             if parsed:
                 # Keep only the deepest line per search
-                result.lines = [l for l in result.lines if l.depth != parsed.depth]
+                result.lines = [ln for ln in result.lines if ln.depth != parsed.depth]
                 result.lines.append(parsed)
-                result.lines.sort(key=lambda l: l.depth, reverse=True)
+                result.lines.sort(key=lambda ln: ln.depth, reverse=True)
 
                 if parsed.depth >= target_depth:
                     break
@@ -134,6 +139,23 @@ class XboardEngine(EngineProtocol):
             result.best_move = result.lines[0].pv[0] if result.lines[0].pv else ""
 
         return result
+
+    def play(self, fen: str, depth: int = 18, time_limit: float | None = None) -> str:
+        """Return the engine's chosen move in coordinate notation."""
+        self._send("force")
+        self._send(f"setboard {fen}")
+        if time_limit:
+            self._send(f"st {int(time_limit)}")
+        else:
+            self._send(f"sd {depth}")
+        self._send("go")
+        # Read until we get "move <move>"
+        deadline = time.monotonic() + (time_limit or depth * 2.0)
+        while time.monotonic() < deadline:
+            line = self._read_line(timeout=1.0)
+            if line and line.startswith("move "):
+                return line.split()[1]
+        raise TimeoutError("Engine did not return a move")
 
     def _parse_thinking_line(self, line: str) -> AnalysisLine | None:
         """Parse xboard thinking output: depth score time nodes pv..."""

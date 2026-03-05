@@ -39,23 +39,21 @@ def format_analysis_for_llm(result: AnalysisResult, level: str = "intermediate")
     material = _material_summary(board)
     parts.append(f"Material: {material}")
 
-    # Check/game state
-    if board.is_check():
-        parts.append("Status: IN CHECK")
+    # Check/game state — check checkmate/stalemate before check,
+    # since checkmate implies check.
+    if board.is_checkmate():
+        parts.append("Status: CHECKMATE")
     elif board.is_stalemate():
         parts.append("Status: STALEMATE")
-    elif board.is_checkmate():
-        parts.append("Status: CHECKMATE")
+    elif board.is_check():
+        parts.append("Status: IN CHECK")
     parts.append("")
 
     # Engine lines
     parts.append("Engine analysis:")
     for i, line in enumerate(result.lines, 1):
         san_pv = _pv_to_san(board, line.pv)
-        parts.append(
-            f"  Line {i}: {line.score_str} (depth {line.depth}) "
-            f"  {san_pv}"
-        )
+        parts.append(f"  Line {i}: {line.score_str} (depth {line.depth})   {san_pv}")
 
     return "\n".join(parts)
 
@@ -80,8 +78,11 @@ def _pv_to_san(board: chess.Board, pv: list[str]) -> str:
 def _material_summary(board: chess.Board) -> str:
     """Summarize material for both sides."""
     piece_values = {
-        chess.PAWN: "P", chess.KNIGHT: "N", chess.BISHOP: "B",
-        chess.ROOK: "R", chess.QUEEN: "Q",
+        chess.PAWN: "P",
+        chess.KNIGHT: "N",
+        chess.BISHOP: "B",
+        chess.ROOK: "R",
+        chess.QUEEN: "Q",
     }
     parts = []
     for color, name in [(chess.WHITE, "White"), (chess.BLACK, "Black")]:

@@ -35,8 +35,13 @@ def cli(ctx: click.Context, config: str) -> None:
 @cli.command()
 @click.argument("fen")
 @click.option("--depth", "-d", type=int, default=None, help="Override analysis depth")
-@click.option("--level", "-l", type=click.Choice(["beginner", "intermediate", "advanced"]),
-              default=None, help="Override coaching level")
+@click.option(
+    "--level",
+    "-l",
+    type=click.Choice(["beginner", "intermediate", "advanced"]),
+    default=None,
+    help="Override coaching level",
+)
 @click.pass_context
 def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) -> None:
     """Explain a chess position given as a FEN string."""
@@ -124,6 +129,49 @@ def check(ctx: click.Context) -> None:
         click.echo("  ✓ Model available")
     else:
         click.echo("  ✗ Not reachable (is Ollama running?)")
+
+
+@cli.command()
+@click.option("--port", "-p", type=int, default=8000, help="Port to listen on")
+@click.pass_context
+def serve(ctx: click.Context, port: int) -> None:
+    """Start the web UI server."""
+    import uvicorn
+
+    from chess_coach.web.server import create_app
+
+    cfg = load_config(ctx.obj["config_path"])
+
+    engine_cfg = cfg["engine"]
+    llm_cfg = cfg["llm"]
+    coaching_cfg = cfg.get("coaching", {})
+
+    engine = XboardEngine(
+        path=engine_cfg["path"],
+        args=engine_cfg.get("args", []),
+    )
+
+    llm = create_provider(
+        provider=llm_cfg["provider"],
+        model=llm_cfg["model"],
+        base_url=llm_cfg.get("base_url", "http://localhost:11434"),
+    )
+
+    coach = Coach(
+        engine=engine,
+        llm=llm,
+        depth=engine_cfg.get("depth", 18),
+        top_moves=coaching_cfg.get("top_moves", 3),
+        level=coaching_cfg.get("level", "intermediate"),
+        max_tokens=llm_cfg.get("max_tokens", 512),
+        temperature=llm_cfg.get("temperature", 0.7),
+    )
+
+    engine.start()
+    app = create_app(coach)
+
+    click.echo(f"Starting Chess Coach on http://localhost:{port}")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 
 def main() -> None:

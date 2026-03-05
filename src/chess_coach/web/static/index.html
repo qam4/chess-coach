@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Coach</title>
+  <link rel="stylesheet" href="/static/vendor/chessboard.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>♟ Chess Coach</h1>
+  </header>
+
+  <main class="app-layout">
+    <!-- Left: Board + eval bar -->
+    <section class="board-section">
+      <div class="board-wrapper">
+        <div class="eval-bar" id="evalBar">
+          <div class="eval-fill" id="evalFill"></div>
+        </div>
+        <div id="board" class="chess-board"></div>
+      </div>
+
+      <!-- Controls below the board -->
+      <div class="controls">
+        <div class="fen-row">
+          <label for="fenInput">FEN</label>
+          <input type="text" id="fenInput"
+                 value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                 placeholder="Paste FEN here…">
+        </div>
+        <div class="options-row">
+          <div class="option-group">
+            <label for="depthSlider">Depth: <span id="depthValue">18</span></label>
+            <input type="range" id="depthSlider" min="1" max="30" value="18">
+          </div>
+          <div class="option-group">
+            <label for="levelSelect">Level</label>
+            <select id="levelSelect">
+              <option value="beginner">Beginner</option>
+              <option value="intermediate" selected>Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+          <button id="analyzeBtn" class="btn-primary">Analyze</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Coaching panel -->
+    <section class="coaching-panel" id="coachingPanel">
+      <h2>Coaching</h2>
+      <div class="coaching-meta" id="coachingMeta"></div>
+      <div class="coaching-text" id="coachingText">
+        <p class="placeholder">Set up a position and click <strong>Analyze</strong> to get coaching.</p>
+      </div>
+      <div class="spinner" id="spinner" hidden>
+        <div class="spinner-circle"></div>
+        <span>Analyzing…</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- SVG layer for arrows (overlaid on board) -->
+  <svg id="arrowSvg" class="arrow-overlay"></svg>
+
+  <script src="/static/vendor/chess.js"></script>
+  <script src="/static/vendor/chessboard.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

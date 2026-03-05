@@ -10,3 +10,6 @@ build/
 .venv/
 venv/
 *.egg
+.tox/
+.hypothesis/
+COMMIT_MSG.txt

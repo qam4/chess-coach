@@ -13,8 +13,7 @@ class LLMProvider(ABC):
         self.base_url = base_url
 
     @abstractmethod
-    def generate(self, prompt: str, max_tokens: int = 512,
-                 temperature: float = 0.7) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
         """Generate a text response from the LLM.
 
         Args:

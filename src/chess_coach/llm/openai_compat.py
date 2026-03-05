@@ -17,13 +17,13 @@ from chess_coach.llm.base import LLMProvider
 class OpenAICompatProvider(LLMProvider):
     """OpenAI-compatible chat completions API."""
 
-    def __init__(self, model: str = "local-model",
-                 base_url: str = "http://localhost:8080", **kwargs: object):
+    def __init__(
+        self, model: str = "local-model", base_url: str = "http://localhost:8080", **kwargs: object
+    ):
         super().__init__(model=model, base_url=base_url, **kwargs)
         self._client = httpx.Client(base_url=base_url, timeout=120.0)
 
-    def generate(self, prompt: str, max_tokens: int = 512,
-                 temperature: float = 0.7) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
         resp = self._client.post(
             "/v1/chat/completions",
             json={
@@ -34,7 +34,7 @@ class OpenAICompatProvider(LLMProvider):
             },
         )
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        return str(resp.json()["choices"][0]["message"]["content"])
 
     def is_available(self) -> bool:
         try:

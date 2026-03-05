@@ -15,13 +15,13 @@ class OllamaProvider(LLMProvider):
     Pull a model: ollama pull qwen3:8b
     """
 
-    def __init__(self, model: str = "qwen3:8b",
-                 base_url: str = "http://localhost:11434", **kwargs: object):
+    def __init__(
+        self, model: str = "qwen3:8b", base_url: str = "http://localhost:11434", **kwargs: object
+    ):
         super().__init__(model=model, base_url=base_url, **kwargs)
         self._client = httpx.Client(base_url=base_url, timeout=120.0)
 
-    def generate(self, prompt: str, max_tokens: int = 512,
-                 temperature: float = 0.7) -> str:
+    def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
         resp = self._client.post(
             "/api/generate",
             json={
@@ -35,7 +35,7 @@ class OllamaProvider(LLMProvider):
             },
         )
         resp.raise_for_status()
-        return resp.json()["response"]
+        return str(resp.json()["response"])
 
     def is_available(self) -> bool:
         try:

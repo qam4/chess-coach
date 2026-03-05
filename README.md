@@ -98,6 +98,48 @@ coaching:
   level: "intermediate"        # beginner, intermediate, advanced
 ```
 
+## Development Setup
+
+### Install dependencies
+
+```bash
+# Option A: editable install with dev extras (recommended)
+pip install -e ".[dev]"
+
+# Option B: traditional requirements file
+pip install -r requirements-dev.txt
+```
+
+### Running tests and checks
+
+The project uses [tox](https://tox.wiki/) to run tests, linting, and type checking in isolated environments.
+
+```bash
+# Run everything (tests + lint + typecheck)
+tox
+
+# Run just tests
+tox -e py311
+
+# Run just linting (ruff check + format check)
+tox -e lint
+
+# Run just type checking (mypy)
+tox -e typecheck
+
+# Auto-fix formatting issues
+tox -e format
+```
+
+Or run tools directly without tox:
+
+```bash
+pytest tests/
+ruff check src/ tests/
+ruff format src/ tests/
+mypy src/chess_coach/
+```
+
 ## Swapping the LLM
 
 The LLM provider is pluggable. To use a different backend:

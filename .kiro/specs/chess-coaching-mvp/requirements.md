@@ -88,33 +88,48 @@ alongside the board instead of copy-pasting FEN strings in a terminal.
 - 7.8 The UI works in any modern browser (Chrome, Firefox, Edge, Safari)
 - 7.9 All processing remains local — the server only binds to localhost
 
-### 8. PGN Game Review (Future)
+### 8. Play vs Engine (Web UI)
+As a chess player, I want to play a game against the engine in the web UI
+so I can practice and get real-time coaching on my moves.
+
+#### Acceptance Criteria
+- 8.1 A "Play" mode toggle switches the UI from analysis mode to play mode
+- 8.2 The user chooses to play as White or Black
+- 8.3 The engine responds to user moves within the configured time/depth limit
+- 8.4 After each engine move, the coach automatically explains why the engine played that move
+- 8.5 After each user move, the coach comments on whether it was good, inaccurate, or a blunder
+- 8.6 The user can undo their last move
+- 8.7 The game can be reset or a new game started at any time
+- 8.8 The move list is displayed alongside the board
+- 8.9 The eval bar updates after every move
+
+### 9. PGN Game Review (Future)
 As a chess player, I want to load a PGN game and get coaching for each
 critical position so I can review my games and learn from mistakes.
 
 #### Acceptance Criteria
-- 8.1 The CLI accepts a PGN file path
-- 8.2 The tool identifies critical positions (large eval swings, blunders)
-- 8.3 Each critical position gets a coaching explanation
-- 8.4 Output is formatted as an annotated game
+- 9.1 The CLI accepts a PGN file path
+- 9.2 The tool identifies critical positions (large eval swings, blunders)
+- 9.3 Each critical position gets a coaching explanation
+- 9.4 Output is formatted as an annotated game
 
-### 9. Interactive Mode (Future)
+### 10. Interactive Mode (Future)
 As a chess player, I want an interactive session where I can ask follow-up
 questions about a position.
 
 #### Acceptance Criteria
-- 9.1 The CLI has an interactive mode (REPL)
-- 9.2 The user can set a position, get coaching, then ask follow-up questions
-- 9.3 The LLM maintains conversation context within a session
-- 9.4 The user can navigate forward/backward through a game
+- 10.1 The CLI has an interactive mode (REPL)
+- 10.2 The user can set a position, get coaching, then ask follow-up questions
+- 10.3 The LLM maintains conversation context within a session
+- 10.4 The user can navigate forward/backward through a game
 
-### 10. Open Source LLM Requirement
+### 11. Open Source LLM Requirement
 As the project owner, I want all LLM models used to be open source with
 permissive licenses (Apache 2.0 or equivalent) so there are no royalty
 or legal issues.
 
 #### Acceptance Criteria
-- 10.1 Default model recommendation is Apache 2.0 licensed (Qwen3-8B)
-- 10.2 Documentation lists recommended models with their licenses
-- 10.3 No proprietary API keys are required for the default setup
-- 10.4 All inference runs locally — no data leaves the user's machine
+- 11.1 Default model recommendation is Apache 2.0 licensed (Qwen3-8B)
+- 11.2 Documentation lists recommended models with their licenses
+- 11.3 No proprietary API keys are required for the default setup
+- 11.4 All inference runs locally — no data leaves the user's machine
