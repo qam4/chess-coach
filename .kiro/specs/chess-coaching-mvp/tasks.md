@@ -105,10 +105,11 @@
 ## Phase 9 — Polish and Documentation
 
 - [ ] 9. Documentation and final polish
-  - [ ] 9.1 Write `README.md` with installation, quickstart (CLI and web UI), configuration reference, and recommended models
-  - [ ] 9.2 Add docstrings to all public classes and functions
-  - [ ] 9.3 Run full test suite, mypy, ruff format, ruff check — all clean
-  - [ ] 9.4 Verify end-to-end: `chess-coach check`, `chess-coach explain <FEN>`, and `chess-coach serve` with a real engine and Ollama
+  - [ ] 9.1 Set up GitHub Actions CI with pytest, ruff, and mypy (run on push to main and PRs)
+  - [ ] 9.2 Write `README.md` with installation, quickstart (CLI and web UI), configuration reference, and recommended models
+  - [ ] 9.3 Add docstrings to all public classes and functions
+  - [ ] 9.4 Run full test suite, mypy, ruff format, ruff check — all clean
+  - [ ] 9.5 Verify end-to-end: `chess-coach check`, `chess-coach explain <FEN>`, and `chess-coach serve` with a real engine and Ollama
 
 ## Phase 10 — UCI Protocol Migration
 
