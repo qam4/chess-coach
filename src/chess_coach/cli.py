@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -25,11 +26,20 @@ def load_config(path: str | Path) -> dict:  # type: ignore[type-arg]
 
 @click.group()
 @click.option("--config", "-c", default="config.yaml", help="Path to config file")
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Show timing and debug info")
 @click.pass_context
-def cli(ctx: click.Context, config: str) -> None:
+def cli(ctx: click.Context, config: str, verbose: bool) -> None:
     """Chess Coach — engine analysis + LLM explanations."""
     ctx.ensure_object(dict)
     ctx.obj["config_path"] = config
+    if verbose:
+        logging.basicConfig(
+            level=logging.WARNING,
+            format="%(name)s: %(message)s",
+            stream=sys.stderr,
+        )
+        # Enable debug for our modules only
+        logging.getLogger("chess_coach").setLevel(logging.DEBUG)
 
 
 @cli.command()
@@ -127,6 +137,12 @@ def check(ctx: click.Context) -> None:
     )
     if llm.is_available():
         click.echo("  ✓ Model available")
+        click.echo("  Running smoke test (short generation)...")
+        ok, msg = llm.smoke_test()
+        if ok:
+            click.echo(f"  ✓ Generation works: {msg}")
+        else:
+            click.echo(f"  ✗ Generation failed: {msg}")
     else:
         click.echo("  ✗ Not reachable (is Ollama running?)")
 

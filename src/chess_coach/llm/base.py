@@ -30,3 +30,17 @@ class LLMProvider(ABC):
     def is_available(self) -> bool:
         """Check if the provider is reachable and the model is loaded."""
         ...
+
+    def smoke_test(self) -> tuple[bool, str]:
+        """Quick generation test to verify the model can actually respond.
+
+        Returns:
+            (success, message) — message is the response text or error detail.
+        """
+        try:
+            reply = self.generate("Say hi", max_tokens=16, temperature=0.0)
+            if reply.strip():
+                return True, reply.strip()[:80]
+            return False, "Empty response"
+        except Exception as exc:
+            return False, str(exc)[:120]

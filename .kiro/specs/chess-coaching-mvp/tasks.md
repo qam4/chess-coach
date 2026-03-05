@@ -105,7 +105,15 @@
 ## Phase 9 — Polish and Documentation
 
 - [ ] 9. Documentation and final polish
-  - [~] 9.1 Write `README.md` with installation, quickstart (CLI and web UI), configuration reference, and recommended models
-  - [~] 9.2 Add docstrings to all public classes and functions
-  - [~] 9.3 Run full test suite, mypy, ruff format, ruff check — all clean
-  - [~] 9.4 Verify end-to-end: `chess-coach check`, `chess-coach explain <FEN>`, and `chess-coach serve` with a real engine and Ollama
+  - [ ] 9.1 Write `README.md` with installation, quickstart (CLI and web UI), configuration reference, and recommended models
+  - [ ] 9.2 Add docstrings to all public classes and functions
+  - [ ] 9.3 Run full test suite, mypy, ruff format, ruff check — all clean
+  - [ ] 9.4 Verify end-to-end: `chess-coach check`, `chess-coach explain <FEN>`, and `chess-coach serve` with a real engine and Ollama
+
+## Phase 10 — UCI Protocol Migration
+
+- [ ] 13. Migrate from Xboard to UCI protocol
+  - [ ] 13.1 Implement `UciEngine(EngineProtocol)` using Blunder's UCI support
+  - [ ] 13.2 Add MultiPV support to retrieve top N candidate moves per position
+  - [ ] 13.3 Update config to default to `protocol: uci`
+  - [ ] 13.4 Update README and config examples to reflect UCI as the default

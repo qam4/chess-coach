@@ -17,8 +17,9 @@ def analyze_position(
     """Analyze a position and return structured results."""
     result = engine.analyze(fen, depth=depth, time_limit=time_limit)
 
-    # Keep only top N lines by depth (deepest first)
-    result.lines = result.lines[:top_n]
+    # Keep only the deepest (best) line until MultiPV is supported
+    if result.lines:
+        result.lines = [result.lines[0]]
 
     return result
 
@@ -59,19 +60,29 @@ def format_analysis_for_llm(result: AnalysisResult, level: str = "intermediate")
 
 
 def _pv_to_san(board: chess.Board, pv: list[str]) -> str:
-    """Convert a PV in coordinate notation to SAN."""
+    """Convert a PV to SAN notation for display.
+
+    Handles both coordinate notation (e2e4) and SAN notation (Nf3).
+    """
     b = board.copy()
     san_moves: list[str] = []
-    for uci_move in pv[:8]:  # Limit to 8 moves for readability
+    for move_str in pv[:8]:  # Limit to 8 moves for readability
         try:
-            move = chess.Move.from_uci(uci_move)
+            # Try coordinate/UCI notation first
+            move = chess.Move.from_uci(move_str)
             if move in b.legal_moves:
                 san_moves.append(b.san(move))
                 b.push(move)
             else:
                 break
         except (ValueError, chess.InvalidMoveError):
-            break
+            # Try SAN notation
+            try:
+                move = b.parse_san(move_str)
+                san_moves.append(move_str)
+                b.push(move)
+            except (ValueError, chess.InvalidMoveError):
+                break
     return " ".join(san_moves)
 
 

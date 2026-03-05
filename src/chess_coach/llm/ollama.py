@@ -19,7 +19,7 @@ class OllamaProvider(LLMProvider):
         self, model: str = "qwen3:8b", base_url: str = "http://localhost:11434", **kwargs: object
     ):
         super().__init__(model=model, base_url=base_url, **kwargs)
-        self._client = httpx.Client(base_url=base_url, timeout=120.0)
+        self._client = httpx.Client(base_url=base_url, timeout=300.0)
 
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
         resp = self._client.post(
@@ -28,6 +28,7 @@ class OllamaProvider(LLMProvider):
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
+                "think": False,
                 "options": {
                     "num_predict": max_tokens,
                     "temperature": temperature,

@@ -245,7 +245,7 @@ class TestAnalyzePosition:
         assert result.best_move == "e2e4"
 
     def test_trims_to_top_n(self):
-        """analyze_position should keep only top_n lines."""
+        """analyze_position keeps only the deepest line (single PV until MultiPV is supported)."""
         mock_engine = MagicMock(spec=EngineProtocol)
         mock_engine.analyze.return_value = AnalysisResult(
             fen=STARTING_FEN,
@@ -260,9 +260,8 @@ class TestAnalyzePosition:
 
         result = analyze_position(mock_engine, STARTING_FEN, depth=12, top_n=2)
 
-        assert len(result.lines) == 2
+        assert len(result.lines) == 1
         assert result.lines[0].pv == ["e2e4"]
-        assert result.lines[1].pv == ["d2d4"]
 
     def test_fewer_lines_than_top_n(self):
         """If engine returns fewer lines than top_n, return all of them."""

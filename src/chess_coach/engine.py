@@ -6,6 +6,7 @@ sends positions, and collects analysis output.
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import threading
 import time
@@ -13,6 +14,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -113,7 +116,7 @@ class XboardEngine(EngineProtocol):
         self._send(f"setboard {fen}")
         self._send("analyze")
 
-        deadline = time.monotonic() + (time_limit or depth * 2.0)
+        deadline = time.monotonic() + (time_limit or max(60.0, depth * 5.0))
         target_depth = depth
 
         while time.monotonic() < deadline:
@@ -121,8 +124,12 @@ class XboardEngine(EngineProtocol):
             if line is None:
                 continue
 
+            logger.debug("Engine raw: %s", line)
             parsed = self._parse_thinking_line(line)
             if parsed:
+                logger.debug(
+                    "Parsed depth=%d score=%d pv=%s", parsed.depth, parsed.score_cp, parsed.pv[:3]
+                )
                 # Keep only the deepest line per search
                 result.lines = [ln for ln in result.lines if ln.depth != parsed.depth]
                 result.lines.append(parsed)
@@ -137,6 +144,14 @@ class XboardEngine(EngineProtocol):
 
         if result.lines:
             result.best_move = result.lines[0].pv[0] if result.lines[0].pv else ""
+            logger.info(
+                "Analysis complete: depth=%d best_move=%s lines=%d",
+                result.lines[0].depth,
+                result.best_move,
+                len(result.lines),
+            )
+        else:
+            logger.warning("Analysis returned no lines for FEN: %s", fen)
 
         return result
 
@@ -158,8 +173,20 @@ class XboardEngine(EngineProtocol):
         raise TimeoutError("Engine did not return a move")
 
     def _parse_thinking_line(self, line: str) -> AnalysisLine | None:
-        """Parse xboard thinking output: depth score time nodes pv..."""
-        parts = line.strip().split()
+        """Parse xboard thinking output.
+
+        Supports two formats:
+        1. Standard xboard: depth score time_cs nodes pv...
+        2. Blunder verbose: depth=N, search ply=N, searched moves=N, time=Ns, score=N, pv=...
+        """
+        stripped = line.strip()
+
+        # Try Blunder verbose format first
+        if stripped.startswith("depth="):
+            return self._parse_blunder_line(stripped)
+
+        # Standard xboard format: depth score time nodes pv...
+        parts = stripped.split()
         if len(parts) < 5:
             return None
         try:
@@ -177,6 +204,47 @@ class XboardEngine(EngineProtocol):
             )
         except (ValueError, IndexError):
             return None
+
+    def _parse_blunder_line(self, line: str) -> AnalysisLine | None:
+        """Parse Blunder's verbose thinking format.
+
+        Example:
+          depth=6, searched moves=122462, time=0.89s, score=3288,
+          pv=1. ... Nc6 2. Bc4 e5
+        """
+        import re
+
+        depth_m = re.search(r"depth=(\d+)", line)
+        score_m = re.search(r"score=(-?\d+)", line)
+        nodes_m = re.search(r"searched moves=(\d+)", line)
+        time_m = re.search(r"time=([0-9.]+)s", line)
+        pv_m = re.search(r"pv=(.+)$", line)
+
+        if not (depth_m and score_m):
+            return None
+
+        depth = int(depth_m.group(1))
+        score_cp = int(score_m.group(1))
+        nodes = int(nodes_m.group(1)) if nodes_m else 0
+        time_s = float(time_m.group(1)) if time_m else 0.0
+
+        # Parse PV: strip move numbers ("1.", "2.", "1. ...") to get bare SAN moves
+        pv_san: list[str] = []
+        if pv_m:
+            pv_raw = pv_m.group(1).strip()
+            for token in pv_raw.split():
+                # Skip move numbers like "1.", "2." and ellipsis "..."
+                if re.match(r"^\d+\.$", token) or token == "...":
+                    continue
+                pv_san.append(token)
+
+        return AnalysisLine(
+            depth=depth,
+            score_cp=score_cp,
+            nodes=nodes,
+            time_ms=int(time_s * 1000),
+            pv=pv_san,
+        )
 
     def _send(self, cmd: str) -> None:
         if self._stdin:

@@ -90,6 +90,7 @@ class TestCheckCommand:
     ) -> None:
         mock_llm = MagicMock()
         mock_llm.is_available.return_value = True
+        mock_llm.smoke_test.return_value = (True, "Hello!")
         mock_create.return_value = mock_llm
 
         # Create a fake engine binary so the path check passes
@@ -114,6 +115,7 @@ class TestCheckCommand:
     ) -> None:
         mock_llm = MagicMock()
         mock_llm.is_available.return_value = True
+        mock_llm.smoke_test.return_value = (True, "Hello!")
         mock_create.return_value = mock_llm
 
         result = runner.invoke(cli, ["--config", str(config_file), "check"])

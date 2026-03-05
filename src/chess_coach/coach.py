@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass
 
 import chess
@@ -14,6 +16,8 @@ from chess_coach.prompts import (
     build_engine_move_explanation_prompt,
     build_move_evaluation_prompt,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -82,19 +86,28 @@ class Coach:
         use_depth = depth if depth is not None else self.depth
         use_level = level if level is not None else self.level
 
+        t0 = time.perf_counter()
         result = analyze_position(
             self.engine,
             fen,
             depth=use_depth,
             top_n=self.top_moves,
         )
+        t1 = time.perf_counter()
+        logger.info("Engine analysis took %.1fs", t1 - t0)
+
         analysis_text = format_analysis_for_llm(result, level=use_level)
         prompt = build_coaching_prompt(analysis_text, level=use_level)
+
+        t2 = time.perf_counter()
         coaching_text = self.llm.generate(
             prompt,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
         )
+        t3 = time.perf_counter()
+        logger.info("LLM generation took %.1fs", t3 - t2)
+        logger.info("Total explain took %.1fs", t3 - t0)
         score = result.top_line.score_str if result.top_line else "?"
 
         return CoachingResponse(
@@ -135,12 +148,15 @@ class Coach:
     ) -> MoveEvaluation:
         """Classify a user move as good, inaccuracy, or blunder."""
         # 1. Analyze position before user's move
+        t0 = time.perf_counter()
         result_before = analyze_position(
             self.engine,
             fen_before,
             depth=self.depth,
             top_n=1,
         )
+        t1 = time.perf_counter()
+        logger.info("evaluate_move: engine analysis (before) took %.1fs", t1 - t0)
         eval_before = result_before.top_line.score_cp if result_before.top_line else 0
 
         # 2. Push user's move and analyze new position
@@ -149,12 +165,15 @@ class Coach:
         board.push(move)
         fen_after = board.fen()
 
+        t2 = time.perf_counter()
         result_after = analyze_position(
             self.engine,
             fen_after,
             depth=self.depth,
             top_n=1,
         )
+        t3 = time.perf_counter()
+        logger.info("evaluate_move: engine analysis (after) took %.1fs", t3 - t2)
         # eval_after is from the opponent's perspective, so negate it
         raw_eval_after = result_after.top_line.score_cp if result_after.top_line else 0
         eval_after = -raw_eval_after
@@ -181,11 +200,15 @@ class Coach:
             analysis_text=analysis_text,
             level=self.level,
         )
+        t4 = time.perf_counter()
         feedback = self.llm.generate(
             prompt,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
         )
+        t5 = time.perf_counter()
+        logger.info("evaluate_move: LLM feedback took %.1fs", t5 - t4)
+        logger.info("evaluate_move: total %.1fs", t5 - t0)
 
         return MoveEvaluation(
             classification=classification,

@@ -6,7 +6,7 @@ engine:
   # Protocol: "xboard" or "uci" (uci coming soon)
   protocol: "xboard"
   # Extra arguments passed to the engine
-  args: ["--xboard", "--nnue", "C:/src/blunder/weights/nnue_v002.bin"]
+  args: ["--xboard"]
   # Analysis depth (plies)
   depth: 18
   # Analysis time limit in seconds (overrides depth if set)
