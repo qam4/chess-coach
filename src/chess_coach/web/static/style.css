@@ -17,6 +17,9 @@ header {
   padding: 0.75rem 1.5rem;
   background: #16213e;
   border-bottom: 1px solid #0f3460;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 header h1 {
@@ -25,12 +28,41 @@ header h1 {
   color: #e0e0e0;
 }
 
+/* --- Mode toggle --- */
+.mode-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #0f3460;
+}
+
+.mode-btn {
+  padding: 0.4rem 1rem;
+  background: transparent;
+  color: #8899aa;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+}
+
+.mode-btn.active {
+  background: #0f3460;
+  color: #fff;
+}
+
+.mode-btn:hover:not(.active) {
+  background: rgba(15, 52, 96, 0.4);
+}
+
 /* --- Main layout --- */
 .app-layout {
   display: flex;
   gap: 1.5rem;
   padding: 1.5rem;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -136,19 +168,90 @@ header h1 {
   transition: background 0.2s;
 }
 
-.btn-primary:hover {
-  background: #1a5276;
+.btn-primary:hover { background: #1a5276; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+  padding: 0.5rem 1.25rem;
+  background: #333;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
 }
 
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.btn-secondary:hover { background: #444; }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* --- Play mode controls --- */
+.play-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* --- Move list panel --- */
+.move-list-panel {
+  flex: 0 0 180px;
+  background: #16213e;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  max-height: 520px;
+}
+
+.move-list-panel h2 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: #a0c4ff;
+}
+
+.move-list {
+  flex: 1;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.85rem;
+  line-height: 1.8;
+}
+
+.move-pair {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+}
+
+.move-pair.current {
+  background: rgba(160, 196, 255, 0.15);
+}
+
+.move-num {
+  color: #667;
+  min-width: 2em;
+  text-align: right;
+}
+
+.move-san {
+  min-width: 3.5em;
+}
+
+.game-result {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: rgba(160, 196, 255, 0.1);
+  border-radius: 4px;
+  color: #a0c4ff;
 }
 
 /* --- Coaching panel --- */
 .coaching-panel {
   flex: 1;
-  min-width: 280px;
+  min-width: 250px;
   background: #16213e;
   border-radius: 8px;
   padding: 1.25rem;
@@ -177,13 +280,94 @@ header h1 {
   font-size: 0.95rem;
 }
 
-.coaching-text .placeholder {
-  color: #667;
-  font-style: italic;
+.coaching-text .placeholder { color: #667; font-style: italic; }
+.coaching-text .error { color: #e74c3c; }
+
+/* --- User feedback badge --- */
+.user-feedback {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
-.coaching-text .error {
-  color: #e74c3c;
+.user-feedback .badge {
+  font-weight: 700;
+  margin-right: 0.5rem;
+}
+
+.user-feedback .feedback-text {
+  color: #ccc;
+}
+
+.feedback-good {
+  background: rgba(34, 197, 94, 0.15);
+  border-left: 3px solid #22c55e;
+}
+
+.feedback-good .badge { color: #22c55e; }
+
+.feedback-inaccuracy {
+  background: rgba(234, 179, 8, 0.15);
+  border-left: 3px solid #eab308;
+}
+
+.feedback-inaccuracy .badge { color: #eab308; }
+
+.feedback-blunder {
+  background: rgba(239, 68, 68, 0.15);
+  border-left: 3px solid #ef4444;
+}
+
+.feedback-blunder .badge { color: #ef4444; }
+
+/* --- Color picker modal --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  min-width: 280px;
+}
+
+.modal h3 {
+  margin-bottom: 1.25rem;
+  color: #a0c4ff;
+}
+
+.color-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.color-btn {
+  padding: 0.75rem 1.5rem;
+  background: #0f3460;
+  color: #fff;
+  border: 1px solid #1a5276;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.color-btn:hover {
+  background: #1a5276;
+  transform: scale(1.03);
 }
 
 /* --- Spinner --- */
@@ -216,7 +400,7 @@ header h1 {
 }
 
 /* --- Responsive --- */
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .app-layout {
     flex-direction: column;
   }
@@ -233,7 +417,12 @@ header h1 {
     aspect-ratio: auto;
   }
 
-  .coaching-panel {
+  .coaching-panel,
+  .move-list-panel {
     max-height: none;
+  }
+
+  .move-list-panel {
+    flex: 0 0 auto;
   }
 }

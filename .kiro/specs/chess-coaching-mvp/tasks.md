@@ -90,17 +90,17 @@
   - [x] 11.4 Add game-over detection to play/move response (checkmate, stalemate, draw)
   - [x] 11.5 Write tests for play endpoints using `httpx.AsyncClient` (test move, new, undo, invalid input, game over)
 
-- [ ] 12. Implement Play vs Engine frontend
-  - [ ] 12.1 Add mode toggle (Analyze / Play) to `index.html` and wire up in `app.js` to show/hide the appropriate UI panels
-  - [ ] 12.2 Add color picker UI (Play as White / Play as Black) and new game button
-  - [ ] 12.3 Implement play-mode move handler in `app.js`: on piece drop, POST to `/api/play/move`, animate engine response, update board state
-  - [ ] 12.4 Display user move feedback badge (good ✓ / inaccuracy ?! / blunder ??) and coaching text for engine moves
-  - [ ] 12.5 Implement move list panel: numbered moves in standard notation, current move highlighted, auto-scroll
-  - [ ] 12.6 Implement undo button: POST to `/api/play/undo`, update board and move list
-  - [ ] 12.7 Implement new game flow: color selection → POST to `/api/play/new` → reset board; if playing Black, animate engine's first move
-  - [ ] 12.8 Update eval bar to refresh after every move in play mode
-  - [ ] 12.9 Add play-mode styles to `style.css`: move list panel, feedback badges, mode toggle, transitions
-  - [ ] 12.10 Write property tests for undo round-trip and reset-to-start (hypothesis, 100+ iterations)
+- [x] 12. Implement Play vs Engine frontend
+  - [x] 12.1 Add mode toggle (Analyze / Play) to `index.html` and wire up in `app.js` to show/hide the appropriate UI panels
+  - [x] 12.2 Add color picker UI (Play as White / Play as Black) and new game button
+  - [x] 12.3 Implement play-mode move handler in `app.js`: on piece drop, POST to `/api/play/move`, animate engine response, update board state
+  - [x] 12.4 Display user move feedback badge (good ✓ / inaccuracy ?! / blunder ??) and coaching text for engine moves
+  - [x] 12.5 Implement move list panel: numbered moves in standard notation, current move highlighted, auto-scroll
+  - [x] 12.6 Implement undo button: POST to `/api/play/undo`, update board and move list
+  - [x] 12.7 Implement new game flow: color selection → POST to `/api/play/new` → reset board; if playing Black, animate engine's first move
+  - [x] 12.8 Update eval bar to refresh after every move in play mode
+  - [x] 12.9 Add play-mode styles to `style.css`: move list panel, feedback badges, mode toggle, transitions
+  - [x] 12.10 Write property tests for undo round-trip and reset-to-start (hypothesis, 100+ iterations)
 
 ## Phase 9 — Polish and Documentation
 

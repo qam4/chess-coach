@@ -10,6 +10,10 @@
 <body>
   <header>
     <h1>♟ Chess Coach</h1>
+    <div class="mode-toggle" role="tablist" aria-label="Mode">
+      <button class="mode-btn active" data-mode="analyze" role="tab" aria-selected="true">Analyze</button>
+      <button class="mode-btn" data-mode="play" role="tab" aria-selected="false">Play</button>
+    </div>
   </header>
 
   <main class="app-layout">
@@ -22,8 +26,8 @@
         <div id="board" class="chess-board"></div>
       </div>
 
-      <!-- Controls below the board -->
-      <div class="controls">
+      <!-- Analyze mode controls -->
+      <div class="controls analyze-only" id="analyzeControls">
         <div class="fen-row">
           <label for="fenInput">FEN</label>
           <input type="text" id="fenInput"
@@ -46,21 +50,48 @@
           <button id="analyzeBtn" class="btn-primary">Analyze</button>
         </div>
       </div>
+
+      <!-- Play mode controls -->
+      <div class="controls play-only" id="playControls" hidden>
+        <div class="play-buttons">
+          <button id="newGameBtn" class="btn-primary">New Game</button>
+          <button id="undoBtn" class="btn-secondary">Undo</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Middle: Move list (play mode only) -->
+    <section class="move-list-panel play-only" id="moveListPanel" hidden>
+      <h2>Moves</h2>
+      <div class="move-list" id="moveList"></div>
+      <div class="game-result" id="gameResult" hidden></div>
     </section>
 
     <!-- Right: Coaching panel -->
     <section class="coaching-panel" id="coachingPanel">
       <h2>Coaching</h2>
       <div class="coaching-meta" id="coachingMeta"></div>
+      <div class="user-feedback" id="userFeedback" hidden></div>
       <div class="coaching-text" id="coachingText">
         <p class="placeholder">Set up a position and click <strong>Analyze</strong> to get coaching.</p>
       </div>
       <div class="spinner" id="spinner" hidden>
         <div class="spinner-circle"></div>
-        <span>Analyzing…</span>
+        <span>Thinking…</span>
       </div>
     </section>
   </main>
+
+  <!-- Color picker modal -->
+  <div class="modal-overlay" id="colorModal" hidden>
+    <div class="modal">
+      <h3>Choose your color</h3>
+      <div class="color-buttons">
+        <button class="color-btn" data-color="white">♔ Play as White</button>
+        <button class="color-btn" data-color="black">♚ Play as Black</button>
+      </div>
+    </div>
+  </div>
 
   <!-- SVG layer for arrows (overlaid on board) -->
   <svg id="arrowSvg" class="arrow-overlay"></svg>
