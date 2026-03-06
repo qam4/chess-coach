@@ -23,9 +23,18 @@ The `[dev]` extra installs pytest, mypy, ruff, and other dev tools.
 
 ## Install Ollama and pull the default model
 
+### Option A: Native install
+
 ```bash
 # Install Ollama from https://ollama.com
 ollama pull qwen3:8b
+```
+
+### Option B: Docker (recommended for AL2 / older glibc)
+
+```bash
+docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
+docker exec ollama ollama pull qwen3:8b
 ```
 
 Qwen3-8B is Apache 2.0 licensed and runs well on 8GB+ VRAM GPUs.

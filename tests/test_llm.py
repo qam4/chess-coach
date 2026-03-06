@@ -24,6 +24,12 @@ def _json_response(data: dict, status: int = 200) -> httpx.Response:
     return httpx.Response(status, json=data)
 
 
+def _stream_response(chunks: list[dict], status: int = 200) -> httpx.Response:
+    """Build an httpx.Response with streaming NDJSON body (for Ollama)."""
+    body = "\n".join(json.dumps(c) for c in chunks)
+    return httpx.Response(status, text=body)
+
+
 def _make_transport(handler):
     """Wrap a handler function as an httpx.MockTransport."""
     return httpx.MockTransport(handler)
@@ -49,8 +55,13 @@ class TestOllamaProviderGenerate:
             body = json.loads(request.content)
             assert body["model"] == "qwen3:8b"
             assert body["prompt"] == "Explain this position"
-            assert body["stream"] is False
-            return _json_response({"response": "The position is equal."})
+            assert body["stream"] is True
+            return _stream_response(
+                [
+                    {"response": "The position ", "done": False},
+                    {"response": "is equal.", "done": True},
+                ]
+            )
 
         provider = OllamaProvider(model="qwen3:8b")
         _inject_transport(provider, handler)
@@ -65,7 +76,7 @@ class TestOllamaProviderGenerate:
             body = json.loads(request.content)
             assert body["options"]["num_predict"] == 256
             assert body["options"]["temperature"] == 0.3
-            return _json_response({"response": "ok"})
+            return _stream_response([{"response": "ok", "done": True}])
 
         provider = OllamaProvider()
         _inject_transport(provider, handler)

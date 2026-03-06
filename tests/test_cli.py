@@ -154,6 +154,7 @@ class TestExplainCommand:
     ) -> None:
         mock_llm = MagicMock()
         mock_llm.is_available.return_value = True
+        mock_llm.smoke_test.return_value = (True, "Hi")
         mock_create.return_value = mock_llm
 
         mock_coach = MagicMock()
@@ -188,6 +189,7 @@ class TestExplainCommand:
     ) -> None:
         mock_llm = MagicMock()
         mock_llm.is_available.return_value = True
+        mock_llm.smoke_test.return_value = (True, "Hi")
         mock_create.return_value = mock_llm
 
         mock_coach = MagicMock()

@@ -19,16 +19,51 @@ FEN position
 ### Prerequisites
 
 1. **Blunder chess engine** — build from [qam4/blunder](https://github.com/qam4/blunder)
-2. **Ollama** — install from [ollama.com](https://ollama.com/download)
+2. **Ollama** — install from [ollama.com](https://ollama.com/download), or run via Docker (see below)
 3. **Python 3.11+**
 
-### Setup
+### Ollama setup
+
+#### Option A: Native install
 
 ```bash
-# Pull an LLM model (Apache 2.0 license, runs locally)
+# Install from https://ollama.com/download
 ollama pull qwen3:8b
+```
 
-# Install chess-coach
+#### Option B: Docker (recommended for AL2 / older glibc)
+
+The native Ollama binary requires glibc 2.27+. On Amazon Linux 2 or similar,
+use Docker instead:
+
+```bash
+# Start Ollama in Docker (persists models across restarts)
+docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
+
+# Pull a model inside the container
+docker exec ollama ollama pull qwen3:8b
+```
+
+Useful Docker commands:
+
+```bash
+# Check if Ollama is already running
+docker ps | grep ollama
+
+# Stop and restart
+docker stop ollama
+docker start ollama
+
+# Pull a different model
+docker exec ollama ollama pull mistral
+```
+
+The default `base_url: "http://localhost:11434"` in `config.yaml` works for
+both native and Docker setups since the container maps port 11434.
+
+### Install chess-coach
+
+```bash
 pip install -e .
 
 # Edit config.yaml with your engine path
@@ -92,6 +127,7 @@ llm:
   base_url: "http://localhost:11434"
   max_tokens: 512
   temperature: 0.7
+  timeout: 300                 # seconds; increase for slow models
 
 coaching:
   top_moves: 3

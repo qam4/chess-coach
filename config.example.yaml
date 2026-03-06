@@ -2,7 +2,13 @@
 # Copy this file to config.yaml and adjust paths for your system.
 
 engine:
-  # Path to the chess engine binary
+  # Path to the chess engine binary.
+  # Use a plain string for a single platform, or a mapping for per-platform paths:
+  #   path: "/usr/local/bin/stockfish"          # single platform
+  #   path:                                      # multi-platform
+  #     linux: "/usr/local/bin/stockfish"
+  #     windows: "C:/tools/stockfish.exe"
+  #     darwin: "/opt/homebrew/bin/stockfish"
   path: "/usr/local/bin/stockfish"
   # Protocol: "xboard" or "uci" (uci coming soon)
   protocol: "xboard"
@@ -24,6 +30,8 @@ llm:
   max_tokens: 512
   # Temperature (lower = more focused, higher = more creative)
   temperature: 0.7
+  # Timeout in seconds for LLM requests (increase for slow models)
+  timeout: 300
 
 coaching:
   # Number of top moves to analyze and explain

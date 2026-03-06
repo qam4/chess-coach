@@ -1,8 +1,10 @@
 # Chess Coach configuration
 
 engine:
-  # Path to the chess engine binary
-  path: "C:/src/blunder/build/dev/blunder.exe"
+  # Path to the chess engine binary (per-platform overrides)
+  path:
+    linux: "~/src/blunder/build/rel/blunder"
+    windows: "C:/src/blunder/build/dev/blunder.exe"
   # Protocol: "xboard" or "uci" (uci coming soon)
   protocol: "xboard"
   # Extra arguments passed to the engine
@@ -23,6 +25,8 @@ llm:
   max_tokens: 512
   # Temperature (lower = more focused, higher = more creative)
   temperature: 0.7
+  # Timeout in seconds for LLM requests (increase for slow models)
+  timeout: 300
 
 coaching:
   # Number of top moves to analyze and explain

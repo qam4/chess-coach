@@ -123,6 +123,9 @@ class XboardEngine(EngineProtocol):
             line = self._read_line(timeout=1.0)
             if line is None:
                 continue
+            # Skip engine debug lines (e.g. Blunder's "# ..." output)
+            if line.startswith("#"):
+                continue
 
             logger.debug("Engine raw: %s", line)
             parsed = self._parse_thinking_line(line)
@@ -278,9 +281,13 @@ class XboardEngine(EngineProtocol):
         lines: list[str] = []
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            line = self._read_line(timeout=deadline - time.monotonic())
-            if line is None:
-                break
+            remaining = max(0.1, deadline - time.monotonic())
+            line = self._read_line(timeout=remaining)
+            if line is None or line == "":
+                continue
+            # Skip engine debug lines (e.g. Blunder's "# ..." output)
+            if line.startswith("#"):
+                continue
             lines.append(line)
             if marker in line:
                 break

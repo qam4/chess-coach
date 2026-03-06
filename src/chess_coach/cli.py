@@ -3,15 +3,43 @@
 from __future__ import annotations
 
 import logging
+import platform
 import sys
+import time
 from pathlib import Path
 
 import click
+import httpx
 import yaml
+from rich.console import Console
+from rich.panel import Panel
 
 from chess_coach.coach import Coach
 from chess_coach.engine import XboardEngine
 from chess_coach.llm import create_provider
+
+console = Console()
+
+
+def _resolve_engine_path(path_cfg: str | dict) -> str:  # type: ignore[type-arg]
+    """Resolve engine path, supporting per-platform mappings.
+
+    Accepts either a plain string or a dict keyed by platform
+    (linux, windows, darwin).  Expands ~ to the user's home directory.
+    """
+    if isinstance(path_cfg, dict):
+        key = platform.system().lower()  # 'linux', 'windows', 'darwin'
+        if key not in path_cfg:
+            available = ", ".join(path_cfg.keys())
+            click.echo(
+                f"No engine path for platform '{key}'. Available: {available}",
+                err=True,
+            )
+            sys.exit(1)
+        raw = path_cfg[key]
+    else:
+        raw = path_cfg
+    return str(Path(raw).expanduser())
 
 
 def load_config(path: str | Path) -> dict:  # type: ignore[type-arg]
@@ -63,15 +91,17 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
 
     # Create engine
     engine = XboardEngine(
-        path=engine_cfg["path"],
+        path=_resolve_engine_path(engine_cfg["path"]),
         args=engine_cfg.get("args", []),
     )
 
     # Create LLM provider
+    llm_timeout = float(llm_cfg.get("timeout", 300))
     llm = create_provider(
         provider=llm_cfg["provider"],
         model=llm_cfg["model"],
         base_url=llm_cfg.get("base_url", "http://localhost:11434"),
+        timeout=llm_timeout,
     )
 
     # Check LLM availability
@@ -92,21 +122,83 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
     )
 
     try:
-        engine.start()
-        click.echo("Analyzing position...\n")
-        response = coach.explain(fen)
+        with console.status("[bold cyan]Starting engine...", spinner="dots"):
+            engine.start()
 
-        click.echo("=" * 60)
-        click.echo(f"Position: {response.fen}")
-        click.echo(f"Best move: {response.best_move}  ({response.score})")
-        click.echo("=" * 60)
-        click.echo()
-        click.echo(response.analysis_text)
-        click.echo()
-        click.echo("-" * 60)
-        click.echo("Coach says:")
-        click.echo("-" * 60)
-        click.echo(response.coaching_text)
+        t_check = time.perf_counter()
+        with console.status("[bold cyan]Checking LLM...", spinner="dots"):
+            if not llm.is_available():
+                console.print("[red]✗[/] LLM not reachable. Is Ollama running?")
+                sys.exit(1)
+        elapsed = time.perf_counter() - t_check
+        console.print(
+            f"  [green]✓[/] LLM connected ({llm_cfg['model']}) [dim]({elapsed:.1f}s)[/]"
+        )
+
+        t_warm = time.perf_counter()
+        with console.status(
+            "[bold cyan]Warming up model (first call loads into RAM, may take a minute)...",
+            spinner="dots",
+        ):
+            ok, msg = llm.smoke_test()
+            if not ok:
+                console.print(f"[red]✗[/] LLM smoke test failed: {msg}")
+                sys.exit(1)
+        console.print(f"  [green]✓[/] Model warm [dim]({time.perf_counter() - t_warm:.1f}s)[/]")
+
+        with console.status("", spinner="dots") as status:
+
+            def _update(msg: str) -> None:
+                status.update(f"[bold cyan]{msg}")
+                console.log(f"  [dim]{msg}[/]")
+
+            try:
+                response = coach.explain(fen, on_progress=_update)
+            except httpx.TimeoutException as exc:
+                console.print(
+                    f"\n[red]✗[/] LLM request timed out after {llm_timeout:.0f}s.\n"
+                    f"  The model may be too slow for this prompt length.\n"
+                    f"  Try a smaller model or increase llm.timeout in config.yaml.\n"
+                    f"  Detail: {exc}"
+                )
+                sys.exit(1)
+            except httpx.HTTPStatusError as exc:
+                console.print(
+                    f"\n[red]✗[/] LLM returned HTTP {exc.response.status_code}.\n  Detail: {exc}"
+                )
+                sys.exit(1)
+            except httpx.HTTPError as exc:
+                console.print(
+                    f"\n[red]✗[/] LLM connection error (httpx).\n"
+                    f"  Is Ollama still running? Detail: {exc}"
+                )
+                sys.exit(1)
+            except TimeoutError as exc:
+                console.print(f"\n[red]✗[/] Engine timed out — it may have hung.\n  Detail: {exc}")
+                sys.exit(1)
+
+        console.print()
+        console.print(
+            Panel(
+                response.analysis_text,
+                title=f"[bold]Position: {response.fen}[/]",
+                subtitle=f"Best move: {response.best_move}  ({response.score})",
+                border_style="blue",
+            )
+        )
+        console.print()
+        console.print(
+            Panel(
+                response.coaching_text,
+                title="[bold]Coach says[/]",
+                border_style="green",
+            )
+        )
+        console.print(
+            f"  [dim]Engine: {response.engine_elapsed_s:.1f}s | "
+            f"LLM: {response.llm_elapsed_s:.1f}s | "
+            f"Total: {response.engine_elapsed_s + response.llm_elapsed_s:.1f}s[/]"
+        )
     finally:
         engine.stop()
 
@@ -121,8 +213,9 @@ def check(ctx: click.Context) -> None:
     llm_cfg = cfg["llm"]
 
     # Check engine
-    click.echo(f"Engine: {engine_cfg['path']}")
-    engine_path = Path(engine_cfg["path"])
+    engine_path_str = _resolve_engine_path(engine_cfg["path"])
+    click.echo(f"Engine: {engine_path_str}")
+    engine_path = Path(engine_path_str)
     if engine_path.exists():
         click.echo("  ✓ Binary found")
     else:
@@ -134,6 +227,7 @@ def check(ctx: click.Context) -> None:
         provider=llm_cfg["provider"],
         model=llm_cfg["model"],
         base_url=llm_cfg.get("base_url", "http://localhost:11434"),
+        timeout=float(llm_cfg.get("timeout", 300)),
     )
     if llm.is_available():
         click.echo("  ✓ Model available")
@@ -163,7 +257,7 @@ def serve(ctx: click.Context, port: int) -> None:
     coaching_cfg = cfg.get("coaching", {})
 
     engine = XboardEngine(
-        path=engine_cfg["path"],
+        path=_resolve_engine_path(engine_cfg["path"]),
         args=engine_cfg.get("args", []),
     )
 
@@ -171,6 +265,7 @@ def serve(ctx: click.Context, port: int) -> None:
         provider=llm_cfg["provider"],
         model=llm_cfg["model"],
         base_url=llm_cfg.get("base_url", "http://localhost:11434"),
+        timeout=float(llm_cfg.get("timeout", 300)),
     )
 
     coach = Coach(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+import typing
 from dataclasses import dataclass
 
 import chess
@@ -29,6 +30,8 @@ class CoachingResponse:
     coaching_text: str
     best_move: str
     score: str
+    engine_elapsed_s: float = 0.0
+    llm_elapsed_s: float = 0.0
 
 
 @dataclass
@@ -81,11 +84,17 @@ class Coach:
         fen: str,
         depth: int | None = None,
         level: str | None = None,
+        on_progress: typing.Callable[[str], None] | None = None,
     ) -> CoachingResponse:
         """Analyze a position and generate a coaching explanation."""
         use_depth = depth if depth is not None else self.depth
         use_level = level if level is not None else self.level
 
+        def _progress(msg: str) -> None:
+            if on_progress:
+                on_progress(msg)
+
+        _progress(f"Engine analyzing (depth {use_depth})...")
         t0 = time.perf_counter()
         result = analyze_position(
             self.engine,
@@ -96,10 +105,16 @@ class Coach:
         t1 = time.perf_counter()
         logger.info("Engine analysis took %.1fs", t1 - t0)
 
+        best = result.best_move or "?"
+        score = result.top_line.score_str if result.top_line else "?"
+        _progress(f"Engine done ({t1 - t0:.1f}s) — best: {best} ({score}). LLM thinking...")
+
         analysis_text = format_analysis_for_llm(result, level=use_level)
         prompt = build_coaching_prompt(analysis_text, level=use_level)
+        logger.debug("Coaching prompt length: %d chars", len(prompt))
 
         t2 = time.perf_counter()
+        _progress(f"LLM generating (prompt {len(prompt)} chars)...")
         coaching_text = self.llm.generate(
             prompt,
             max_tokens=self.max_tokens,
@@ -108,6 +123,7 @@ class Coach:
         t3 = time.perf_counter()
         logger.info("LLM generation took %.1fs", t3 - t2)
         logger.info("Total explain took %.1fs", t3 - t0)
+        _progress(f"LLM done ({t3 - t2:.1f}s, {len(coaching_text)} chars). Total: {t3 - t0:.1f}s")
         score = result.top_line.score_str if result.top_line else "?"
 
         return CoachingResponse(
@@ -116,6 +132,8 @@ class Coach:
             coaching_text=coaching_text,
             best_move=result.best_move,
             score=score,
+            engine_elapsed_s=t1 - t0,
+            llm_elapsed_s=t3 - t2,
         )
 
     def check(self) -> dict[str, bool]:

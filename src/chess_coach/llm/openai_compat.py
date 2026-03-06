@@ -18,10 +18,14 @@ class OpenAICompatProvider(LLMProvider):
     """OpenAI-compatible chat completions API."""
 
     def __init__(
-        self, model: str = "local-model", base_url: str = "http://localhost:8080", **kwargs: object
+        self,
+        model: str = "local-model",
+        base_url: str = "http://localhost:8080",
+        timeout: float = 300.0,
+        **kwargs: object,
     ):
-        super().__init__(model=model, base_url=base_url, **kwargs)
-        self._client = httpx.Client(base_url=base_url, timeout=300.0)
+        super().__init__(model=model, base_url=base_url, timeout=timeout, **kwargs)
+        self._client = httpx.Client(base_url=base_url, timeout=self.timeout)
 
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
         resp = self._client.post(

@@ -8,9 +8,10 @@ from abc import ABC, abstractmethod
 class LLMProvider(ABC):
     """Base class for LLM providers. Implement this to add a new backend."""
 
-    def __init__(self, model: str, base_url: str = "", **kwargs: object):
+    def __init__(self, model: str, base_url: str = "", timeout: float = 300.0, **kwargs: object):
         self.model = model
         self.base_url = base_url
+        self.timeout = timeout
 
     @abstractmethod
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:

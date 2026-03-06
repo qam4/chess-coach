@@ -9,6 +9,7 @@ def create_provider(
     provider: str,
     model: str,
     base_url: str = "http://localhost:11434",
+    timeout: float = 300.0,
     **kwargs: object,
 ) -> LLMProvider:
     """Factory: create an LLM provider by name."""
@@ -19,7 +20,7 @@ def create_provider(
     cls = providers.get(provider)
     if cls is None:
         raise ValueError(f"Unknown LLM provider: {provider!r}. Choose from: {list(providers)}")
-    return cls(model=model, base_url=base_url, **kwargs)
+    return cls(model=model, base_url=base_url, timeout=timeout, **kwargs)
 
 
 __all__ = ["LLMProvider", "OllamaProvider", "OpenAICompatProvider", "create_provider"]
