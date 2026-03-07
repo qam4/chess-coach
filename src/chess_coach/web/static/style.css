@@ -1,5 +1,10 @@
 /* Chess Coach — main stylesheet */
 
+/* Ensure the HTML hidden attribute always wins over display rules */
+[hidden] {
+  display: none !important;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -333,6 +338,10 @@ header h1 {
   z-index: 100;
 }
 
+.modal-overlay[hidden] {
+  display: none;
+}
+
 .modal {
   background: #16213e;
   border: 1px solid #0f3460;
@@ -377,6 +386,10 @@ header h1 {
   gap: 0.75rem;
   padding: 1rem 0;
   color: #8899aa;
+}
+
+.spinner[hidden] {
+  display: none;
 }
 
 .spinner-circle {

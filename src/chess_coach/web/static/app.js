@@ -38,7 +38,7 @@
   var board = Chessboard('board', {
     position: 'start',
     draggable: true,
-    pieceTheme: '/static/vendor/img/{piece}.svg',
+    pieceTheme: '/static/vendor/img/{piece}.png',
     onDrop: onDrop,
     onSnapEnd: onSnapEnd,
   });
@@ -268,12 +268,15 @@
   // New game
   // =========================================================================
   newGameBtn.addEventListener('click', function () {
-    colorModal.hidden = false;
+    colorModal.removeAttribute('hidden');
+    colorModal.style.display = 'flex';
   });
 
   document.querySelectorAll('.color-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      colorModal.hidden = true;
+      console.log('Color chosen:', btn.getAttribute('data-color'));
+      colorModal.setAttribute('hidden', '');
+      colorModal.style.display = 'none';
       startNewGame(btn.getAttribute('data-color'));
     });
   });

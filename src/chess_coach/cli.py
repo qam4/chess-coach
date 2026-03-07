@@ -131,9 +131,7 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
                 console.print("[red]✗[/] LLM not reachable. Is Ollama running?")
                 sys.exit(1)
         elapsed = time.perf_counter() - t_check
-        console.print(
-            f"  [green]✓[/] LLM connected ({llm_cfg['model']}) [dim]({elapsed:.1f}s)[/]"
-        )
+        console.print(f"  [green]✓[/] LLM connected ({llm_cfg['model']}) [dim]({elapsed:.1f}s)[/]")
 
         t_warm = time.perf_counter()
         with console.status(
