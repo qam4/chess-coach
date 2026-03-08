@@ -10,12 +10,14 @@ from dataclasses import dataclass, field
 import chess
 
 from chess_coach.analyzer import analyze_position, format_analysis_for_llm
-from chess_coach.engine import AnalysisResult, EngineProtocol
+from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol
 from chess_coach.llm.base import LLMProvider
 from chess_coach.prompts import (
     build_coaching_prompt,
     build_engine_move_explanation_prompt,
     build_move_evaluation_prompt,
+    build_rich_coaching_prompt,
+    build_rich_move_evaluation_prompt,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,6 +104,7 @@ class Coach:
         self.level = level
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
 
     @property
     def debug_config(self) -> dict[str, typing.Any]:
@@ -150,6 +153,81 @@ class Coach:
                 on_debug(TraceStep(step=step, message=message, elapsed_s=elapsed, detail=detail))
 
         _trace("config", "Pipeline config", tool="system", **self.debug_config)
+
+        # ----- Coaching protocol path (rich structured data) -----
+        if self._coaching_available:
+            assert isinstance(self.engine, CoachingEngine)
+            _trace(
+                "engine_start",
+                "Coaching protocol: requesting position report",
+                tool="engine",
+                input_fen=fen,
+            )
+            _progress("Engine analyzing (coaching protocol)...")
+            t0 = time.perf_counter()
+            report = self.engine.get_position_report(fen, multipv=self.top_moves)
+            t1 = time.perf_counter()
+            logger.info("Coaching position report took %.1fs", t1 - t0)
+
+            best = (
+                report.top_lines[0].moves[0]
+                if report.top_lines and report.top_lines[0].moves
+                else "?"
+            )
+            score = f"{report.eval_cp / 100:+.2f}"
+            _trace(
+                "engine_done",
+                f"Position report ready — eval: {score}",
+                tool="engine",
+                elapsed=t1 - t0,
+                eval_cp=report.eval_cp,
+            )
+            _progress(f"Engine done ({t1 - t0:.1f}s). LLM thinking...")
+
+            prompt = build_rich_coaching_prompt(report, level=use_level)
+            logger.debug("Rich coaching prompt length: %d chars", len(prompt))
+
+            _trace(
+                "llm_start",
+                f"LLM generating ({len(prompt)} chars prompt)",
+                tool="llm",
+                model=getattr(self.llm, "model", "?"),
+                base_url=getattr(self.llm, "base_url", "?"),
+                llm_prompt=prompt,
+            )
+            t2 = time.perf_counter()
+            _progress(f"LLM generating (prompt {len(prompt)} chars)...")
+            coaching_text = self.llm.generate(
+                prompt,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            t3 = time.perf_counter()
+            logger.info("LLM generation took %.1fs", t3 - t2)
+            logger.info("Total explain took %.1fs", t3 - t0)
+            _trace(
+                "llm_done",
+                f"LLM done ({t3 - t2:.1f}s)",
+                tool="llm",
+                elapsed=t3 - t2,
+                llm_response=coaching_text,
+            )
+            _progress(
+                f"LLM done ({t3 - t2:.1f}s, {len(coaching_text)} chars). Total: {t3 - t0:.1f}s"
+            )
+
+            return CoachingResponse(
+                fen=fen,
+                analysis_text=prompt,
+                coaching_text=coaching_text,
+                best_move=best,
+                score=score,
+                engine_elapsed_s=t1 - t0,
+                llm_elapsed_s=t3 - t2,
+                llm_prompt=prompt,
+            )
+
+        # ----- UCI fallback path (existing flow) -----
         _trace(
             "engine_start",
             f"Engine analyzing (depth {use_depth})",
@@ -265,6 +343,67 @@ class Coach:
                 on_debug(TraceStep(step=step, message=message, elapsed_s=elapsed, detail=detail))
 
         _trace("config", "Pipeline config", tool="system", **self.debug_config)
+
+        # ----- Coaching protocol path (single round-trip) -----
+        if self._coaching_available:
+            assert isinstance(self.engine, CoachingEngine)
+            _trace(
+                "eval_engine_coaching",
+                "Coaching protocol: requesting comparison report",
+                tool="engine",
+                input_fen=fen_before,
+                user_move=user_move,
+            )
+            t0 = time.perf_counter()
+            report = self.engine.get_comparison_report(fen_before, user_move)
+            t1 = time.perf_counter()
+            logger.info("evaluate_move: coaching comparison report took %.1fs", t1 - t0)
+            _trace(
+                "eval_engine_coaching_done",
+                f"Comparison report ready — {report.classification} "
+                f"(drop {report.eval_drop_cp}cp, {report.nag})",
+                tool="engine",
+                elapsed=t1 - t0,
+                classification=report.classification,
+                eval_drop_cp=report.eval_drop_cp,
+                nag=report.nag,
+            )
+
+            prompt = build_rich_move_evaluation_prompt(report, level=self.level)
+            _trace(
+                "eval_llm_start",
+                f"LLM evaluating move ({len(prompt)} chars prompt)",
+                tool="llm",
+                model=getattr(self.llm, "model", "?"),
+                base_url=getattr(self.llm, "base_url", "?"),
+                llm_prompt=prompt,
+            )
+            t2 = time.perf_counter()
+            feedback = self.llm.generate(
+                prompt,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            t3 = time.perf_counter()
+            logger.info("evaluate_move: LLM feedback took %.1fs", t3 - t2)
+            logger.info("evaluate_move: total %.1fs", t3 - t0)
+            _trace(
+                "eval_llm_done",
+                f"Move feedback ready: {report.classification}",
+                tool="llm",
+                elapsed=t3 - t2,
+                llm_response=feedback,
+            )
+
+            return MoveEvaluation(
+                classification=report.classification,
+                eval_before_cp=report.best_eval_cp,
+                eval_after_cp=report.user_eval_cp,
+                eval_drop_cp=report.eval_drop_cp,
+                feedback=feedback,
+            )
+
+        # ----- UCI fallback path (existing two-analysis flow) -----
 
         # 1. Analyze position before user's move
         _trace(
@@ -489,7 +628,12 @@ class Coach:
     def play_move(self, fen: str, user_move: str) -> PlayMoveResponse:
         """Process a user move and get the engine's response with coaching.
 
-        Optimised pipeline (eliminates 2 redundant engine analyses):
+        When the coaching protocol is available, uses:
+        1. get_comparison_report() for user move evaluation (single round-trip)
+        2. engine.play() for the engine's response move
+        3. get_position_report() for engine move explanation → rich prompt → LLM
+
+        Otherwise falls back to the existing optimised UCI pipeline:
         1. evaluate_move → 2 engine analyses + 1 LLM call
         2. engine.play   → 1 engine call (fast — just picks a move)
         3. explain_engine_move → reuses analysis from step 1, 1 LLM call only
@@ -497,6 +641,91 @@ class Coach:
         """
         t_start = time.perf_counter()
 
+        # ----- Coaching protocol path -----
+        if self._coaching_available:
+            assert isinstance(self.engine, CoachingEngine)
+
+            # 1. Evaluate user's move via comparison report
+            comparison = self.engine.get_comparison_report(fen, user_move)
+            t_compare = time.perf_counter()
+
+            # Build user feedback from comparison report
+            user_prompt = build_rich_move_evaluation_prompt(comparison, level=self.level)
+            user_feedback = self.llm.generate(
+                user_prompt,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            t_user_llm = time.perf_counter()
+
+            # 2. Push user's move to get new FEN
+            board = chess.Board(fen)
+            move = chess.Move.from_uci(user_move)
+            board.push(move)
+            fen_after_user = board.fen()
+
+            # 3. Engine plays its response
+            engine_move_uci = self.engine.play(
+                fen_after_user,
+                depth=self.depth,
+            )
+            t_engine_play = time.perf_counter()
+
+            # Convert engine move to SAN
+            engine_move_obj = chess.Move.from_uci(engine_move_uci)
+            engine_move_san = board.san(engine_move_obj)
+
+            # 4. Push engine move and get position report for explanation
+            board.push(engine_move_obj)
+            fen_after_engine = board.fen()
+
+            pos_report = self.engine.get_position_report(fen_after_engine, multipv=self.top_moves)
+            t_pos_report = time.perf_counter()
+
+            coaching_prompt = build_rich_coaching_prompt(pos_report, level=self.level)
+            coaching_text = self.llm.generate(
+                coaching_prompt,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            t_explain = time.perf_counter()
+
+            eval_cp = pos_report.eval_cp
+            eval_score = f"{eval_cp / 100:+.2f}"
+
+            debug = {
+                "fen_input": fen,
+                "user_move": user_move,
+                "fen_after_user": fen_after_user,
+                "engine_move_uci": engine_move_uci,
+                "fen_after_engine": fen_after_engine,
+                "eval_before_cp": comparison.best_eval_cp,
+                "eval_after_cp": comparison.user_eval_cp,
+                "eval_drop_cp": comparison.eval_drop_cp,
+                "final_eval_cp": eval_cp,
+                "coaching_protocol": True,
+                "timings": {
+                    "comparison_report_s": round(t_compare - t_start, 2),
+                    "user_feedback_llm_s": round(t_user_llm - t_compare, 2),
+                    "engine_play_s": round(t_engine_play - t_user_llm, 2),
+                    "position_report_s": round(t_pos_report - t_engine_play, 2),
+                    "explain_move_s": round(t_explain - t_pos_report, 2),
+                    "total_s": round(t_explain - t_start, 2),
+                },
+            }
+
+            return PlayMoveResponse(
+                engine_move=engine_move_san,
+                engine_move_uci=engine_move_uci,
+                coaching_text=coaching_text,
+                user_feedback=user_feedback,
+                user_classification=comparison.classification,
+                eval_cp=eval_cp,
+                eval_score=eval_score,
+                debug=debug,
+            )
+
+        # ----- UCI fallback path (existing flow) -----
         # 1. Evaluate user's move (produces analysis of position after user's move)
         evaluation = self.evaluate_move(fen, user_move)
         t_eval = time.perf_counter()

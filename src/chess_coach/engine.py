@@ -13,7 +13,10 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO
+from typing import IO, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from chess_coach.models import ComparisonReport, PositionReport
 
 logger = logging.getLogger(__name__)
 
@@ -563,3 +566,223 @@ class UciEngine(EngineProtocol):
             if marker in line:
                 break
         return lines
+
+
+# ---------------------------------------------------------------------------
+# CoachingEngine — UCI + coaching protocol adapter
+# ---------------------------------------------------------------------------
+
+EXPECTED_VERSION = "1.0.0"
+
+
+class CoachingEngine(EngineProtocol):
+    """Engine adapter that wraps :class:`UciEngine` and adds coaching protocol support.
+
+    The coaching protocol runs alongside UCI over the same stdin/stdout pipe.
+    Commands prefixed with ``coach`` return JSON responses delimited by
+    ``BEGIN_COACH_RESPONSE`` / ``END_COACH_RESPONSE`` markers.
+
+    On :meth:`start`, the engine is probed with ``coach ping``.  If the engine
+    responds, :attr:`coaching_available` is ``True`` and the rich
+    :meth:`get_position_report` / :meth:`get_comparison_report` methods are
+    usable.  Otherwise the adapter falls back to pure UCI via the inner engine.
+    """
+
+    def __init__(
+        self,
+        path: str | Path,
+        args: list[str] | None = None,
+        coaching_timeout: float = 30.0,
+        ping_timeout: float = 2.0,
+    ) -> None:
+        self._inner = UciEngine(path, args)
+        self._coaching_timeout = coaching_timeout
+        self._ping_timeout = ping_timeout
+        self._coaching_available = False
+
+    # ------------------------------------------------------------------
+    # EngineProtocol interface — delegated to inner UciEngine
+    # ------------------------------------------------------------------
+
+    def start(self) -> None:
+        self._inner.start()
+        self._probe_coaching_protocol()
+
+    def stop(self) -> None:
+        self._inner.stop()
+
+    def analyze(self, fen: str, depth: int = 18, time_limit: float | None = None) -> AnalysisResult:
+        return self._inner.analyze(fen, depth, time_limit)
+
+    def is_ready(self) -> bool:
+        return self._inner.is_ready()
+
+    def play(self, fen: str, depth: int = 18, time_limit: float | None = None) -> str:
+        return self._inner.play(fen, depth, time_limit)
+
+    # ------------------------------------------------------------------
+    # Coaching protocol
+    # ------------------------------------------------------------------
+
+    @property
+    def coaching_available(self) -> bool:
+        """Whether the connected engine supports the coaching protocol."""
+        return self._coaching_available
+
+    def get_position_report(self, fen: str, multipv: int = 3) -> "PositionReport":
+        """Request a rich position evaluation from the engine.
+
+        Sends ``coach eval fen <FEN> multipv <N>`` and parses the JSON
+        response into a :class:`PositionReport`.
+
+        Raises:
+            CoachingTimeoutError: If the engine does not respond in time.
+            EngineTerminatedError: If the engine process has died.
+            CoachingParseError: If the response JSON is malformed.
+            CoachingValidationError: If the response doesn't match the schema.
+        """
+        from chess_coach.models import (
+            format_coaching_command,
+            validate_position_report,
+        )
+
+        cmd = format_coaching_command("eval", fen=fen, multipv=multipv)
+        data = self._send_coaching_command(cmd)
+        return validate_position_report(data)
+
+    def get_comparison_report(self, fen: str, user_move: str) -> "ComparisonReport":
+        """Request a move comparison report from the engine.
+
+        Sends ``coach compare fen <FEN> move <MOVE>`` and parses the JSON
+        response into a :class:`ComparisonReport`.
+
+        Raises:
+            CoachingTimeoutError: If the engine does not respond in time.
+            EngineTerminatedError: If the engine process has died.
+            CoachingParseError: If the response JSON is malformed.
+            CoachingValidationError: If the response doesn't match the schema.
+        """
+        from chess_coach.models import (
+            format_coaching_command,
+            validate_comparison_report,
+        )
+
+        cmd = format_coaching_command("compare", fen=fen, move=user_move)
+        data = self._send_coaching_command(cmd)
+        return validate_comparison_report(data)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _probe_coaching_protocol(self) -> bool:
+        """Send ``coach ping`` to detect coaching protocol support.
+
+        Sets :attr:`_coaching_available` based on the result.  Returns
+        ``True`` when the protocol is available.
+        """
+        from chess_coach.models import (
+            check_version_compatibility,
+            format_coaching_command,
+            parse_coaching_response,
+        )
+
+        try:
+            cmd = format_coaching_command("ping")
+            self._inner._send(cmd)
+
+            # Read lines until END_COACH_RESPONSE or timeout
+            lines: list[str] = []
+            deadline = time.monotonic() + self._ping_timeout
+            while time.monotonic() < deadline:
+                remaining = max(0.1, deadline - time.monotonic())
+                line = self._inner._read_line(timeout=remaining)
+                if line is None or line == "":
+                    continue
+                lines.append(line)
+                if "END_COACH_RESPONSE" in line:
+                    break
+
+            if not any("END_COACH_RESPONSE" in ln for ln in lines):
+                # Engine didn't respond — coaching not available
+                logger.info("Engine does not support coaching protocol (ping timeout)")
+                self._coaching_available = False
+                return False
+
+            data = parse_coaching_response(lines)
+            engine_version = data.get("version", "0.0.0")
+            compat = check_version_compatibility(engine_version, EXPECTED_VERSION)
+
+            if compat == "incompatible":
+                logger.warning(
+                    "Coaching protocol version mismatch: engine=%s expected=%s"
+                    " — disabling coaching",
+                    engine_version,
+                    EXPECTED_VERSION,
+                )
+                self._coaching_available = False
+                return False
+
+            if compat == "compatible_warning":
+                logger.info(
+                    "Coaching protocol minor version difference: engine=%s expected=%s",
+                    engine_version,
+                    EXPECTED_VERSION,
+                )
+
+            logger.info("Coaching protocol available (engine version %s)", engine_version)
+            self._coaching_available = True
+            return True
+
+        except Exception:
+            logger.debug("Coaching protocol probe failed", exc_info=True)
+            self._coaching_available = False
+            return False
+
+    def _send_coaching_command(self, cmd: str) -> dict[str, object]:
+        """Send a coaching command and return the parsed response data dict.
+
+        Writes *cmd* to the engine's stdin, reads lines until
+        ``END_COACH_RESPONSE`` or timeout, then parses via
+        :func:`parse_coaching_response`.
+
+        Raises:
+            EngineTerminatedError: If the engine process is not running.
+            CoachingTimeoutError: If no ``END_COACH_RESPONSE`` within
+                :attr:`_coaching_timeout`.
+            CoachingParseError: If the response is malformed JSON.
+        """
+        from chess_coach.models import (
+            CoachingTimeoutError,
+            EngineTerminatedError,
+            parse_coaching_response,
+        )
+
+        # Check process is alive before sending
+        proc = self._inner._proc
+        if proc is None or proc.poll() is not None:
+            raise EngineTerminatedError("engine process is not running")
+
+        self._inner._send(cmd)
+
+        lines: list[str] = []
+        deadline = time.monotonic() + self._coaching_timeout
+        while time.monotonic() < deadline:
+            # Check for process death during read
+            if proc.poll() is not None:
+                raise EngineTerminatedError("engine process terminated during coaching command")
+
+            remaining = max(0.1, deadline - time.monotonic())
+            line = self._inner._read_line(timeout=min(remaining, 1.0))
+            if line is None or line == "":
+                continue
+            lines.append(line)
+            if "END_COACH_RESPONSE" in line:
+                break
+
+        if not any("END_COACH_RESPONSE" in ln for ln in lines):
+            raise CoachingTimeoutError(
+                f"coaching command timed out after {self._coaching_timeout}s: {cmd}"
+            )
+
+        return parse_coaching_response(lines)
