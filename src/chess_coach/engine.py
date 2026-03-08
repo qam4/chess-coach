@@ -292,3 +292,274 @@ class XboardEngine(EngineProtocol):
             if marker in line:
                 break
         return lines
+
+
+class UciEngine(EngineProtocol):
+    """UCI protocol engine driver.
+
+    Implements the Universal Chess Interface protocol for engines that
+    support ``--uci`` (e.g. Blunder, Stockfish).
+
+    UCI info line format::
+
+        info depth 8 score cp 77 nodes 238953 nps 1993933 time 110 pv e2e3 b8c6 ...
+
+    The ``bestmove`` line terminates a ``go`` command::
+
+        bestmove e2e3 ponder b8c6
+    """
+
+    def __init__(self, path: str | Path, args: list[str] | None = None):
+        self._path = str(path)
+        self._args = args or []
+        self._proc: subprocess.Popen[str] | None = None
+        self._stdin: IO[str] | None = None
+        self._stdout: IO[str] | None = None
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def start(self) -> None:
+        cmd = [self._path] + self._args
+        self._proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+        )
+        self._stdin = self._proc.stdin
+        self._stdout = self._proc.stdout
+
+        self._send("uci")
+        self._read_until("uciok", timeout=5.0)
+        self._send("isready")
+        self._read_until("readyok", timeout=5.0)
+
+    def stop(self) -> None:
+        if self._proc and self._proc.poll() is None:
+            self._send("quit")
+            self._proc.wait(timeout=5)
+
+    def is_ready(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
+
+    # ------------------------------------------------------------------
+    # Analysis (infinite / depth-limited)
+    # ------------------------------------------------------------------
+
+    def analyze(
+        self,
+        fen: str,
+        depth: int = 18,
+        time_limit: float | None = None,
+    ) -> AnalysisResult:
+        result = AnalysisResult(fen=fen)
+
+        self._send(f"position fen {fen}")
+        self._send("isready")
+        self._read_until("readyok", timeout=5.0)
+
+        if time_limit:
+            movetime_ms = int(time_limit * 1000)
+            self._send(f"go movetime {movetime_ms}")
+        else:
+            self._send(f"go depth {depth}")
+
+        # Read info lines until bestmove
+        deadline = time.monotonic() + (time_limit or max(60.0, depth * 5.0))
+        while time.monotonic() < deadline:
+            line = self._read_line(timeout=1.0)
+            if line is None:
+                continue
+
+            logger.debug("UCI raw: %s", line)
+
+            if line.startswith("bestmove"):
+                # Extract bestmove token
+                parts = line.split()
+                if len(parts) >= 2 and not result.best_move:
+                    result.best_move = parts[1]
+                break
+
+            if line.startswith("info"):
+                parsed = self._parse_info_line(line)
+                if parsed:
+                    # Keep the deepest line per depth
+                    result.lines = [ln for ln in result.lines if ln.depth != parsed.depth]
+                    result.lines.append(parsed)
+                    result.lines.sort(key=lambda ln: ln.depth, reverse=True)
+
+        # Derive best_move from deepest PV if bestmove wasn't explicit
+        if not result.best_move and result.lines and result.lines[0].pv:
+            result.best_move = result.lines[0].pv[0]
+
+        if result.lines:
+            logger.info(
+                "UCI analysis complete: depth=%d best_move=%s lines=%d",
+                result.lines[0].depth,
+                result.best_move,
+                len(result.lines),
+            )
+        else:
+            logger.warning("UCI analysis returned no lines for FEN: %s", fen)
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Play (engine picks a move)
+    # ------------------------------------------------------------------
+
+    def play(
+        self,
+        fen: str,
+        depth: int = 18,
+        time_limit: float | None = None,
+    ) -> str:
+        """Return the engine's chosen move in coordinate notation."""
+        self._send(f"position fen {fen}")
+        self._send("isready")
+        self._read_until("readyok", timeout=5.0)
+
+        if time_limit:
+            movetime_ms = int(time_limit * 1000)
+            self._send(f"go movetime {movetime_ms}")
+        else:
+            self._send(f"go depth {depth}")
+
+        deadline = time.monotonic() + (time_limit or max(30.0, depth * 2.0))
+        while time.monotonic() < deadline:
+            line = self._read_line(timeout=1.0)
+            if line and line.startswith("bestmove"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    return parts[1]
+        raise TimeoutError("UCI engine did not return bestmove")
+
+    # ------------------------------------------------------------------
+    # UCI info line parser
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_info_line(line: str) -> AnalysisLine | None:
+        """Parse a UCI ``info`` line into an AnalysisLine.
+
+        Example::
+
+            info depth 8 score cp 77 nodes 238953 nps 1993933 time 110 pv e2e3 b8c6 ...
+            info depth 5 score mate 3 nodes 1234 time 10 pv e1g1 ...
+        """
+        tokens = line.split()
+        if tokens[0] != "info":
+            return None
+
+        depth = 0
+        score_cp = 0
+        nodes = 0
+        time_ms = 0
+        pv: list[str] = []
+
+        i = 1
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok == "depth" and i + 1 < len(tokens):
+                try:
+                    depth = int(tokens[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif tok == "score" and i + 1 < len(tokens):
+                kind = tokens[i + 1]
+                if kind == "cp" and i + 2 < len(tokens):
+                    try:
+                        score_cp = int(tokens[i + 2])
+                    except ValueError:
+                        pass
+                    i += 3
+                elif kind == "mate" and i + 2 < len(tokens):
+                    try:
+                        mate_in = int(tokens[i + 2])
+                        # Encode mate scores the same way as AnalysisLine.score_str expects
+                        sign = 1 if mate_in > 0 else -1
+                        score_cp = sign * (20001 - abs(mate_in) * 2)
+                    except ValueError:
+                        pass
+                    i += 3
+                else:
+                    i += 2
+            elif tok == "nodes" and i + 1 < len(tokens):
+                try:
+                    nodes = int(tokens[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif tok == "time" and i + 1 < len(tokens):
+                try:
+                    time_ms = int(tokens[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif tok == "pv":
+                pv = tokens[i + 1 :]
+                break
+            else:
+                i += 1
+
+        # Skip lines without depth or PV (e.g. "info string ..." or partial)
+        if depth == 0 or not pv:
+            return None
+
+        return AnalysisLine(
+            depth=depth,
+            score_cp=score_cp,
+            nodes=nodes,
+            time_ms=time_ms,
+            pv=pv,
+        )
+
+    # ------------------------------------------------------------------
+    # I/O helpers (same pattern as XboardEngine)
+    # ------------------------------------------------------------------
+
+    def _send(self, cmd: str) -> None:
+        if self._stdin:
+            self._stdin.write(cmd + "\n")
+            self._stdin.flush()
+
+    def _read_line(self, timeout: float = 1.0) -> str | None:
+        """Read a single line with timeout."""
+        if not self._stdout:
+            return None
+
+        result: list[str] = []
+        done = threading.Event()
+
+        def _reader() -> None:
+            assert self._stdout is not None
+            line = self._stdout.readline()
+            result.append(line)
+            done.set()
+
+        t = threading.Thread(target=_reader, daemon=True)
+        t.start()
+        done.wait(timeout=timeout)
+
+        if result:
+            return result[0].strip()
+        return None
+
+    def _read_until(self, marker: str, timeout: float = 5.0) -> list[str]:
+        """Read lines until one contains the marker."""
+        lines: list[str] = []
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            remaining = max(0.1, deadline - time.monotonic())
+            line = self._read_line(timeout=remaining)
+            if line is None or line == "":
+                continue
+            lines.append(line)
+            if marker in line:
+                break
+        return lines

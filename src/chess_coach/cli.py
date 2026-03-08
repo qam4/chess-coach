@@ -15,10 +15,29 @@ from rich.console import Console
 from rich.panel import Panel
 
 from chess_coach.coach import Coach
-from chess_coach.engine import XboardEngine
+from chess_coach.engine import EngineProtocol, UciEngine, XboardEngine
 from chess_coach.llm import create_provider
 
 console = Console()
+
+
+def _create_engine(engine_cfg: dict) -> EngineProtocol:  # type: ignore[type-arg]
+    """Create the right engine driver based on config protocol setting."""
+    protocol = engine_cfg.get("protocol", "xboard")
+    path = _resolve_engine_path(engine_cfg["path"])
+    args = engine_cfg.get("args", [])
+
+    if protocol == "uci":
+        # Filter out --xboard if present (user may have switched protocols)
+        args = [a for a in args if a != "--xboard"]
+        if "--uci" not in args:
+            args = ["--uci"] + args
+        return UciEngine(path=path, args=args)
+
+    # Default: xboard
+    if "--xboard" not in args:
+        args = ["--xboard"] + args
+    return XboardEngine(path=path, args=args)
 
 
 def _resolve_engine_path(path_cfg: str | dict) -> str:  # type: ignore[type-arg]
@@ -90,10 +109,7 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
     coaching_cfg = cfg.get("coaching", {})
 
     # Create engine
-    engine = XboardEngine(
-        path=_resolve_engine_path(engine_cfg["path"]),
-        args=engine_cfg.get("args", []),
-    )
+    engine = _create_engine(engine_cfg)
 
     # Create LLM provider
     llm_timeout = float(llm_cfg.get("timeout", 300))
@@ -150,8 +166,24 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
                 status.update(f"[bold cyan]{msg}")
                 console.log(f"  [dim]{msg}[/]")
 
+            def _debug(step: "TraceStep") -> None:
+                status.update(f"[bold cyan]{step.message}")
+                elapsed = f" ({step.elapsed_s:.1f}s)" if step.elapsed_s else ""
+                console.log(f"  [dim]{step.step}: {step.message}{elapsed}[/]")
+                for key, val in step.detail.items():
+                    if key == "llm_prompt":
+                        console.log(f"    [dim]{key}: ({len(val)} chars)[/]")
+                    elif key == "llm_response":
+                        console.log(f"    [dim]{key}: ({len(val)} chars)[/]")
+                    elif isinstance(val, str) and len(val) > 120:
+                        console.log(f"    [dim]{key}: {val[:120]}…[/]")
+                    else:
+                        console.log(f"    [dim]{key}: {val}[/]")
+
             try:
-                response = coach.explain(fen, on_progress=_update)
+                from chess_coach.coach import TraceStep  # noqa: F811
+
+                response = coach.explain(fen, on_progress=_update, on_debug=_debug)
             except httpx.TimeoutException as exc:
                 console.print(
                     f"\n[red]✗[/] LLM request timed out after {llm_timeout:.0f}s.\n"
@@ -254,10 +286,7 @@ def serve(ctx: click.Context, port: int) -> None:
     llm_cfg = cfg["llm"]
     coaching_cfg = cfg.get("coaching", {})
 
-    engine = XboardEngine(
-        path=_resolve_engine_path(engine_cfg["path"]),
-        args=engine_cfg.get("args", []),
-    )
+    engine = _create_engine(engine_cfg)
 
     llm = create_provider(
         provider=llm_cfg["provider"],
@@ -278,6 +307,14 @@ def serve(ctx: click.Context, port: int) -> None:
 
     engine.start()
     app = create_app(coach)
+
+    # Warm up the LLM model so the first web request isn't slow
+    click.echo("Warming up LLM model (first call loads into RAM)...")
+    ok, msg = llm.smoke_test()
+    if ok:
+        click.echo(f"  ✓ Model warm: {msg}")
+    else:
+        click.echo(f"  ⚠ Warmup failed: {msg} — first request may be slow")
 
     click.echo(f"Starting Chess Coach on http://localhost:{port}")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

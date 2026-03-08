@@ -439,3 +439,58 @@ header h1 {
     flex: 0 0 auto;
   }
 }
+
+/* --- Debug panel --- */
+.debug-panel {
+  margin: 0.75rem 1.5rem 1.5rem;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.debug-panel summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #667;
+  padding: 0.4rem 0;
+  user-select: none;
+}
+
+.debug-panel summary:hover {
+  color: #a0c4ff;
+}
+
+.debug-content {
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 1rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #aaa;
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* --- Coaching text markdown --- */
+.coaching-text ol,
+.coaching-text ul {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.coaching-text li {
+  margin-bottom: 0.3rem;
+}
+
+.coaching-text p {
+  margin: 0.4rem 0;
+}
+
+.coaching-text p:empty {
+  display: none;
+}

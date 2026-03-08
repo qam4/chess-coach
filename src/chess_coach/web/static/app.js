@@ -23,6 +23,7 @@
   var newGameBtn = document.getElementById('newGameBtn');
   var undoBtn = document.getElementById('undoBtn');
   var colorModal = document.getElementById('colorModal');
+  var debugContent = document.getElementById('debugContent');
 
   // --- State ---
   var mode = 'analyze'; // 'analyze' | 'play'
@@ -67,10 +68,14 @@
     moveListPanel.hidden = !isPlay;
 
     if (isPlay) {
-      coachingText.innerHTML = '<p class="placeholder">Start a new game to begin playing.</p>';
+      coachingText.innerHTML = '<p class="placeholder">Choose your color to start playing.</p>';
       coachingMeta.textContent = '';
       userFeedback.hidden = true;
+      colorModal.removeAttribute('hidden');
+      colorModal.style.display = 'flex';
     } else {
+      // Sync the current board position into the FEN input
+      fenInput.value = game.fen();
       coachingText.innerHTML = '<p class="placeholder">Set up a position and click <strong>Analyze</strong> to get coaching.</p>';
       coachingMeta.textContent = '';
       userFeedback.hidden = true;
@@ -124,54 +129,57 @@
       return 'snapback';
     }
 
+    // Record FEN before the move for the server request
+    var fenBeforeMove = game.fen();
+
     var move = game.move({ from: source, to: target, promotion: 'q' });
     if (move === null) return 'snapback';
 
     var uci = move.from + move.to + (move.promotion ? move.promotion : '');
-    var fenBefore = game.fen();
 
-    // Undo the move on chess.js — we'll re-apply after server confirms
-    game.undo();
-
-    sendPlayMove(fenBefore, uci, move.san, source + target);
+    // Keep the move applied — don't undo. Board shows the piece where it landed.
+    sendPlayMove(fenBeforeMove, uci, move.san, source + target);
   }
 
   // =========================================================================
   // Play mode: send move to server
   // =========================================================================
-  function sendPlayMove(fenBeforeEngineReply, userUci, userSan, rawUci) {
-    // The FEN we send is the position BEFORE the user's move
-    var fenToSend = gameMoves.length > 0
-      ? gameMoves[gameMoves.length - 1].fen
-      : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-
+  function sendPlayMove(fenBeforeMove, userUci, userSan, rawUci) {
     waitingForEngine = true;
-    setLoading(true);
+    setLoading(true, 'Evaluating your move…');
     clearArrows();
     userFeedback.hidden = true;
+    clearDebug();
+    appendDebug('Play move: FEN=' + fenBeforeMove + ' move=' + rawUci);
 
-    fetch('/api/play/move', {
+    // Record the user's move in gameMoves immediately (optimistic)
+    gameMoves.push({ uci: rawUci, san: userSan, fen: game.fen() });
+    renderMoveList();
+
+    fetch('/api/play/move/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fen: fenToSend, user_move: rawUci }),
+      body: JSON.stringify({ fen: fenBeforeMove, user_move: rawUci }),
     })
       .then(function (res) {
         if (!res.ok) return res.json().then(function (d) { throw new Error(d.detail || 'Move failed'); });
-        return res.json();
+        return readSSE(res, function (event, data) {
+          if (event === 'progress') {
+            setLoading(true, data.message);
+            var toolTag = data.tool ? '[' + data.tool + '] ' : '';
+            appendDebug(toolTag + data.message);
+            if (data.detail) appendDebugDetail('detail', data.detail);
+          }
+        });
       })
       .then(function (data) {
-        // Re-apply user move on chess.js
-        game.load(fenToSend);
-        var userMoveObj = game.move({ from: rawUci.substring(0, 2), to: rawUci.substring(2, 4), promotion: 'q' });
-        var userSanActual = userMoveObj ? userMoveObj.san : userSan;
-
-        gameMoves.push({ uci: rawUci, san: userSanActual, fen: game.fen() });
+        if (!data) return;
 
         // Show user feedback badge
         showUserFeedback(data.user_classification, data.user_feedback);
 
         // Apply engine move
-        if (data.engine_move_uci && !data.game_over) {
+        if (data.engine_move_uci) {
           var engineMove = game.move({
             from: data.engine_move_uci.substring(0, 2),
             to: data.engine_move_uci.substring(2, 4),
@@ -179,15 +187,6 @@
           });
           var engineSan = engineMove ? engineMove.san : data.engine_move;
           gameMoves.push({ uci: data.engine_move_uci, san: engineSan, fen: game.fen() });
-        } else if (data.engine_move_uci && data.game_over) {
-          // Engine delivered checkmate or game ended
-          var engineMove2 = game.move({
-            from: data.engine_move_uci.substring(0, 2),
-            to: data.engine_move_uci.substring(2, 4),
-            promotion: data.engine_move_uci.length > 4 ? data.engine_move_uci[4] : undefined,
-          });
-          var engineSan2 = engineMove2 ? engineMove2.san : data.engine_move;
-          gameMoves.push({ uci: data.engine_move_uci, san: engineSan2, fen: game.fen() });
         }
 
         board.position(game.fen().split(' ')[0]);
@@ -196,7 +195,8 @@
 
         // Show coaching text
         coachingMeta.textContent = '';
-        coachingText.innerHTML = '<p>' + escapeHtml(data.coaching_text || '') + '</p>';
+        coachingText.innerHTML = renderMarkdown(data.coaching_text || '');
+        appendDebug('--- Done ---');
 
         // Game over?
         if (data.game_over) {
@@ -206,8 +206,12 @@
       })
       .catch(function (err) {
         coachingText.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
-        // Restore board position
+        appendDebug('ERROR: ' + err.message);
+        // Roll back the optimistic user move
+        gameMoves.pop();
+        game.undo();
         board.position(game.fen().split(' ')[0]);
+        renderMoveList();
       })
       .finally(function () {
         waitingForEngine = false;
@@ -323,7 +327,7 @@
             board.position(game.fen().split(' ')[0]);
             renderMoveList();
             if (data.coaching_text) {
-              coachingText.innerHTML = '<p>' + escapeHtml(data.coaching_text) + '</p>';
+              coachingText.innerHTML = renderMarkdown(data.coaching_text);
             }
           }
         })
@@ -385,10 +389,12 @@
     var fen = fenInput.value.trim();
     if (!fen) return;
 
-    setLoading(true);
+    setLoading(true, 'Engine analyzing…');
     clearArrows();
+    clearDebug();
+    appendDebug('Analyze request: FEN=' + fen + ' depth=' + depthSlider.value + ' level=' + levelSelect.value);
 
-    fetch('/api/analyze', {
+    fetch('/api/analyze/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -399,15 +405,26 @@
     })
       .then(function (res) {
         if (!res.ok) throw new Error('Analysis failed (' + res.status + ')');
-        return res.json();
+        return readSSE(res, function (event, data) {
+          if (event === 'progress') {
+            setLoading(true, data.message);
+            var toolTag = data.tool ? '[' + data.tool + '] ' : '';
+            appendDebug(toolTag + data.message);
+            if (data.detail) appendDebugDetail('detail', data.detail);
+          }
+        });
       })
-      .then(function (data) {
-        renderCoaching(data);
-        updateEvalBar(data.score);
-        if (data.best_move) drawBestMoveArrow(data.best_move);
+      .then(function (finalData) {
+        if (finalData) {
+          renderCoaching(finalData);
+          updateEvalBar(finalData.score);
+          if (finalData.best_move) drawBestMoveArrow(finalData.best_move);
+          appendDebug('--- Done ---');
+        }
       })
       .catch(function (err) {
         coachingText.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+        appendDebug('ERROR: ' + err.message);
       })
       .finally(function () {
         setLoading(false);
@@ -420,7 +437,7 @@
   function renderCoaching(data) {
     coachingMeta.textContent =
       'Best move: ' + (data.best_move || '?') + '  (' + (data.score || '?') + ')';
-    coachingText.innerHTML = '<p>' + escapeHtml(data.coaching_text || '') + '</p>';
+    coachingText.innerHTML = renderMarkdown(data.coaching_text || '');
   }
 
   // =========================================================================
@@ -495,6 +512,12 @@
   function squareToCoords(sq, sqSize) {
     var file = sq.charCodeAt(0) - 97;
     var rank = parseInt(sq[1], 10) - 1;
+    // Flip coordinates when board is oriented for Black
+    var orientation = board.orientation();
+    if (orientation === 'black') {
+      file = 7 - file;
+      rank = 7 - rank;
+    }
     return {
       x: file * sqSize + sqSize / 2,
       y: (7 - rank) * sqSize + sqSize / 2,
@@ -504,14 +527,138 @@
   // =========================================================================
   // Helpers
   // =========================================================================
-  function setLoading(on) {
+  function setLoading(on, message) {
     spinner.hidden = !on;
     analyzeBtn.disabled = on;
+    var spinnerText = document.getElementById('spinnerText');
+    if (spinnerText) spinnerText.textContent = message || 'Thinking…';
   }
 
   function escapeHtml(str) {
     var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function renderMarkdown(str) {
+    // Simple markdown to HTML: handles bold, numbered lists, bullet lists, paragraphs
+    var html = escapeHtml(str);
+    // Bold: **text**
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Split into lines for list handling
+    var lines = html.split('\n');
+    var out = [];
+    var inOl = false;
+    var inUl = false;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var olMatch = line.match(/^\s*(\d+)\.\s+(.*)/);
+      var ulMatch = line.match(/^\s*[-*]\s+(.*)/);
+      if (olMatch) {
+        if (!inOl) { if (inUl) { out.push('</ul>'); inUl = false; } out.push('<ol>'); inOl = true; }
+        out.push('<li>' + olMatch[2] + '</li>');
+      } else if (ulMatch) {
+        if (!inUl) { if (inOl) { out.push('</ol>'); inOl = false; } out.push('<ul>'); inUl = true; }
+        out.push('<li>' + ulMatch[1] + '</li>');
+      } else {
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (line.trim() === '') {
+          out.push('');
+        } else {
+          out.push('<p>' + line + '</p>');
+        }
+      }
+    }
+    if (inOl) out.push('</ol>');
+    if (inUl) out.push('</ul>');
+    return out.join('\n');
+  }
+
+  function showDebug(data) {
+    if (data && debugContent) {
+      debugContent.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
+  function appendDebug(message) {
+    if (debugContent) {
+      if (debugContent.textContent === 'No data yet. Make a move or analyze a position.') {
+        debugContent.textContent = '';
+      }
+      var ts = new Date().toLocaleTimeString();
+      debugContent.textContent += '[' + ts + '] ' + message + '\n';
+      debugContent.scrollTop = debugContent.scrollHeight;
+    }
+  }
+
+  function appendDebugDetail(label, data) {
+    if (debugContent && data) {
+      var text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+      debugContent.textContent += '  ┗ ' + label + ': ' + text + '\n';
+      debugContent.scrollTop = debugContent.scrollHeight;
+    }
+  }
+
+  function clearDebug() {
+    if (debugContent) {
+      debugContent.textContent = '';
+    }
+  }
+
+  /**
+   * Read an SSE stream from a fetch Response.
+   * Calls onEvent(eventName, parsedData) for each event.
+   * Returns a promise that resolves with the 'done' event data,
+   * or rejects if an 'error' event is received.
+   */
+  function readSSE(response, onEvent) {
+    return new Promise(function (resolve, reject) {
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+      var doneData = null;
+
+      function pump() {
+        reader.read().then(function (result) {
+          if (result.done) {
+            resolve(doneData);
+            return;
+          }
+          buffer += decoder.decode(result.value, { stream: true });
+          // Parse complete SSE messages (separated by double newline)
+          var parts = buffer.split('\n\n');
+          buffer = parts.pop() || '';
+          parts.forEach(function (block) {
+            if (!block.trim()) return;
+            var eventName = 'message';
+            var dataStr = '';
+            block.split('\n').forEach(function (line) {
+              if (line.indexOf('event: ') === 0) {
+                eventName = line.substring(7);
+              } else if (line.indexOf('data: ') === 0) {
+                dataStr += line.substring(6);
+              }
+            });
+            if (!dataStr) return;
+            try {
+              var parsed = JSON.parse(dataStr);
+            } catch (e) {
+              return;
+            }
+            if (eventName === 'error') {
+              reject(new Error(parsed.message || 'Server error'));
+              return;
+            }
+            if (eventName === 'done') {
+              doneData = parsed;
+            }
+            if (onEvent) onEvent(eventName, parsed);
+          });
+          pump();
+        }).catch(reject);
+      }
+      pump();
+    });
   }
 })();

@@ -5,12 +5,12 @@ engine:
   path:
     linux: "~/src/blunder/build/rel/blunder"
     windows: "C:/src/blunder/build/dev/blunder.exe"
-  # Protocol: "xboard" or "uci" (uci coming soon)
-  protocol: "xboard"
-  # Extra arguments passed to the engine
-  args: ["--xboard"]
+  # Protocol: "uci" (recommended) or "xboard"
+  protocol: "uci"
+  # Extra arguments passed to the engine (--uci/--xboard added automatically)
+  args: []
   # Analysis depth (plies)
-  depth: 18
+  depth: 8
   # Analysis time limit in seconds (overrides depth if set)
   # time_limit: 5.0
 

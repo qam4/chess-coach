@@ -36,8 +36,8 @@
         </div>
         <div class="options-row">
           <div class="option-group">
-            <label for="depthSlider">Depth: <span id="depthValue">18</span></label>
-            <input type="range" id="depthSlider" min="1" max="30" value="18">
+            <label for="depthSlider">Depth: <span id="depthValue">8</span></label>
+            <input type="range" id="depthSlider" min="1" max="30" value="8">
           </div>
           <div class="option-group">
             <label for="levelSelect">Level</label>
@@ -77,7 +77,7 @@
       </div>
       <div class="spinner" id="spinner" hidden>
         <div class="spinner-circle"></div>
-        <span>Thinking…</span>
+        <span id="spinnerText">Thinking…</span>
       </div>
     </section>
   </main>
@@ -96,9 +96,15 @@
   <!-- SVG layer for arrows (overlaid on board) -->
   <svg id="arrowSvg" class="arrow-overlay"></svg>
 
+  <!-- Debug panel -->
+  <details class="debug-panel" id="debugPanel">
+    <summary>Debug</summary>
+    <pre id="debugContent" class="debug-content">No data yet. Make a move or analyze a position.</pre>
+  </details>
+
   <script src="/static/vendor/jquery.min.js"></script>
   <script src="/static/vendor/chess.js"></script>
   <script src="/static/vendor/chessboard.js"></script>
-  <script src="/static/app.js?v=5"></script>
+  <script src="/static/app.js?v=6"></script>
 </body>
 </html>

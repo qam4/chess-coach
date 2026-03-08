@@ -36,7 +36,7 @@ src/chess_coach/
 ├── cli.py          # Click CLI: explain, check commands
 ├── coach.py        # Coach orchestrator class
 ├── analyzer.py     # Position analysis (engine + python-chess bridge)
-├── engine.py       # Engine protocol abstraction (Xboard, UCI future)
+├── engine.py       # Engine protocol abstraction (UCI default, Xboard supported)
 ├── prompts.py      # Prompt templates (system prompt, analysis prompt)
 └── llm/
     ├── __init__.py
@@ -52,7 +52,7 @@ Single `config.yaml` with three sections:
 ```yaml
 engine:
   path: /path/to/engine      # engine binary
-  protocol: xboard            # xboard or uci
+  protocol: uci               # uci (recommended) or xboard
   depth: 18                   # analysis depth
   args: []                    # extra engine CLI args
 

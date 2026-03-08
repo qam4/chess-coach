@@ -74,10 +74,10 @@
 ## Phase 8b — Play vs Engine
 
 - [x] 10. Implement Play vs Engine backend
-  - [ ] 10.1 Add `play(fen, depth, time_limit) -> str` method to `EngineProtocol` ABC and implement in `XboardEngine` (send `force`, `setboard`, `sd`/`st`, `go`, read `move <move>` response)
-  - [ ] 10.2 Add `MoveEvaluation` and `PlayMoveResponse` dataclasses to `coach.py`
-  - [ ] 10.3 Implement `Coach.evaluate_move(fen_before, user_move)`: analyze before/after positions, compute eval drop, classify as good (≤30cp) / inaccuracy (31–100cp) / blunder (>100cp), call LLM for feedback text
-  - [ ] 10.4 Implement `Coach.explain_engine_move(fen_before, engine_move)`: analyze position, call LLM with engine-move-explanation prompt
+  - [x] 10.1 Add `play(fen, depth, time_limit) -> str` method to `EngineProtocol` ABC and implement in `XboardEngine` (send `force`, `setboard`, `sd`/`st`, `go`, read `move <move>` response)
+  - [x] 10.2 Add `MoveEvaluation` and `PlayMoveResponse` dataclasses to `coach.py`
+  - [x] 10.3 Implement `Coach.evaluate_move(fen_before, user_move)`: analyze before/after positions, compute eval drop, classify as good (≤30cp) / inaccuracy (31–100cp) / blunder (>100cp), call LLM for feedback text
+  - [x] 10.4 Implement `Coach.explain_engine_move(fen_before, engine_move)`: analyze position, call LLM with engine-move-explanation prompt
   - [x] 10.5 Implement `Coach.play_move(fen, user_move)`: orchestrate evaluate_move → push user move → engine.play → explain_engine_move → return PlayMoveResponse
   - [x] 10.6 Add `MOVE_EVALUATION_PROMPT` and `ENGINE_MOVE_EXPLANATION_PROMPT` templates to `prompts.py`
   - [x] 10.7 Write unit tests for `evaluate_move` classification thresholds with mocked engine
@@ -113,8 +113,8 @@
 
 ## Phase 10 — UCI Protocol Migration
 
-- [ ] 13. Migrate from Xboard to UCI protocol
-  - [ ] 13.1 Implement `UciEngine(EngineProtocol)` using Blunder's UCI support
-  - [ ] 13.2 Add MultiPV support to retrieve top N candidate moves per position
-  - [ ] 13.3 Update config to default to `protocol: uci`
+- [x] 13. Migrate from Xboard to UCI protocol
+  - [x] 13.1 Implement `UciEngine(EngineProtocol)` using Blunder's UCI support
+  - [ ] 13.2 Add MultiPV support to retrieve top N candidate moves per position (blocked: Blunder does not support MultiPV yet)
+  - [x] 13.3 Update config to default to `protocol: uci`
   - [ ] 13.4 Update README and config examples to reflect UCI as the default

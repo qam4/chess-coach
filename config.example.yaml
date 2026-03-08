@@ -10,8 +10,8 @@ engine:
   #     windows: "C:/tools/stockfish.exe"
   #     darwin: "/opt/homebrew/bin/stockfish"
   path: "/usr/local/bin/stockfish"
-  # Protocol: "xboard" or "uci" (uci coming soon)
-  protocol: "xboard"
+  # Protocol: "uci" (recommended) or "xboard"
+  protocol: "uci"
   # Extra arguments passed to the engine
   args: []
   # Analysis depth (plies)
