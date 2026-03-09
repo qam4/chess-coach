@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from chess_coach.analyzer import analyze_position
-from chess_coach.coach import Coach, TraceStep
+from chess_coach.coach import Coach, CoachingResponse, TraceStep
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -210,9 +210,9 @@ def create_app(coach: Coach) -> FastAPI:
     async def analyze_stream(req: AnalyzeRequest) -> StreamingResponse:
         coach = app.state.coach
 
-        async def generate():  # type: ignore[no-untyped-def]
+        async def generate() -> typing.AsyncGenerator[str, None]:
             queue: asyncio.Queue[str | None] = asyncio.Queue()
-            trace_events: list[dict] = []  # type: ignore[type-arg]
+            trace_events: list[dict[str, typing.Any]] = []
             loop = asyncio.get_event_loop()
 
             def _on_debug(step: TraceStep) -> None:
@@ -226,7 +226,7 @@ def create_app(coach: Coach) -> FastAPI:
                 trace_events.append(event_data)
                 loop.call_soon_threadsafe(queue.put_nowait, _sse_event("progress", event_data))
 
-            async def _run_explain() -> "CoachingResponse | Exception":
+            async def _run_explain() -> CoachingResponse | Exception:
                 try:
                     return await asyncio.to_thread(
                         coach.explain,
@@ -286,9 +286,9 @@ def create_app(coach: Coach) -> FastAPI:
 
         coach = app.state.coach
 
-        async def generate():  # type: ignore[no-untyped-def]
+        async def generate() -> typing.AsyncGenerator[str, None]:
             queue: asyncio.Queue[str | None] = asyncio.Queue()
-            trace_events: list[dict] = []  # type: ignore[type-arg]
+            trace_events: list[dict[str, typing.Any]] = []
             loop = asyncio.get_event_loop()
 
             def _on_debug(step: TraceStep) -> None:
@@ -311,7 +311,7 @@ def create_app(coach: Coach) -> FastAPI:
                     )
                 )
 
-            async def _run_pipeline() -> "dict | Exception":  # type: ignore[type-arg]
+            async def _run_pipeline() -> dict[str, typing.Any] | Exception:
                 try:
                     t0 = time.perf_counter()
 
@@ -423,7 +423,7 @@ def create_app(coach: Coach) -> FastAPI:
     return app
 
 
-def _sse_event(event: str, data: dict) -> str:  # type: ignore[type-arg]
+def _sse_event(event: str, data: dict[str, typing.Any]) -> str:
     """Format a Server-Sent Event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
