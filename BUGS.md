@@ -9,10 +9,13 @@ Tracked issues discovered during development and testing.
   `depth=9` after ~90s, then times out.
 - **Impact**: Shallow analysis produces weak evaluations. Engine thinks
   `e3` is best in the starting position (should be `e4` or `d4`).
-- **Root cause**: Unknown. Possibly the `analyze` command timeout
-  (`max(60.0, depth * 5.0)` = 90s) is too short for Blunder to reach
-  depth 18, or the engine stalls at higher depths.
+- **Root cause**: Xboard `analyze` command didn't reliably reach target
+  depth. The UCI protocol uses `go depth N` which properly requests the
+  full depth.
 - **Debug data**: `"lines": [{"depth": 9, "score_cp": 96, "pv": ["e3", ...]}]`
+- **Status**: FIXED — resolved by UCI protocol migration (Phase 10).
+  `UciEngine.analyze()` sends `go depth {depth}` and parses standard
+  UCI `info` lines reliably.
 
 ### BUG-002: Engine analysis returns empty lines for some positions
 - **Observed**: `analyze_position` for
@@ -20,9 +23,10 @@ Tracked issues discovered during development and testing.
   returns `"lines": []` after 90s.
 - **Impact**: LLM gets an empty "Engine analysis:" section and
   hallucinates. Coaching text is fabricated with no grounding.
-- **Root cause**: Engine may not be producing parseable output for
-  this position, or the thinking line parser is failing silently.
-  Need to capture raw engine stdout to diagnose.
+- **Root cause**: Xboard thinking line parser was failing silently.
+  UCI `info` lines use a standard format that parses reliably.
+- **Status**: FIXED — resolved by UCI protocol migration (Phase 10).
+  `UciEngine._parse_info_line()` handles standard UCI output.
 
 ### BUG-003: Engine plays Na6 (b8a6) — a terrible move
 - **Observed**: `engine.play()` returns `b8a6` (Na6) as Black's
@@ -30,20 +34,21 @@ Tracked issues discovered during development and testing.
   basic opening principles.
 - **Impact**: Games against the engine are not realistic or useful
   for coaching.
-- **Root cause**: Likely related to BUG-001/BUG-002. If the engine
-  can't analyze properly, `play()` (which uses `sd 18` + `go`) may
-  also be producing garbage. The 1s response time for depth 18 is
-  suspiciously fast.
+- **Root cause**: Xboard `sd` + `go` commands weren't working
+  correctly. UCI `go depth N` + `bestmove` parsing is reliable.
+- **Status**: FIXED — resolved by UCI protocol migration (Phase 10).
+  `UciEngine.play()` uses proper `go depth` and reads `bestmove`.
 
 ### BUG-004: eval_after always returns 0cp
 - **Observed**: After any user move, `raw_eval_after_cp` is 0,
   making every opening move look like a 96cp inaccuracy.
 - **Impact**: Move classification is broken. `d4` and `e4` are
   classified as "inaccuracy" when they're among the best moves.
-- **Root cause**: Related to BUG-002. The post-move analysis returns
-  no lines, so `score_cp` defaults to 0. The eval comparison
-  `eval_before(96) - eval_after(0) = 96cp drop` triggers the
-  inaccuracy threshold (>30cp).
+- **Root cause**: Downstream of BUG-002 — Xboard post-move analysis
+  returned no lines, so `score_cp` defaulted to 0. With UCI returning
+  proper analysis lines, eval_after is now correct. The eval negation
+  (`eval_after = -raw_eval_after`) is also properly implemented.
+- **Status**: FIXED — resolved by UCI protocol migration (Phase 10).
 
 ## LLM Issues
 
@@ -78,8 +83,13 @@ Tracked issues discovered during development and testing.
     `explain_engine_move` (currently re-analyzes the same position)
   - Skip `final_analysis` (redundant — we already have eval)
   - Batch the two LLM calls into one prompt
-- **Status**: PARTIALLY FIXED — eliminated 2 redundant engine analyses
-  per move (reuse eval_after analysis in explain_engine_move, skip
-  final_analysis). Pipeline now does 2 engine analyses + 1 engine play
-  + 2 LLM calls instead of 4 analyses + 1 play + 2 LLM calls.
-  Estimated savings: ~180s per move (2 × ~90s engine analysis).
+- **Status**: PARTIALLY FIXED —
+  1. Eliminated 2 redundant engine analyses per move (reuse eval_after
+     analysis in explain_engine_move, skip final_analysis). Pipeline
+     now does 2 engine analyses + 1 engine play + 2 LLM calls instead
+     of 4 analyses + 1 play + 2 LLM calls.
+  2. LLM streaming added (commit 8823d00) — text appears incrementally
+     so perceived wait time is lower even if total time is similar.
+  3. UCI engine is faster than Xboard for the same depth.
+  Remaining opportunities: lower play-mode depth, batch LLM calls,
+  background pre-analysis while user reads coaching text.
