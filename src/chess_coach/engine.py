@@ -684,7 +684,7 @@ class CoachingEngine(EngineProtocol):
         from chess_coach.models import (
             check_version_compatibility,
             format_coaching_command,
-            parse_coaching_response,
+            parse_coaching_envelope,
         )
 
         try:
@@ -709,8 +709,8 @@ class CoachingEngine(EngineProtocol):
                 self._coaching_available = False
                 return False
 
-            data = parse_coaching_response(lines)
-            engine_version = data.get("version", "0.0.0")
+            envelope = parse_coaching_envelope(lines)
+            engine_version = envelope.get("version", "0.0.0")
             compat = check_version_compatibility(engine_version, EXPECTED_VERSION)
 
             if compat == "incompatible":

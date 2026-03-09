@@ -1,0 +1,13 @@
+{
+  "started_at": 1773085051.7025428,
+  "command": "chess-coach explain r1bqkbnr/pppppppp/2n5/4P3/2B5/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+  "status": "COMPLETED",
+  "pid": 31733,
+  "exit_code": 0,
+  "finished_at": 1773085131.762119,
+  "warning": null,
+  "progress": {
+    "text": "5/4",
+    "percent": 100
+  }
+}

@@ -730,6 +730,57 @@ def parse_coaching_response(lines: list[str]) -> dict[str, Any]:
     return data
 
 
+def parse_coaching_envelope(lines: list[str]) -> dict[str, Any]:
+    """Like :func:`parse_coaching_response` but returns the full envelope.
+
+    This is useful when the caller needs envelope-level metadata such as
+    ``version`` or ``type`` that are not part of the inner ``data`` dict.
+
+    Returns:
+        The complete parsed envelope dict (contains ``protocol``,
+        ``version``, ``type``, ``data``, etc.).
+
+    Raises:
+        CoachingParseError: Same conditions as :func:`parse_coaching_response`.
+    """
+    begin_idx: int | None = None
+    end_idx: int | None = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == _BEGIN_MARKER:
+            begin_idx = i
+        elif stripped == _END_MARKER and begin_idx is not None:
+            end_idx = i
+            break
+
+    if begin_idx is None or end_idx is None:
+        raise CoachingParseError("coaching response markers not found in engine output")
+
+    json_lines = lines[begin_idx + 1 : end_idx]
+    raw_text = "\n".join(line.strip() for line in json_lines)
+
+    try:
+        envelope = json.loads(raw_text)
+    except (json.JSONDecodeError, ValueError) as exc:
+        preview = raw_text[:_RAW_TEXT_LIMIT]
+        raise CoachingParseError(
+            f"malformed JSON in coaching response: {exc}\n---\n{preview}"
+        ) from exc
+
+    if not isinstance(envelope, dict):
+        raise CoachingParseError(
+            f"expected JSON object in coaching response, got {type(envelope).__name__}"
+        )
+
+    protocol = envelope.get("protocol")
+    if protocol != "coaching":
+        raise CoachingParseError(
+            f"unexpected protocol field: expected 'coaching', got {protocol!r}"
+        )
+
+    return envelope
+
+
 # ---------------------------------------------------------------------------
 # Version compatibility checking
 # ---------------------------------------------------------------------------

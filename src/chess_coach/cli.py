@@ -15,7 +15,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from chess_coach.coach import Coach
-from chess_coach.engine import EngineProtocol, UciEngine, XboardEngine
+from chess_coach.engine import CoachingEngine, EngineProtocol, XboardEngine
 from chess_coach.llm import create_provider
 
 console = Console()
@@ -32,7 +32,7 @@ def _create_engine(engine_cfg: dict) -> EngineProtocol:  # type: ignore[type-arg
         args = [a for a in args if a != "--xboard"]
         if "--uci" not in args:
             args = ["--uci"] + args
-        return UciEngine(path=path, args=args)
+        return CoachingEngine(path=path, args=args)
 
     # Default: xboard
     if "--xboard" not in args:
@@ -127,19 +127,20 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
         sys.exit(1)
 
     # Create coach
-    coach = Coach(
-        engine=engine,
-        llm=llm,
-        depth=depth or engine_cfg.get("depth", 18),
-        top_moves=coaching_cfg.get("top_moves", 3),
-        level=level or coaching_cfg.get("level", "intermediate"),
-        max_tokens=llm_cfg.get("max_tokens", 512),
-        temperature=llm_cfg.get("temperature", 0.7),
-    )
-
     try:
         with console.status("[bold cyan]Starting engine...", spinner="dots"):
             engine.start()
+
+        # Create coach after engine.start() so coaching protocol probe has run
+        coach = Coach(
+            engine=engine,
+            llm=llm,
+            depth=depth or engine_cfg.get("depth", 18),
+            top_moves=coaching_cfg.get("top_moves", 3),
+            level=level or coaching_cfg.get("level", "intermediate"),
+            max_tokens=llm_cfg.get("max_tokens", 512),
+            temperature=llm_cfg.get("temperature", 0.7),
+        )
 
         t_check = time.perf_counter()
         with console.status("[bold cyan]Checking LLM...", spinner="dots"):
@@ -171,10 +172,20 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
                 elapsed = f" ({step.elapsed_s:.1f}s)" if step.elapsed_s else ""
                 console.log(f"  [dim]{step.step}: {step.message}{elapsed}[/]")
                 for key, val in step.detail.items():
-                    if key == "llm_prompt":
+                    if key in ("llm_prompt", "llm_response"):
                         console.log(f"    [dim]{key}: ({len(val)} chars)[/]")
-                    elif key == "llm_response":
-                        console.log(f"    [dim]{key}: ({len(val)} chars)[/]")
+                        console.log(f"    [dim]{'─' * 60}[/]")
+                        for line in val.splitlines():
+                            console.log(f"    [dim]{line}[/]")
+                        console.log(f"    [dim]{'─' * 60}[/]")
+                    elif key == "position_report":
+                        import json as _json
+
+                        console.log(f"    [dim]{key}:[/]")
+                        console.log(f"    [dim]{'─' * 60}[/]")
+                        for line in _json.dumps(val, indent=2).splitlines():
+                            console.log(f"    [dim]{line}[/]")
+                        console.log(f"    [dim]{'─' * 60}[/]")
                     elif isinstance(val, str) and len(val) > 120:
                         console.log(f"    [dim]{key}: {val[:120]}…[/]")
                     else:
@@ -295,6 +306,9 @@ def serve(ctx: click.Context, port: int) -> None:
         timeout=float(llm_cfg.get("timeout", 300)),
     )
 
+    engine.start()
+
+    # Create coach after engine.start() so coaching protocol probe has run
     coach = Coach(
         engine=engine,
         llm=llm,
@@ -305,7 +319,6 @@ def serve(ctx: click.Context, port: int) -> None:
         temperature=llm_cfg.get("temperature", 0.7),
     )
 
-    engine.start()
     app = create_app(coach)
 
     # Warm up the LLM model so the first web request isn't slow

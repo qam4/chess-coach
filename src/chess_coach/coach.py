@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import chess
 
 from chess_coach.analyzer import analyze_position, format_analysis_for_llm
-from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol
+from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol, UciEngine
 from chess_coach.llm.base import LLMProvider
 from chess_coach.prompts import (
     build_coaching_prompt,
@@ -109,13 +109,22 @@ class Coach:
     @property
     def debug_config(self) -> dict[str, typing.Any]:
         """Return config summary for debug traces."""
-        engine_path = getattr(self.engine, "_path", "?")
-        engine_args = getattr(self.engine, "_args", [])
+        if isinstance(self.engine, CoachingEngine):
+            engine_path = getattr(self.engine, "_inner", None)
+            engine_path = getattr(engine_path, "_path", "?") if engine_path else "?"
+            engine_args = (
+                getattr(self.engine._inner, "_args", []) if hasattr(self.engine, "_inner") else []
+            )
+            protocol = "coaching" if self._coaching_available else "uci"
+        else:
+            engine_path = getattr(self.engine, "_path", "?")
+            engine_args = getattr(self.engine, "_args", [])
+            protocol = "uci" if isinstance(self.engine, UciEngine) else "xboard"
         return {
             "engine": {
                 "path": engine_path,
                 "args": engine_args,
-                "protocol": "xboard",
+                "protocol": protocol,
                 "depth": self.depth,
             },
             "llm": {
@@ -129,6 +138,7 @@ class Coach:
             "coaching": {
                 "level": self.level,
                 "top_moves": self.top_moves,
+                "coaching_available": self._coaching_available,
             },
         }
 
@@ -161,6 +171,8 @@ class Coach:
                 "engine_start",
                 "Coaching protocol: requesting position report",
                 tool="engine",
+                protocol="coaching",
+                engine_command=f"coach eval fen {fen} multipv {self.top_moves}",
                 input_fen=fen,
             )
             _progress("Engine analyzing (coaching protocol)...")
@@ -181,6 +193,7 @@ class Coach:
                 tool="engine",
                 elapsed=t1 - t0,
                 eval_cp=report.eval_cp,
+                position_report=report.to_dict(),
             )
             _progress(f"Engine done ({t1 - t0:.1f}s). LLM thinking...")
 

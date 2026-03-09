@@ -270,30 +270,45 @@ def _format_tactics(report: PositionReport) -> str | None:
 
 
 def _format_threat_map(report: PositionReport) -> str | None:
-    """Format the threat map section, or return None if empty."""
+    """Format the threat map section, or return None if empty.
+
+    Only includes squares with pieces that are attacked by the opponent,
+    to keep the prompt concise.  Empty squares and fully-safe pieces are
+    omitted.
+    """
     if not report.threat_map:
         return None
-    lines = ["--- Piece Safety (Threat Map) ---"]
+    lines = ["--- Piece Safety ---"]
     for entry in report.threat_map:
-        piece_str = entry.piece if entry.piece else "empty"
-        status = "NET ATTACKED" if entry.net_attacked else "safe"
-        lines.append(
-            f"{entry.square} ({piece_str}): "
-            f"W atk={entry.white_attackers} def={entry.white_defenders}, "
-            f"B atk={entry.black_attackers} def={entry.black_defenders} "
-            f"[{status}]"
+        if entry.piece is None:
+            continue
+        # Only show pieces that are attacked by the opposing side
+        is_white_piece = entry.white_defenders > 0 or (
+            entry.white_attackers == 0 and entry.black_attackers == 0
         )
+        opponent_attackers = entry.black_attackers if is_white_piece else entry.white_attackers
+        own_defenders = entry.white_defenders if is_white_piece else entry.black_defenders
+        if opponent_attackers == 0:
+            continue
+        status = "UNDER-DEFENDED" if entry.net_attacked else "defended"
+        lines.append(
+            f"{entry.piece} on {entry.square}: attacked {opponent_attackers}x, "
+            f"defended {own_defenders}x [{status}]"
+        )
+    if len(lines) == 1:
+        return None
     return "\n".join(lines)
 
 
 def _format_top_lines(report: PositionReport) -> str:
-    """Format the top engine lines section."""
+    """Format the top engine lines section, skipping empty lines."""
     lines = ["--- Top Engine Lines ---"]
     for i, pv in enumerate(report.top_lines, 1):
+        if not pv.moves:
+            continue
         moves_str = " ".join(pv.moves)
-        lines.append(
-            f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}"
-        )
+        theme_str = f" — theme: {pv.theme}" if pv.theme else ""
+        lines.append(f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str}{theme_str}")
     return "\n".join(lines)
 
 

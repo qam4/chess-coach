@@ -3,7 +3,7 @@
 engine:
   # Path to the chess engine binary (per-platform overrides)
   path:
-    linux: "~/src/blunder/build/rel/blunder"
+    linux: "~/src/fred/blunder/build/rel/blunder"
     windows: "C:/src/blunder/build/dev/blunder.exe"
   # Protocol: "uci" (recommended) or "xboard"
   protocol: "uci"
