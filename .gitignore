@@ -13,3 +13,6 @@ venv/
 .tox/
 .hypothesis/
 COMMIT_MSG.txt
+
+# Eval/monitoring output
+output/
