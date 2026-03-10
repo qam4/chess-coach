@@ -12,6 +12,8 @@ from chess_coach.engine import AnalysisLine, AnalysisResult, EngineProtocol
 from chess_coach.llm.base import LLMProvider
 
 STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+# A middlegame position not in the opening book — used for threshold tests
+MIDDLEGAME_FEN = "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 w - - 4 7"
 
 
 def _make_line(score_cp: int, depth: int = 12, pv: list[str] | None = None):
@@ -131,7 +133,7 @@ class TestEvaluateMove:
     def test_inaccuracy_just_over_boundary(self):
         """eval_before=100, eval_after=49 => drop=51 => inaccuracy."""
         coach = _make_coach(eval_before_cp=100, eval_after_cp=49)
-        result = coach.evaluate_move(STARTING_FEN, "e2e4")
+        result = coach.evaluate_move(MIDDLEGAME_FEN, "c4b5")
 
         assert result.classification == "inaccuracy"
         assert result.eval_drop_cp == 51
@@ -139,7 +141,7 @@ class TestEvaluateMove:
     def test_inaccuracy_at_upper_boundary(self):
         """eval_before=100, eval_after=0 => drop=100 => inaccuracy."""
         coach = _make_coach(eval_before_cp=100, eval_after_cp=0)
-        result = coach.evaluate_move(STARTING_FEN, "e2e4")
+        result = coach.evaluate_move(MIDDLEGAME_FEN, "c4b5")
 
         assert result.classification == "inaccuracy"
         assert result.eval_drop_cp == 100
@@ -147,7 +149,7 @@ class TestEvaluateMove:
     def test_blunder_just_over_boundary(self):
         """eval_before=100, eval_after=-1 => drop=101 => blunder."""
         coach = _make_coach(eval_before_cp=100, eval_after_cp=-1)
-        result = coach.evaluate_move(STARTING_FEN, "e2e4")
+        result = coach.evaluate_move(MIDDLEGAME_FEN, "c4b5")
 
         assert result.classification == "blunder"
         assert result.eval_drop_cp == 101
@@ -155,7 +157,7 @@ class TestEvaluateMove:
     def test_blunder_large_drop(self):
         """eval_before=200, eval_after=-300 => drop=500 => blunder."""
         coach = _make_coach(eval_before_cp=200, eval_after_cp=-300)
-        result = coach.evaluate_move(STARTING_FEN, "e2e4")
+        result = coach.evaluate_move(MIDDLEGAME_FEN, "c4b5")
 
         assert result.classification == "blunder"
         assert result.eval_drop_cp == 500
@@ -178,7 +180,7 @@ class TestEvaluateMove:
     def test_feedback_populated_for_inaccuracy(self):
         """Inaccuracies get LLM feedback."""
         coach = _make_coach(eval_before_cp=100, eval_after_cp=40)
-        result = coach.evaluate_move(STARTING_FEN, "e2e4")
+        result = coach.evaluate_move(MIDDLEGAME_FEN, "c4b5")
 
         assert result.feedback == "Good move."
 

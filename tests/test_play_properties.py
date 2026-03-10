@@ -34,14 +34,14 @@ def test_classification_matches_thresholds(
 
     For any pair of eval values, the eval drop (clamped to >= 0)
     determines the classification:
-    - good: drop <= 30
-    - inaccuracy: 31 <= drop <= 100
+    - good: drop <= 50
+    - inaccuracy: 51 <= drop <= 100
     - blunder: drop > 100
     """
     eval_drop = max(0, eval_before - eval_after)
     classification = Coach.classify_move(eval_drop)
 
-    if eval_drop <= 30:
+    if eval_drop <= 50:
         assert classification == "good", (
             f"drop={eval_drop} should be 'good', got '{classification}'"
         )

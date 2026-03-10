@@ -194,7 +194,7 @@
         renderMoveList();
 
         // Show coaching text
-        coachingMeta.textContent = '';
+        coachingMeta.textContent = data.opening_name || '';
         coachingText.innerHTML = renderMarkdown(data.coaching_text || '');
         appendDebug('--- Done ---');
 
@@ -435,8 +435,11 @@
   // Render coaching text (analyze mode)
   // =========================================================================
   function renderCoaching(data) {
-    coachingMeta.textContent =
-      'Best move: ' + (data.best_move || '?') + '  (' + (data.score || '?') + ')';
+    var meta = 'Best move: ' + (data.best_move || '?') + '  (' + (data.score || '?') + ')';
+    if (data.opening_name) {
+      meta = data.opening_name + '  |  ' + meta;
+    }
+    coachingMeta.textContent = meta;
     coachingText.innerHTML = renderMarkdown(data.coaching_text || '');
   }
 

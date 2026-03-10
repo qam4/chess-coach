@@ -50,6 +50,7 @@ def create_app(coach: Coach) -> FastAPI:
                 "score": response.score,
                 "analysis_text": top_line or "",
                 "fen": response.fen,
+                "opening_name": response.opening_name,
                 "debug": {
                     "fen_input": response.fen,
                     "engine_analysis": response.analysis_text,
@@ -105,6 +106,22 @@ def create_app(coach: Coach) -> FastAPI:
         if game_over:
             result = board.result()
 
+        # Opening identification — check after user move and after engine move,
+        # return the most specific (latest) match
+        from chess_coach.openings import lookup_fen
+
+        opening_name = None
+        # Check position after user's move
+        board_after_user = chess.Board(req.fen)
+        board_after_user.push(move)
+        opening = lookup_fen(board_after_user.fen())
+        if opening:
+            opening_name = opening.name
+        # Check position after engine's move (may be more specific)
+        opening2 = lookup_fen(board.fen())
+        if opening2:
+            opening_name = opening2.name
+
         return {
             "engine_move": response.engine_move,
             "engine_move_uci": response.engine_move_uci,
@@ -115,6 +132,7 @@ def create_app(coach: Coach) -> FastAPI:
             "eval_score": response.eval_score,
             "game_over": game_over,
             "result": result,
+            "opening_name": opening_name,
             "debug": response.debug,
         }
 
@@ -356,18 +374,33 @@ def create_app(coach: Coach) -> FastAPI:
                     )
 
                     # Step 3: LLM explains the engine's move — reuse
-                    # the after-move analysis from evaluate_move
-                    coaching_text = await asyncio.to_thread(
-                        coach.explain_engine_move,
-                        fen_after_user,
-                        engine_move_san,
-                        _on_debug,
-                        evaluation._result_after,
-                    )
+                    # the after-move analysis from evaluate_move.
+                    # In known openings, skip the LLM and just name the opening.
+                    from chess_coach.openings import lookup_fen as _lookup_fen
+
+                    board_after.push(engine_move_obj)
+                    opening_before_engine = _lookup_fen(fen_after_user)
+                    opening_after_engine = _lookup_fen(board_after.fen())
+                    # Use the most specific opening name available
+                    opening_match = opening_after_engine or opening_before_engine
+                    if opening_match:
+                        coaching_text = f"**{opening_match.name}** ({opening_match.eco})"
+                        _emit(
+                            "explain_skip_opening",
+                            f"Opening book — {opening_match.name}",
+                            tool="llm",
+                        )
+                    else:
+                        coaching_text = await asyncio.to_thread(
+                            coach.explain_engine_move,
+                            fen_after_user,
+                            engine_move_san,
+                            _on_debug,
+                            evaluation._result_after,
+                        )
 
                     # Step 4: Derive eval from evaluate_move (no extra
                     # engine call needed)
-                    board_after.push(engine_move_obj)
                     eval_cp = evaluation.eval_after_cp
                     eval_score = f"{eval_cp / 100:+.2f}"
                     t_end = time.perf_counter()
@@ -385,6 +418,19 @@ def create_app(coach: Coach) -> FastAPI:
                     game_over = board_after.is_game_over()
                     result = board_after.result() if game_over else None
 
+                    # Opening identification
+                    from chess_coach.openings import lookup_fen as _lookup_fen
+
+                    opening_name = None
+                    # Check after user's move
+                    _op = _lookup_fen(fen_after_user)
+                    if _op:
+                        opening_name = _op.name
+                    # Check after engine's move (may be more specific)
+                    _op2 = _lookup_fen(board_after.fen())
+                    if _op2:
+                        opening_name = _op2.name
+
                     return {
                         "engine_move": engine_move_san,
                         "engine_move_uci": engine_move_uci,
@@ -395,6 +441,7 @@ def create_app(coach: Coach) -> FastAPI:
                         "eval_score": eval_score,
                         "game_over": game_over,
                         "result": result,
+                        "opening_name": opening_name,
                     }
                 except Exception as exc:
                     return exc

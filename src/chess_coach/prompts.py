@@ -45,8 +45,14 @@ notation. Refer to pieces by name and squares when helpful.\
 """
 
 
-def build_coaching_prompt(analysis_text: str, level: str = "intermediate") -> str:
+def build_coaching_prompt(
+    analysis_text: str,
+    level: str = "intermediate",
+    opening_name: str | None = None,
+) -> str:
     """Build the full prompt for the LLM."""
+    if opening_name:
+        analysis_text = f"Opening: {opening_name}\n\n{analysis_text}"
     return ANALYSIS_PROMPT_TEMPLATE.format(
         system=SYSTEM_PROMPT,
         level=level,
@@ -312,7 +318,11 @@ def _format_top_lines(report: PositionReport) -> str:
     return "\n".join(lines)
 
 
-def build_rich_coaching_prompt(report: PositionReport, level: str = "intermediate") -> str:
+def build_rich_coaching_prompt(
+    report: PositionReport,
+    level: str = "intermediate",
+    opening_name: str | None = None,
+) -> str:
     """Build a rich coaching prompt from a PositionReport.
 
     Formats each section of the report conditionally — sections with no data
@@ -331,6 +341,10 @@ def build_rich_coaching_prompt(report: PositionReport, level: str = "intermediat
         The complete prompt string ready to send to the LLM.
     """
     sections: list[str] = []
+
+    # Opening identification (if known)
+    if opening_name:
+        sections.append(f"--- Opening ---\n{opening_name}")
 
     # Always-present sections
     sections.append(_format_eval_breakdown(report))

@@ -12,6 +12,7 @@ import chess
 from chess_coach.analyzer import analyze_position, format_analysis_for_llm
 from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol, UciEngine
 from chess_coach.llm.base import LLMProvider
+from chess_coach.openings import lookup_fen
 from chess_coach.prompts import (
     build_coaching_prompt,
     build_engine_move_explanation_prompt,
@@ -55,6 +56,7 @@ class CoachingResponse:
     engine_elapsed_s: float = 0.0
     llm_elapsed_s: float = 0.0
     llm_prompt: str = ""
+    opening_name: str | None = None
 
 
 @dataclass
@@ -164,6 +166,17 @@ class Coach:
 
         _trace("config", "Pipeline config", tool="system", **self.debug_config)
 
+        # ----- Opening identification -----
+        opening = lookup_fen(fen)
+        if opening:
+            _trace(
+                "opening",
+                f"Opening: {opening.eco} {opening.name}",
+                eco=opening.eco,
+                name=opening.name,
+                pgn=opening.pgn,
+            )
+
         # ----- Coaching protocol path (rich structured data) -----
         if self._coaching_available:
             assert isinstance(self.engine, CoachingEngine)
@@ -197,7 +210,8 @@ class Coach:
             )
             _progress(f"Engine done ({t1 - t0:.1f}s). LLM thinking...")
 
-            prompt = build_rich_coaching_prompt(report, level=use_level)
+            opening_label = f"{opening.eco} {opening.name}" if opening else None
+            prompt = build_rich_coaching_prompt(report, level=use_level, opening_name=opening_label)
             logger.debug("Rich coaching prompt length: %d chars", len(prompt))
 
             _trace(
@@ -238,6 +252,7 @@ class Coach:
                 engine_elapsed_s=t1 - t0,
                 llm_elapsed_s=t3 - t2,
                 llm_prompt=prompt,
+                opening_name=opening.name if opening else None,
             )
 
         # ----- UCI fallback path (existing flow) -----
@@ -277,7 +292,8 @@ class Coach:
         _progress(f"Engine done ({t1 - t0:.1f}s) — best: {best} ({score}). LLM thinking...")
 
         analysis_text = format_analysis_for_llm(result, level=use_level)
-        prompt = build_coaching_prompt(analysis_text, level=use_level)
+        opening_label = f"{opening.eco} {opening.name}" if opening else None
+        prompt = build_coaching_prompt(analysis_text, level=use_level, opening_name=opening_label)
         logger.debug("Coaching prompt length: %d chars", len(prompt))
 
         _trace(
@@ -318,6 +334,7 @@ class Coach:
             engine_elapsed_s=t1 - t0,
             llm_elapsed_s=t3 - t2,
             llm_prompt=prompt,
+            opening_name=opening.name if opening else None,
         )
 
     def check(self) -> dict[str, bool]:
@@ -382,11 +399,18 @@ class Coach:
                 nag=report.nag,
             )
 
-            # Skip LLM for good moves — no need to explain what's not wrong
-            if report.classification == "good" or report.nag in ("!!", "!", "!?"):
+            # Skip LLM for good moves — no need to explain what's not wrong.
+            # If the user's move leads to a known opening position, it's a
+            # book move — use a very high threshold (only critique real blunders).
+            # Otherwise use the normal 50cp threshold.
+            board_tmp = chess.Board(fen_before)
+            board_tmp.push(chess.Move.from_uci(user_move))
+            is_book_move = lookup_fen(board_tmp.fen()) is not None
+            skip_threshold = 150 if is_book_move else 50
+            if report.eval_drop_cp <= skip_threshold:
                 _trace(
                     "eval_skip_llm",
-                    f"Good move ({report.nag}) — skipping LLM feedback",
+                    f"Good move (drop {report.eval_drop_cp}cp) — skipping LLM",
                     tool="llm",
                 )
                 return MoveEvaluation(
@@ -512,8 +536,11 @@ class Coach:
             classification=classification,
         )
 
-        # Skip LLM for good moves — no need to explain what's not wrong
-        if classification == "good":
+        # Skip LLM for good moves — no need to explain what's not wrong.
+        # If the user's move leads to a known opening, it's a book move.
+        is_book_move = lookup_fen(fen_after) is not None
+        skip_threshold = 150 if is_book_move else 50
+        if eval_drop <= skip_threshold:
             _trace(
                 "eval_skip_llm",
                 f"Good move (drop {eval_drop}cp) — skipping LLM feedback",

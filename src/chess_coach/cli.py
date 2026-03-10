@@ -219,6 +219,8 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
                 sys.exit(1)
 
         console.print()
+        if response.opening_name:
+            console.print(f"  Opening: {response.opening_name}")
         console.print(
             Panel(
                 response.analysis_text,
