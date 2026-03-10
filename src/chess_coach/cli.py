@@ -310,6 +310,15 @@ def serve(ctx: click.Context, port: int) -> None:
 
     engine.start()
 
+    # Log configuration at startup
+    coaching_available = hasattr(engine, "coaching_available") and engine.coaching_available
+    protocol = "coaching" if coaching_available else engine_cfg.get("protocol", "?")
+    level = coaching_cfg.get("level", "intermediate")
+    depth = engine_cfg.get("depth", 18)
+    click.echo(f"Engine: {engine_cfg.get('path', '?')} (protocol: {protocol})")
+    click.echo(f"LLM: {llm_cfg['provider']} / {llm_cfg['model']}")
+    click.echo(f"Level: {level}, depth: {depth}")
+
     # Create coach after engine.start() so coaching protocol probe has run
     coach = Coach(
         engine=engine,

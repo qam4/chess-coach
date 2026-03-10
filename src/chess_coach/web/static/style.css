@@ -327,6 +327,36 @@ header h1 {
 
 .feedback-blunder .badge { color: #ef4444; }
 
+/* --- Hint --- */
+.hint-container {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.hint-btn {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.hint-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+}
+
+.hint-text {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(99, 102, 241, 0.1);
+  border-left: 3px solid #6366f1;
+  border-radius: 4px;
+  color: #c7d2fe;
+  font-weight: 600;
+}
+
 /* --- Color picker modal --- */
 .modal-overlay {
   position: fixed;

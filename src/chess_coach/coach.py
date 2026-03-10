@@ -68,6 +68,8 @@ class MoveEvaluation:
     eval_after_cp: int
     eval_drop_cp: int
     feedback: str  # LLM-generated feedback
+    hint_uci: str | None = None
+    """Best next move for the user (UCI notation), extracted from engine PV."""
     _result_after: typing.Any = field(default=None, repr=False)
     """Engine AnalysisResult for the position after the user's move (internal)."""
 

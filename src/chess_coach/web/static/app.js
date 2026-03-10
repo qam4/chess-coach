@@ -18,6 +18,9 @@
   var analyzeControls = document.getElementById('analyzeControls');
   var playControls = document.getElementById('playControls');
   var moveListPanel = document.getElementById('moveListPanel');
+  var hintContainer = document.getElementById('hintContainer');
+  var hintBtn = document.getElementById('hintBtn');
+  var hintText = document.getElementById('hintText');
   var moveList = document.getElementById('moveList');
   var gameResult = document.getElementById('gameResult');
   var newGameBtn = document.getElementById('newGameBtn');
@@ -149,6 +152,7 @@
     setLoading(true, 'Evaluating your move…');
     clearArrows();
     userFeedback.hidden = true;
+    hintContainer.hidden = true;
     clearDebug();
     appendDebug('Play move: FEN=' + fenBeforeMove + ' move=' + rawUci);
 
@@ -196,6 +200,17 @@
         // Show coaching text
         coachingMeta.textContent = data.opening_name || '';
         coachingText.innerHTML = renderMarkdown(data.coaching_text || '');
+
+        // Show hint button if hint available
+        if (data.hint_san) {
+          hintText.textContent = 'Consider playing: ' + data.hint_san;
+          hintText.hidden = true;
+          hintBtn.textContent = '💡 Show hint';
+          hintContainer.hidden = false;
+        } else {
+          hintContainer.hidden = true;
+        }
+
         appendDebug('--- Done ---');
 
         // Game over?
@@ -383,6 +398,19 @@
   // =========================================================================
   analyzeBtn.addEventListener('click', function () {
     analyze();
+  });
+
+  // =========================================================================
+  // Hint toggle
+  // =========================================================================
+  hintBtn.addEventListener('click', function () {
+    if (hintText.hidden) {
+      hintText.hidden = false;
+      hintBtn.textContent = '💡 Hide hint';
+    } else {
+      hintText.hidden = true;
+      hintBtn.textContent = '💡 Show hint';
+    }
   });
 
   function analyze() {

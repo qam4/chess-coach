@@ -422,14 +422,36 @@ def create_app(coach: Coach) -> FastAPI:
                     from chess_coach.openings import lookup_fen as _lookup_fen
 
                     opening_name = None
-                    # Check after user's move
                     _op = _lookup_fen(fen_after_user)
                     if _op:
                         opening_name = _op.name
-                    # Check after engine's move (may be more specific)
                     _op2 = _lookup_fen(board_after.fen())
                     if _op2:
                         opening_name = _op2.name
+
+                    # Extract hint: best next move for the user.
+                    # Try existing PV first, fall back to a quick engine query.
+                    hint_uci = None
+                    hint_san = None
+                    ra = evaluation._result_after
+                    if ra and ra.top_line and len(ra.top_line.pv) >= 2:
+                        if ra.top_line.pv[0] == engine_move_uci:
+                            hint_uci = ra.top_line.pv[1]
+                    if hint_uci is None and not game_over:
+                        try:
+                            hint_uci = await asyncio.to_thread(
+                                coach.engine.play,
+                                board_after.fen(),
+                                depth=coach.depth,
+                            )
+                        except Exception:
+                            pass
+                    if hint_uci:
+                        try:
+                            hint_move = chess.Move.from_uci(hint_uci)
+                            hint_san = board_after.san(hint_move)
+                        except (ValueError, AssertionError):
+                            hint_san = hint_uci
 
                     return {
                         "engine_move": engine_move_san,
@@ -442,6 +464,8 @@ def create_app(coach: Coach) -> FastAPI:
                         "game_over": game_over,
                         "result": result,
                         "opening_name": opening_name,
+                        "hint_uci": hint_uci,
+                        "hint_san": hint_san,
                     }
                 except Exception as exc:
                     return exc
