@@ -76,10 +76,10 @@ class TestClassifyMove:
         assert Coach.classify_move(0) == "good"
 
     def test_good_at_boundary(self):
-        assert Coach.classify_move(30) == "good"
+        assert Coach.classify_move(50) == "good"
 
     def test_inaccuracy_just_above_good(self):
-        assert Coach.classify_move(31) == "inaccuracy"
+        assert Coach.classify_move(51) == "inaccuracy"
 
     def test_inaccuracy_at_boundary(self):
         assert Coach.classify_move(100) == "inaccuracy"
@@ -121,20 +121,20 @@ class TestEvaluateMove:
         assert result.eval_drop_cp == 0
 
     def test_good_move_at_boundary(self):
-        """eval_before=50, eval_after=20 => drop=30 => good."""
-        coach = _make_coach(eval_before_cp=50, eval_after_cp=20)
+        """eval_before=100, eval_after=50 => drop=50 => good."""
+        coach = _make_coach(eval_before_cp=100, eval_after_cp=50)
         result = coach.evaluate_move(STARTING_FEN, "e2e4")
 
         assert result.classification == "good"
-        assert result.eval_drop_cp == 30
+        assert result.eval_drop_cp == 50
 
     def test_inaccuracy_just_over_boundary(self):
-        """eval_before=50, eval_after=19 => drop=31 => inaccuracy."""
-        coach = _make_coach(eval_before_cp=50, eval_after_cp=19)
+        """eval_before=100, eval_after=49 => drop=51 => inaccuracy."""
+        coach = _make_coach(eval_before_cp=100, eval_after_cp=49)
         result = coach.evaluate_move(STARTING_FEN, "e2e4")
 
         assert result.classification == "inaccuracy"
-        assert result.eval_drop_cp == 31
+        assert result.eval_drop_cp == 51
 
     def test_inaccuracy_at_upper_boundary(self):
         """eval_before=100, eval_after=0 => drop=100 => inaccuracy."""
@@ -168,9 +168,16 @@ class TestEvaluateMove:
         assert result.classification == "good"
         assert result.eval_drop_cp == 0
 
-    def test_feedback_is_populated(self):
-        """LLM feedback text is included in the result."""
+    def test_feedback_skipped_for_good_move(self):
+        """Good moves skip LLM — feedback is empty."""
         coach = _make_coach(eval_before_cp=50, eval_after_cp=40)
+        result = coach.evaluate_move(STARTING_FEN, "e2e4")
+
+        assert result.feedback == ""
+
+    def test_feedback_populated_for_inaccuracy(self):
+        """Inaccuracies get LLM feedback."""
+        coach = _make_coach(eval_before_cp=100, eval_after_cp=40)
         result = coach.evaluate_move(STARTING_FEN, "e2e4")
 
         assert result.feedback == "Good move."

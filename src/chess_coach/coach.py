@@ -332,11 +332,11 @@ class Coach:
         """Classify a move based on centipawn eval drop.
 
         Thresholds (from side-to-move perspective):
-        - good: eval drop <= 30 cp
-        - inaccuracy: eval drop 31-100 cp
+        - good: eval drop <= 50 cp  (less than half a pawn — not worth critiquing)
+        - inaccuracy: eval drop 51-100 cp
         - blunder: eval drop > 100 cp
         """
-        if eval_drop_cp <= 30:
+        if eval_drop_cp <= 50:
             return "good"
         elif eval_drop_cp <= 100:
             return "inaccuracy"
@@ -381,6 +381,21 @@ class Coach:
                 eval_drop_cp=report.eval_drop_cp,
                 nag=report.nag,
             )
+
+            # Skip LLM for good moves — no need to explain what's not wrong
+            if report.classification == "good" or report.nag in ("!!", "!", "!?"):
+                _trace(
+                    "eval_skip_llm",
+                    f"Good move ({report.nag}) — skipping LLM feedback",
+                    tool="llm",
+                )
+                return MoveEvaluation(
+                    classification="good",
+                    eval_before_cp=report.best_eval_cp,
+                    eval_after_cp=report.user_eval_cp,
+                    eval_drop_cp=report.eval_drop_cp,
+                    feedback="",
+                )
 
             prompt = build_rich_move_evaluation_prompt(report, level=self.level)
             _trace(
@@ -496,6 +511,22 @@ class Coach:
             eval_drop_cp=eval_drop,
             classification=classification,
         )
+
+        # Skip LLM for good moves — no need to explain what's not wrong
+        if classification == "good":
+            _trace(
+                "eval_skip_llm",
+                f"Good move (drop {eval_drop}cp) — skipping LLM feedback",
+                tool="llm",
+            )
+            return MoveEvaluation(
+                classification="good",
+                eval_before_cp=eval_before,
+                eval_after_cp=eval_after,
+                eval_drop_cp=eval_drop,
+                feedback="",
+                _result_after=result_after,
+            )
 
         # 5. Format analysis and call LLM for feedback
         analysis_text = format_analysis_for_llm(
