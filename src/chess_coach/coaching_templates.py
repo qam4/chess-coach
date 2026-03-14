@@ -87,15 +87,13 @@ def generate_move_coaching(
         )
     elif cls == "blunder":
         sections.append(
-            f"That's a blunder — it drops {drop / 100:.1f} pawns. "
-            f"Let's look at what went wrong."
+            f"That's a blunder — it drops {drop / 100:.1f} pawns. Let's look at what went wrong."
         )
 
     # What the engine preferred
     if report.best_move and cls != "good":
         sections.append(
-            f"The engine preferred {report.best_move} "
-            f"(eval: {report.best_eval_cp / 100:+.2f})."
+            f"The engine preferred {report.best_move} (eval: {report.best_eval_cp / 100:+.2f})."
         )
 
     # Missed tactics
