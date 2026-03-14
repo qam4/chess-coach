@@ -76,7 +76,7 @@ class HangingPiece:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> HangingPiece:
-        return cls(square=d["square"], piece=d["piece"], color=d["color"])
+        return cls(square=d["square"], piece=d["piece"], color=d.get("color", ""))
 
 
 @dataclass(frozen=True)
@@ -395,8 +395,11 @@ def _validate_eval_breakdown(data: Any, ctx: str = "eval_breakdown") -> None:
 
 def _validate_hanging_piece(data: Any, ctx: str = "hanging_piece") -> None:
     _require_dict(data, ctx)
-    for field in ("square", "piece", "color"):
+    for field in ("square", "piece"):
         _require_key(data, field, str, ctx)
+    # 'color' is optional — inferred from the parent side key when missing
+    if "color" in data:
+        _require_key(data, "color", str, ctx)
 
 
 def _validate_threat(data: Any, ctx: str = "threat") -> None:
@@ -487,6 +490,11 @@ def validate_position_report(data: dict[str, Any]) -> PositionReport:
     _validate_eval_breakdown(data["eval_breakdown"])
 
     _require_key(data, "hanging_pieces", dict)
+    # Backfill 'color' from the side key when the engine omits it
+    for side in ("white", "black"):
+        for hp in data["hanging_pieces"].get(side, []):
+            if isinstance(hp, dict) and "color" not in hp:
+                hp["color"] = side
     _validate_side_dict(data["hanging_pieces"], "hanging_pieces", _validate_hanging_piece)
 
     _require_key(data, "threats", dict)

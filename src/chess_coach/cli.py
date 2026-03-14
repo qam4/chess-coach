@@ -311,13 +311,15 @@ def serve(ctx: click.Context, port: int) -> None:
     engine.start()
 
     # Log configuration at startup
+    play_elo = engine_cfg.get("play_elo", 0)
     coaching_available = hasattr(engine, "coaching_available") and engine.coaching_available
     protocol = "coaching" if coaching_available else engine_cfg.get("protocol", "?")
     level = coaching_cfg.get("level", "intermediate")
     depth = engine_cfg.get("depth", 18)
     click.echo(f"Engine: {engine_cfg.get('path', '?')} (protocol: {protocol})")
     click.echo(f"LLM: {llm_cfg['provider']} / {llm_cfg['model']}")
-    click.echo(f"Level: {level}, depth: {depth}")
+    elo_str = f"Elo {play_elo}" if play_elo else "full strength"
+    click.echo(f"Level: {level}, depth: {depth}, play: {elo_str}")
 
     # Create coach after engine.start() so coaching protocol probe has run
     coach = Coach(
@@ -328,6 +330,7 @@ def serve(ctx: click.Context, port: int) -> None:
         level=coaching_cfg.get("level", "intermediate"),
         max_tokens=llm_cfg.get("max_tokens", 512),
         temperature=llm_cfg.get("temperature", 0.7),
+        play_elo=play_elo,
     )
 
     app = create_app(coach)

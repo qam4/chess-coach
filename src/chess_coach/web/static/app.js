@@ -27,6 +27,8 @@
   var undoBtn = document.getElementById('undoBtn');
   var colorModal = document.getElementById('colorModal');
   var debugContent = document.getElementById('debugContent');
+  var strengthSlider = document.getElementById('strengthSlider');
+  var strengthLabel = document.getElementById('strengthLabel');
 
   // --- State ---
   var mode = 'analyze'; // 'analyze' | 'play'
@@ -91,6 +93,36 @@
   // =========================================================================
   depthSlider.addEventListener('input', function () {
     depthValue.textContent = depthSlider.value;
+  });
+
+  // =========================================================================
+  // Strength slider (play mode)
+  // =========================================================================
+  function eloLabel(elo) {
+    if (elo === 0) return 'Full strength';
+    var titles = [
+      [2400, 'GM'], [2300, 'IM'], [2200, 'FM'],
+      [2000, 'CM'], [1800, 'Class B'], [1600, 'Class C'],
+      [1400, 'Class D'], [1200, 'Novice'], [0, 'Beginner'],
+    ];
+    var title = 'Beginner';
+    for (var i = 0; i < titles.length; i++) {
+      if (elo >= titles[i][0]) { title = titles[i][1]; break; }
+    }
+    return 'Elo ' + elo + ' (' + title + ')';
+  }
+
+  strengthSlider.addEventListener('input', function () {
+    strengthLabel.textContent = eloLabel(parseInt(strengthSlider.value));
+  });
+
+  strengthSlider.addEventListener('change', function () {
+    var elo = parseInt(strengthSlider.value);
+    fetch('/api/play/strength', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ play_elo: elo }),
+    });
   });
 
   // =========================================================================

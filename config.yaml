@@ -11,6 +11,12 @@ engine:
   args: []
   # Analysis depth (plies)
   depth: 8
+  # Play strength: Elo rating for engine's play moves (500-2500)
+  # Analysis always uses full strength regardless of this setting.
+  # Set to 0 or omit to play at full strength.
+  play_elo: 1500
+  # Play strength (1-20, only affects engine moves in play mode, not analysis)
+  play_skill: 10
   # Analysis time limit in seconds (overrides depth if set)
   # time_limit: 5.0
 

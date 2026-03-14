@@ -75,6 +75,28 @@ def create_app(coach: Coach) -> FastAPI:
             "llm": status.get("llm", False),
         }
 
+    @app.get("/api/play/strength")
+    async def get_strength() -> dict:  # type: ignore[type-arg]
+        return {"play_elo": app.state.coach.play_elo}
+
+    @app.post("/api/play/strength")
+    async def set_strength(req: dict) -> dict:  # type: ignore[type-arg]
+        elo = req.get("play_elo", 0)
+        if not isinstance(elo, int) or elo < 0 or elo > 2500:
+            raise HTTPException(
+                status_code=400,
+                detail="play_elo must be 0-2500 (0 = full strength)",
+            )
+        coach = app.state.coach
+        coach.play_elo = elo
+        if hasattr(coach.engine, "set_option"):
+            if elo > 0:
+                coach.engine.set_option("UCI_LimitStrength", True)
+                coach.engine.set_option("UCI_Elo", elo)
+            else:
+                coach.engine.set_option("UCI_LimitStrength", False)
+        return {"play_elo": elo}
+
     @app.post("/api/play/move")
     async def play_move(req: PlayMoveRequest) -> dict:  # type: ignore[type-arg]
         # Validate FEN
@@ -146,10 +168,12 @@ def create_app(coach: Coach) -> FastAPI:
         if req.color == "black":
             # Engine plays first as white
             try:
+                app.state.coach._set_play_skill()
                 engine_move_uci = app.state.coach.engine.play(
                     starting_fen,
                     depth=app.state.coach.depth,
                 )
+                app.state.coach._set_full_strength()
                 board = chess.Board(starting_fen)
                 engine_move_obj = chess.Move.from_uci(engine_move_uci)
                 engine_move_san = board.san(engine_move_obj)
@@ -355,11 +379,13 @@ def create_app(coach: Coach) -> FastAPI:
                         commands=["force", f"setboard {fen_after_user}", f"sd {coach.depth}", "go"],
                     )
 
+                    coach._set_play_skill()
                     engine_move_uci = await asyncio.to_thread(
                         coach.engine.play,
                         fen_after_user,
                         depth=coach.depth,
                     )
+                    coach._set_full_strength()
                     t_play = time.perf_counter()
 
                     engine_move_obj = chess.Move.from_uci(engine_move_uci)

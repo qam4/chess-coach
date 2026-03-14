@@ -9,10 +9,19 @@ for.
 
 ```
 FEN position
-    → Chess engine (Blunder) analyzes: top moves, scores, PV lines
-    → LLM (Qwen3-8B via Ollama) explains in plain English
+    → Chess engine (Blunder) analyzes via UCI + coaching protocol
+    → Rich structured data: eval breakdown, threats, hanging pieces, tactics
+    → LLM (Qwen3 via Ollama) explains in plain English
     → You understand the position, not just the move
 ```
+
+Features:
+- Position analysis with natural language coaching
+- Play mode: play against the engine with move-by-move feedback
+- Opening identification (3600+ named openings from ECO)
+- Web UI with SSE streaming for real-time coaching
+- Coaching protocol: structured engine data (eval breakdown, threats, king safety, pawn structure)
+- Pluggable LLM backend (Ollama, OpenAI-compatible)
 
 ## Quick start
 
@@ -33,39 +42,16 @@ ollama pull qwen3:8b
 
 #### Option B: Docker (recommended for AL2 / older glibc)
 
-The native Ollama binary requires glibc 2.27+. On Amazon Linux 2 or similar,
-use Docker instead:
-
 ```bash
-# Start Ollama in Docker (persists models across restarts)
 docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
-
-# Pull a model inside the container
 docker exec ollama ollama pull qwen3:8b
 ```
-
-Useful Docker commands:
-
-```bash
-# Check if Ollama is already running
-docker ps | grep ollama
-
-# Stop and restart
-docker stop ollama
-docker start ollama
-
-# Pull a different model
-docker exec ollama ollama pull mistral
-```
-
-The default `base_url: "http://localhost:11434"` in `config.yaml` works for
-both native and Docker setups since the container maps port 11434.
 
 ### Install chess-coach
 
 ```bash
 pip install -e .
-
+cp config.example.yaml config.yaml
 # Edit config.yaml with your engine path
 ```
 
@@ -80,34 +66,10 @@ chess-coach explain "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
 
 # Override depth or coaching level
 chess-coach explain "r1bqkb1r/pppppppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4" \
-    --depth 20 --level beginner
-```
+    --depth 12 --level beginner
 
-### Example output
-
-```
-============================================================
-Position: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
-Best move: e7e5  (+0.12)
-============================================================
-
-Engine analysis:
-  Line 1: +0.12 (depth 18)   e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O
-
-------------------------------------------------------------
-Coach says:
-------------------------------------------------------------
-This is the starting position after 1.e4. White has occupied the center
-with a pawn and opened lines for the bishop and queen. Black has many
-good responses.
-
-The engine recommends 1...e5, the classical reply. This fights for the
-center immediately and opens the diagonal for Black's dark-squared
-bishop. After 2.Nf3 Nc6, both sides develop naturally toward the
-Italian Game or Ruy Lopez.
-
-The position is essentially equal — neither side has an advantage yet.
-Focus on developing your pieces toward the center and castling early.
+# Start the web UI
+chess-coach serve
 ```
 
 ## Configuration
@@ -116,10 +78,10 @@ Edit `config.yaml`:
 
 ```yaml
 engine:
-  path: "path/to/blunder.exe"
-  protocol: "xboard"          # "uci" coming soon
-  args: ["--xboard", "--nnue", "path/to/weights.bin"]
-  depth: 18
+  path: "path/to/blunder"
+  protocol: "uci"              # uci (recommended) or xboard
+  args: []                     # --uci/--xboard added automatically
+  depth: 8
 
 llm:
   provider: "ollama"           # or "openai_compat"
@@ -127,98 +89,59 @@ llm:
   base_url: "http://localhost:11434"
   max_tokens: 512
   temperature: 0.7
-  timeout: 300                 # seconds; increase for slow models
+  timeout: 300
 
 coaching:
   top_moves: 3
   level: "intermediate"        # beginner, intermediate, advanced
 ```
 
-## Development Setup
+The engine protocol defaults to UCI. If Blunder supports the coaching protocol
+(`coach ping`), chess-coach automatically uses it for richer analysis data
+(eval breakdown, threats, hanging pieces, pawn structure, king safety). If not,
+it falls back to standard UCI analysis.
 
-### Install dependencies
+## Development
 
 ```bash
-# Option A: editable install with dev extras (recommended)
 pip install -e ".[dev]"
 
-# Option B: traditional requirements file
-pip install -r requirements-dev.txt
-```
-
-### Running tests and checks
-
-The project uses [tox](https://tox.wiki/) to run tests, linting, and type checking in isolated environments.
-
-```bash
-# Run everything (tests + lint + typecheck)
-tox
-
-# Run just tests
-tox -e py311
-
-# Run just linting (ruff check + format check)
-tox -e lint
-
-# Run just type checking (mypy)
-tox -e typecheck
-
-# Auto-fix formatting issues
-tox -e format
-```
-
-Or run tools directly without tox:
-
-```bash
-pytest tests/
+# Run checks
+pytest
+mypy src/
 ruff check src/ tests/
-ruff format src/ tests/
-mypy src/chess_coach/
+ruff format --check src/ tests/
 ```
+
+CI runs on GitHub Actions (Python 3.11 + 3.12) on every push to main.
 
 ## Swapping the LLM
 
-The LLM provider is pluggable. To use a different backend:
+The LLM provider is pluggable:
 
-### Ollama (default)
 ```yaml
+# Ollama (default)
 llm:
   provider: "ollama"
-  model: "qwen3:8b"           # or mistral, llama3.1, etc.
+  model: "qwen3:8b"
   base_url: "http://localhost:11434"
-```
 
-### llama.cpp server
-```bash
-./llama-server -m model.gguf --host 0.0.0.0 --port 8080
-```
-```yaml
+# llama.cpp server or any OpenAI-compatible API
 llm:
   provider: "openai_compat"
   model: "local-model"
   base_url: "http://localhost:8080"
 ```
 
-### Any OpenAI-compatible API
-```yaml
-llm:
-  provider: "openai_compat"
-  model: "your-model"
-  base_url: "http://your-server:port"
-```
-
 ## Swapping the engine
 
-Any Xboard-compatible engine works. Just update `config.yaml`:
+Any UCI-compatible engine works. Xboard is also supported:
 
 ```yaml
 engine:
-  path: "path/to/any-xboard-engine"
-  protocol: "xboard"
-  args: ["--xboard"]
+  path: "path/to/stockfish"
+  protocol: "uci"
 ```
-
-UCI support will be added once Blunder implements it.
 
 ## License
 

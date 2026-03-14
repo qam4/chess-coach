@@ -100,6 +100,7 @@ class Coach:
         level: str = "intermediate",
         max_tokens: int = 512,
         temperature: float = 0.7,
+        play_elo: int = 0,
     ):
         self.engine = engine
         self.llm = llm
@@ -108,7 +109,19 @@ class Coach:
         self.level = level
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.play_elo = play_elo
         self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
+
+    def _set_play_skill(self) -> None:
+        """Set engine to reduced strength for play moves."""
+        if self.play_elo > 0 and hasattr(self.engine, "set_option"):
+            self.engine.set_option("UCI_LimitStrength", True)
+            self.engine.set_option("UCI_Elo", self.play_elo)
+
+    def _set_full_strength(self) -> None:
+        """Restore engine to full strength for analysis."""
+        if self.play_elo > 0 and hasattr(self.engine, "set_option"):
+            self.engine.set_option("UCI_LimitStrength", False)
 
     @property
     def debug_config(self) -> dict[str, typing.Any]:
@@ -375,6 +388,9 @@ class Coach:
                 on_debug(TraceStep(step=step, message=message, elapsed_s=elapsed, detail=detail))
 
         _trace("config", "Pipeline config", tool="system", **self.debug_config)
+
+        # Ensure full strength for analysis (play strength may be active)
+        self._set_full_strength()
 
         # ----- Coaching protocol path (single round-trip) -----
         if self._coaching_available:
@@ -737,11 +753,13 @@ class Coach:
             board.push(move)
             fen_after_user = board.fen()
 
-            # 3. Engine plays its response
+            # 3. Engine plays its response (at reduced skill if configured)
+            self._set_play_skill()
             engine_move_uci = self.engine.play(
                 fen_after_user,
                 depth=self.depth,
             )
+            self._set_full_strength()
             t_engine_play = time.perf_counter()
 
             # Convert engine move to SAN
@@ -755,7 +773,13 @@ class Coach:
             pos_report = self.engine.get_position_report(fen_after_engine, multipv=self.top_moves)
             t_pos_report = time.perf_counter()
 
-            coaching_prompt = build_rich_coaching_prompt(pos_report, level=self.level)
+            opening = lookup_fen(fen_after_engine)
+            opening_label = f"{opening.eco} {opening.name}" if opening else None
+            coaching_prompt = build_rich_coaching_prompt(
+                pos_report,
+                level=self.level,
+                opening_name=opening_label,
+            )
             coaching_text = self.llm.generate(
                 coaching_prompt,
                 max_tokens=self.max_tokens,
@@ -809,11 +833,13 @@ class Coach:
         board.push(move)
         fen_after_user = board.fen()
 
-        # 3. Engine plays its response
+        # 3. Engine plays its response (at reduced skill if configured)
+        self._set_play_skill()
         engine_move_uci = self.engine.play(
             fen_after_user,
             depth=self.depth,
         )
+        self._set_full_strength()
         t_engine_play = time.perf_counter()
 
         # Convert engine move to SAN

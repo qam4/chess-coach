@@ -341,6 +341,14 @@ class UciEngine(EngineProtocol):
         self._send("isready")
         self._read_until("readyok", timeout=5.0)
 
+    def set_option(self, name: str, value: str | int | bool) -> None:
+        """Send a UCI setoption command."""
+        if isinstance(value, bool):
+            value = "true" if value else "false"
+        self._send(f"setoption name {name} value {value}")
+        self._send("isready")
+        self._read_until("readyok", timeout=2.0)
+
     def stop(self) -> None:
         if self._proc and self._proc.poll() is None:
             self._send("quit")
@@ -610,6 +618,10 @@ class CoachingEngine(EngineProtocol):
 
     def stop(self) -> None:
         self._inner.stop()
+
+    def set_option(self, name: str, value: str | int | bool) -> None:
+        """Send a UCI setoption command via the inner engine."""
+        self._inner.set_option(name, value)
 
     def analyze(self, fen: str, depth: int = 18, time_limit: float | None = None) -> AnalysisResult:
         return self._inner.analyze(fen, depth, time_limit)
