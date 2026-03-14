@@ -14,6 +14,48 @@ A living document for feature ideas, improvements, and research directions.
 - [ ] Pre-analyze: while the user is reading coaching text, start analyzing
       likely next positions in the background
 
+## Hybrid Coaching: Template Engine + LLM Voice
+
+The LLM audit (scripts/eval_models.py) showed that small models (1.7b-4b)
+hallucinate chess facts — wrong piece locations, nonsensical eval
+interpretations, invented tactics. Larger models (8b) are more accurate
+but too slow for interactive play (~34s per response on CPU).
+
+The insight: the LLM is bad at deterministic facts but good at tone and
+narrative. Split the work:
+
+### Layer 1: Template Engine (Python, instant, always accurate)
+Generate factual coaching text directly from the structured engine data.
+No LLM needed. Covers:
+- Opening identification ("This is the Italian Game, C50")
+- Eval summary ("White is slightly better, +0.43 pawns")
+- Hanging pieces ("Your e4 pawn is undefended — Nf6 can take it")
+- Threats ("White's bishop on c4 targets f7")
+- Best move explanation ("Nc3 develops a piece and protects e4")
+- Move classification ("Your move was good / an inaccuracy / a blunder")
+- Pawn structure notes ("Black has doubled e-pawns")
+- King safety warnings ("Castle soon — your king is exposed")
+
+This layer is deterministic, zero-latency, and never hallucinates.
+
+### Layer 2: LLM Voice (optional, adds personality)
+Take the template output and rephrase it in a coaching tone adapted to
+the student's level. The LLM prompt becomes:
+"Rephrase this chess coaching text for a beginner: [template output]"
+
+This is a much easier task — even a 1.7b model can rephrase text without
+inventing chess facts. The prompt is shorter, so it's faster too.
+
+### Benefits
+- No-LLM fallback: if Ollama isn't running, users still get accurate
+  coaching from templates alone. Just less conversational.
+- Faster: template output is instant. LLM rephrasing is faster than
+  full generation because the prompt is shorter and the task is simpler.
+- More accurate: facts come from code, not the model's imagination.
+- Testable: template output can be unit-tested against expected strings.
+- Gradual migration: start with templates for the most common patterns,
+  fall back to full LLM generation for edge cases.
+
 ## Richer Engine Data for the LLM
 
 - [ ] Feed top 3 lines to the LLM instead of just the best move (needs MultiPV / UCI)
