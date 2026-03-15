@@ -72,6 +72,9 @@
     playControls.hidden = !isPlay;
     moveListPanel.hidden = !isPlay;
 
+    // Default: template ON in play mode (speed), OFF in analyze mode (depth)
+    document.getElementById('templateToggle').checked = isPlay;
+
     if (isPlay) {
       coachingText.innerHTML = '<p class="placeholder">Choose your color to start playing.</p>';
       coachingMeta.textContent = '';
