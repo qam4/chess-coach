@@ -564,6 +564,109 @@ def create_app(coach: Coach) -> FastAPI:
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
+    @app.post("/api/play/move/template")
+    async def play_move_template(req: PlayMoveRequest) -> dict:  # type: ignore[type-arg]
+        """Play a move with template-based coaching — no LLM, fast."""
+        from chess_coach.coaching_templates import (
+            generate_move_coaching,
+            generate_position_coaching,
+        )
+        from chess_coach.engine import CoachingEngine
+        from chess_coach.openings import lookup_fen
+
+        coach = app.state.coach
+        engine = coach.engine
+
+        # Validate
+        try:
+            board = chess.Board(req.fen)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid FEN: {exc}") from exc
+        try:
+            move = chess.Move.from_uci(req.user_move)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid move: {exc}") from exc
+        if move not in board.legal_moves:
+            raise HTTPException(status_code=400, detail=f"Illegal move: {req.user_move}")
+
+        try:
+            t0 = time.perf_counter()
+
+            # 1. Evaluate user's move (engine only, no LLM)
+            evaluation = await asyncio.to_thread(coach.evaluate_move, req.fen, req.user_move)
+
+            # Generate template feedback for the move
+            user_feedback = ""
+            if evaluation.classification != "good" and isinstance(engine, CoachingEngine):
+                try:
+                    report = await asyncio.to_thread(
+                        engine.get_comparison_report, req.fen, req.user_move
+                    )
+                    user_feedback = generate_move_coaching(report)
+                except Exception:
+                    user_feedback = evaluation.feedback
+
+            # 2. Engine plays its response
+            board.push(move)
+            fen_after_user = board.fen()
+
+            coach._set_play_skill()
+            engine_move_uci = await asyncio.to_thread(
+                engine.play, fen_after_user, depth=coach.depth
+            )
+            coach._set_full_strength()
+
+            engine_move_obj = chess.Move.from_uci(engine_move_uci)
+            engine_move_san = board.san(engine_move_obj)
+            board.push(engine_move_obj)
+
+            # 3. Template coaching for the position after engine's move
+            opening = lookup_fen(board.fen()) or lookup_fen(fen_after_user)
+            if opening:
+                coaching_text = f"**{opening.name}** ({opening.eco})"
+            elif isinstance(engine, CoachingEngine) and engine.coaching_available:
+                try:
+                    pos_report = await asyncio.to_thread(
+                        engine.get_position_report,
+                        board.fen(),
+                        multipv=coach.top_moves,
+                    )
+                    coaching_text = generate_position_coaching(
+                        pos_report, level=coach.level, opening=opening
+                    )
+                except Exception:
+                    coaching_text = f"Engine played {engine_move_san}."
+            else:
+                coaching_text = f"Engine played {engine_move_san}."
+
+            # 4. Eval and game state
+            eval_cp = evaluation.eval_after_cp
+            eval_score = f"{eval_cp / 100:+.2f}"
+            game_over = board.is_game_over()
+            result = board.result() if game_over else None
+            elapsed = time.perf_counter() - t0
+
+            return {
+                "engine_move": engine_move_san,
+                "engine_move_uci": engine_move_uci,
+                "coaching_text": coaching_text,
+                "user_feedback": user_feedback or evaluation.feedback,
+                "user_classification": evaluation.classification,
+                "eval_cp": eval_cp,
+                "eval_score": eval_score,
+                "game_over": game_over,
+                "result": result,
+                "opening_name": opening.name if opening else None,
+                "mode": "template",
+                "debug": {
+                    "engine_s": round(elapsed, 2),
+                    "llm_s": 0.0,
+                    "total_s": round(elapsed, 2),
+                },
+            }
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     return app
 
 

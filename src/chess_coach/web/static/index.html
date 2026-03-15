@@ -26,6 +26,13 @@
         <div id="board" class="chess-board"></div>
       </div>
 
+      <!-- Shared controls -->
+      <div class="controls" style="padding: 4px 0;">
+        <label for="templateToggle" style="font-size: 0.85em; cursor: pointer;">
+          <input type="checkbox" id="templateToggle"> Template mode (no LLM — instant)
+        </label>
+      </div>
+
       <!-- Analyze mode controls -->
       <div class="controls analyze-only" id="analyzeControls">
         <div class="fen-row">
@@ -46,11 +53,6 @@
               <option value="intermediate" selected>Intermediate</option>
               <option value="advanced">Advanced</option>
             </select>
-          </div>
-          <div class="option-group">
-            <label for="templateToggle">
-              <input type="checkbox" id="templateToggle"> Template (no LLM)
-            </label>
           </div>
           <button id="analyzeBtn" class="btn-primary">Analyze</button>
         </div>

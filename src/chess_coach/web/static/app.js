@@ -192,6 +192,31 @@
     gameMoves.push({ uci: rawUci, san: userSan, fen: game.fen() });
     renderMoveList();
 
+    var useTemplate = document.getElementById('templateToggle').checked;
+
+    if (useTemplate) {
+      fetch('/api/play/move/template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fen: fenBeforeMove, user_move: rawUci }),
+      })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.detail || 'Move failed'); });
+          return res.json();
+        })
+        .then(function (data) {
+          handlePlayMoveResponse(data);
+        })
+        .catch(function (err) {
+          handlePlayMoveError(err);
+        })
+        .finally(function () {
+          waitingForEngine = false;
+          setLoading(false);
+        });
+      return;
+    }
+
     fetch('/api/play/move/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -210,7 +235,18 @@
       })
       .then(function (data) {
         if (!data) return;
+        handlePlayMoveResponse(data);
+      })
+      .catch(function (err) {
+        handlePlayMoveError(err);
+      })
+      .finally(function () {
+        waitingForEngine = false;
+        setLoading(false);
+      });
+  }
 
+  function handlePlayMoveResponse(data) {
         // Show user feedback badge
         showUserFeedback(data.user_classification, data.user_feedback);
 
@@ -250,8 +286,9 @@
           gameOver = true;
           showGameResult(data.result);
         }
-      })
-      .catch(function (err) {
+  }
+
+  function handlePlayMoveError(err) {
         coachingText.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
         appendDebug('ERROR: ' + err.message);
         // Roll back the optimistic user move
@@ -259,11 +296,6 @@
         game.undo();
         board.position(game.fen().split(' ')[0]);
         renderMoveList();
-      })
-      .finally(function () {
-        waitingForEngine = false;
-        setLoading(false);
-      });
   }
 
   // =========================================================================
