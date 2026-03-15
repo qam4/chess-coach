@@ -100,3 +100,17 @@ These are from IDEAS.md — things that would need Blunder changes:
 - **Critical moment detection**: Flag positions where the eval is
   volatile (large swings between candidate moves). Currently
   `critical_moment` is always `false`.
+
+
+### BLUNDER-009: "Pawn storm detected" false positive in openings
+
+- **Observed**: After 1.e4, White's king safety description says
+  "king uncastled, still has castling rights, missing e-pawn shield,
+  pawn storm detected." The e-pawn advancing to e4 is a normal opening
+  move, not a pawn storm.
+- **Impact**: The coaching text tells beginners there's a pawn storm
+  on move 2, which is confusing and incorrect.
+- **Expected**: Pawn storm detection should require multiple pawns
+  advancing toward the opponent's king, not just a single central
+  pawn push. A pawn storm typically involves 2-3 pawns on the same
+  wing advancing past the 4th rank toward a castled king.

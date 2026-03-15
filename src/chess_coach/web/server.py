@@ -637,29 +637,58 @@ def create_app(coach: Coach) -> FastAPI:
             trace.append(f"engine played: {engine_move_san} ({engine_move_uci}) [{t3 - t2:.1f}s]")
 
             # 3. Template coaching for the position after engine's move
+            pos_report = None
             opening = lookup_fen(board.fen()) or lookup_fen(fen_after_user)
-            if opening:
-                coaching_text = f"**{opening.name}** ({opening.eco})"
-            elif isinstance(engine, CoachingEngine) and engine.coaching_available:
+            opening_label = f"**{opening.name}** ({opening.eco})\n\n" if opening else ""
+
+            if isinstance(engine, CoachingEngine) and engine.coaching_available:
                 try:
                     pos_report = await asyncio.to_thread(
                         engine.get_position_report,
                         board.fen(),
                         multipv=coach.top_moves,
                     )
-                    coaching_text = generate_position_coaching(
+                    coaching_text = opening_label + generate_position_coaching(
                         pos_report, level=coach.level, opening=opening
                     )
                 except Exception:
-                    coaching_text = f"Engine played {engine_move_san}."
+                    coaching_text = opening_label + f"Engine played {engine_move_san}."
             else:
-                coaching_text = f"Engine played {engine_move_san}."
+                coaching_text = opening_label + f"Engine played {engine_move_san}."
 
             # 4. Eval and game state
             eval_cp = evaluation.eval_after_cp
             eval_score = f"{eval_cp / 100:+.2f}"
             game_over = board.is_game_over()
             result = board.result() if game_over else None
+
+            # 5. Extract hint for user's next move
+            hint_uci = None
+            hint_san = None
+            if not game_over:
+                # Try the position report PV if we have one
+                if pos_report and pos_report.top_lines:
+                    top = pos_report.top_lines[0]
+                    if top.moves:
+                        hint_uci = top.moves[0]
+                # Fallback: quick engine query with book enabled
+                if hint_uci is None:
+                    try:
+                        coach._set_play_skill()
+                        hint_uci = await asyncio.to_thread(
+                            engine.play, board.fen(), depth=coach.depth
+                        )
+                        coach._set_full_strength()
+                    except Exception:
+                        pass
+                if hint_uci:
+                    try:
+                        hint_move = chess.Move.from_uci(hint_uci)
+                        hint_san = board.san(hint_move)
+                        trace.append(f"hint: {hint_san} ({hint_uci})")
+                    except (ValueError, AssertionError):
+                        hint_san = hint_uci
+
             elapsed = time.perf_counter() - t0
 
             return {
@@ -673,6 +702,8 @@ def create_app(coach: Coach) -> FastAPI:
                 "game_over": game_over,
                 "result": result,
                 "opening_name": opening.name if opening else None,
+                "hint_uci": hint_uci,
+                "hint_san": hint_san,
                 "mode": "template",
                 "debug": {
                     "engine_s": round(elapsed, 2),
