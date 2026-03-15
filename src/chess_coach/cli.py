@@ -99,8 +99,17 @@ def cli(ctx: click.Context, config: str, verbose: bool) -> None:
     default=None,
     help="Override coaching level",
 )
+@click.option(
+    "--template",
+    "-t",
+    is_flag=True,
+    default=False,
+    help="Use template engine (no LLM, instant, no hallucination)",
+)
 @click.pass_context
-def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) -> None:
+def explain(
+    ctx: click.Context, fen: str, depth: int | None, level: str | None, template: bool
+) -> None:
     """Explain a chess position given as a FEN string."""
     cfg = load_config(ctx.obj["config_path"])
 
@@ -110,6 +119,70 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None) 
 
     # Create engine
     engine = _create_engine(engine_cfg)
+
+    use_level = level or coaching_cfg.get("level", "intermediate")
+    use_depth = depth or engine_cfg.get("depth", 18)
+
+    # Template mode: no LLM needed
+    if template:
+        from chess_coach.coaching_templates import generate_position_coaching
+        from chess_coach.openings import lookup_fen
+
+        try:
+            with console.status("[bold cyan]Starting engine...", spinner="dots"):
+                engine.start()
+
+            with console.status("[bold cyan]Analyzing position...", spinner="dots"):
+                from chess_coach.engine import CoachingEngine
+
+                t0 = time.perf_counter()
+                if isinstance(engine, CoachingEngine) and engine.coaching_available:
+                    report = engine.get_position_report(
+                        fen, multipv=coaching_cfg.get("top_moves", 3)
+                    )
+                    opening = lookup_fen(fen)
+                    coaching_text = generate_position_coaching(
+                        report, level=use_level, opening=opening
+                    )
+                    best_line = report.top_lines[0] if report.top_lines else None
+                    best_move = best_line.moves[0] if best_line and best_line.moves else "?"
+                    score = f"{report.eval_cp / 100:+.2f}"
+                else:
+                    # Fallback: UCI-only engine, use analyzer
+                    from chess_coach.analyzer import analyze_position
+
+                    result = analyze_position(engine, fen, depth=use_depth)
+                    opening = lookup_fen(fen)
+                    # Can't use rich templates without coaching protocol
+                    console.print(
+                        "[yellow]Template mode requires coaching protocol. "
+                        "Falling back to basic analysis.[/]"
+                    )
+                    best_move = result.top_line.pv[0] if result.top_line else "?"
+                    score = result.top_line.score_str if result.top_line else "?"
+                    coaching_text = f"Best move: {best_move} ({score})"
+
+                elapsed = time.perf_counter() - t0
+
+            console.print()
+            if opening:
+                console.print(f"  Opening: {opening.eco} {opening.name}")
+            console.print(
+                Panel(
+                    coaching_text,
+                    title=f"[bold]Position: {fen}[/]",
+                    subtitle=f"Best move: {best_move}  ({score})",
+                    border_style="green",
+                )
+            )
+            console.print(
+                f"  [dim]Engine: {elapsed:.1f}s | LLM: 0.0s (template) | Total: {elapsed:.1f}s[/]"
+            )
+        finally:
+            engine.stop()
+        return
+
+    # --- LLM mode (default) ---
 
     # Create LLM provider
     llm_timeout = float(llm_cfg.get("timeout", 300))

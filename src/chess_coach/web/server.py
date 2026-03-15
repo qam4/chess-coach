@@ -66,6 +66,53 @@ def create_app(coach: Coach) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @app.post("/api/analyze/template")
+    async def analyze_template(req: AnalyzeRequest) -> dict:  # type: ignore[type-arg]
+        """Analyze using template engine — no LLM, instant, no hallucination."""
+        from chess_coach.coaching_templates import generate_position_coaching
+        from chess_coach.engine import CoachingEngine
+        from chess_coach.openings import lookup_fen
+
+        coach = app.state.coach
+        engine = coach.engine
+
+        if not (isinstance(engine, CoachingEngine) and engine.coaching_available):
+            raise HTTPException(
+                status_code=400,
+                detail="Template mode requires coaching protocol support",
+            )
+
+        try:
+            t0 = time.perf_counter()
+            report = await asyncio.to_thread(
+                engine.get_position_report,
+                req.fen,
+                multipv=coach.top_moves,
+            )
+            opening = lookup_fen(req.fen)
+            coaching_text = generate_position_coaching(report, level=req.level, opening=opening)
+            elapsed = time.perf_counter() - t0
+
+            best_line = report.top_lines[0] if report.top_lines else None
+            best_move = best_line.moves[0] if best_line and best_line.moves else "?"
+            score = f"{report.eval_cp / 100:+.2f}"
+
+            return {
+                "coaching_text": coaching_text,
+                "best_move": best_move,
+                "score": score,
+                "fen": req.fen,
+                "opening_name": f"{opening.eco} {opening.name}" if opening else None,
+                "mode": "template",
+                "debug": {
+                    "engine_s": round(elapsed, 2),
+                    "llm_s": 0.0,
+                    "total_s": round(elapsed, 2),
+                },
+            }
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     @app.get("/api/health")
     async def health() -> dict:  # type: ignore[type-arg]
         status = app.state.coach.check()
