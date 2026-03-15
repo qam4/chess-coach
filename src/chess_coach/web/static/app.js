@@ -449,10 +449,42 @@
     var fen = fenInput.value.trim();
     if (!fen) return;
 
-    setLoading(true, 'Engine analyzing…');
+    var useTemplate = document.getElementById('templateToggle').checked;
+
+    setLoading(true, useTemplate ? 'Template analyzing…' : 'Engine analyzing…');
     clearArrows();
     clearDebug();
-    appendDebug('Analyze request: FEN=' + fen + ' depth=' + depthSlider.value + ' level=' + levelSelect.value);
+    appendDebug('Analyze request: FEN=' + fen + ' depth=' + depthSlider.value + ' level=' + levelSelect.value + (useTemplate ? ' [template]' : ''));
+
+    if (useTemplate) {
+      fetch('/api/analyze/template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fen: fen,
+          depth: parseInt(depthSlider.value, 10),
+          level: levelSelect.value,
+        }),
+      })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.detail || res.status); });
+          return res.json();
+        })
+        .then(function (data) {
+          renderCoaching(data);
+          updateEvalBar(data.score);
+          if (data.best_move) drawBestMoveArrow(data.best_move);
+          appendDebug('--- Done (template, ' + (data.debug ? data.debug.total_s : '?') + 's) ---');
+        })
+        .catch(function (err) {
+          coachingText.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+          appendDebug('ERROR: ' + err.message);
+        })
+        .finally(function () {
+          setLoading(false);
+        });
+      return;
+    }
 
     fetch('/api/analyze/stream', {
       method: 'POST',
