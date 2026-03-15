@@ -131,6 +131,12 @@ def _eval_summary(report: PositionReport) -> str:
         side = "White" if cp > 0 else "Black"
         assessment = f"{side} is winning ({cp / 100:+.2f} pawns)."
 
+    # Add mobility context if the breakdown is available
+    mob = report.eval_breakdown.mobility
+    if abs(mob) > 100:
+        better = "White" if mob > 0 else "Black"
+        assessment += f" {better}'s pieces are more active and control more squares."
+
     return assessment
 
 
@@ -148,16 +154,47 @@ def _hanging_pieces_text(report: PositionReport) -> str | None:
 
 
 def _threats_text(report: PositionReport) -> str | None:
-    """Describe active threats."""
+    """Describe active threats with piece names."""
     items = []
+    board = chess.Board(report.fen)
+
     for t in report.threats.get("white", []):
-        items.append(t.description)
+        # Enrich with piece name from the board
+        piece_name = _piece_name_at(board, t.source_square)
+        if piece_name:
+            items.append(f"White's {piece_name} on {t.source_square}: {t.description}")
+        else:
+            items.append(f"White: {t.description}")
     for t in report.threats.get("black", []):
-        items.append(t.description)
+        piece_name = _piece_name_at(board, t.source_square)
+        if piece_name:
+            items.append(f"Black's {piece_name} on {t.source_square}: {t.description}")
+        else:
+            items.append(f"Black: {t.description}")
 
     if not items:
         return None
     return "Threats: " + ". ".join(items) + "."
+
+
+def _piece_name_at(board: chess.Board, square_name: str) -> str | None:
+    """Get the piece name at a square, or None."""
+    try:
+        sq = chess.parse_square(square_name)
+        piece = board.piece_at(sq)
+        if piece is None:
+            return None
+        names = {
+            chess.PAWN: "pawn",
+            chess.KNIGHT: "knight",
+            chess.BISHOP: "bishop",
+            chess.ROOK: "rook",
+            chess.QUEEN: "queen",
+            chess.KING: "king",
+        }
+        return names.get(piece.piece_type)
+    except ValueError:
+        return None
 
 
 def _king_safety_text(report: PositionReport, level: str) -> str | None:
@@ -212,18 +249,44 @@ def _pawn_structure_text(report: PositionReport, level: str) -> str | None:
 
 
 def _best_move_text(report: PositionReport) -> str | None:
-    """Recommend the best move from the top engine line."""
+    """Recommend the best move with context about what it does."""
     if not report.top_lines or not report.top_lines[0].moves:
         return None
 
     line = report.top_lines[0]
     uci_move = line.moves[0]
 
-    # Try to convert to SAN for readability
     try:
         board = chess.Board(report.fen)
         move = chess.Move.from_uci(uci_move)
         san = board.san(move)
-        return f"The engine recommends {san} (eval: {line.eval_cp / 100:+.2f})."
+        piece = board.piece_at(move.from_square)
+
+        # Describe what the move does
+        context_parts = []
+        if san in ("O-O", "O-O-O"):
+            context_parts.append("getting the king to safety")
+        elif (
+            piece
+            and piece.piece_type in (chess.KNIGHT, chess.BISHOP)
+            and board.fullmove_number <= 10
+        ):
+            context_parts.append("developing a piece toward the center")
+        if board.is_capture(move):
+            captured = board.piece_at(move.to_square)
+            if captured:
+                names = {1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen"}
+                cap_name = names.get(captured.piece_type, "piece")
+                context_parts.append(f"capturing the {cap_name}")
+
+        # Check if the move defends a hanging piece
+        for hp in report.hanging_pieces.get("white", []) + report.hanging_pieces.get("black", []):
+            if move.to_square == chess.parse_square(hp.square):
+                context_parts.append(f"defending the {hp.piece}")
+
+        rec = f"The engine recommends {san} (eval: {line.eval_cp / 100:+.2f})"
+        if context_parts:
+            rec += " — " + ", ".join(context_parts)
+        return rec + "."
     except (ValueError, chess.InvalidMoveError):
         return f"The engine recommends {uci_move} (eval: {line.eval_cp / 100:+.2f})."

@@ -20,10 +20,11 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from chess_coach.coaching_templates import generate_position_coaching
 from chess_coach.engine import CoachingEngine
+from chess_coach.llm.ollama import OllamaProvider
 from chess_coach.openings import lookup_fen
 from chess_coach.prompts import build_rich_coaching_prompt
-from chess_coach.llm.ollama import OllamaProvider
 
 # --- Test positions ---
 # Each tests a different coaching scenario.
@@ -82,6 +83,58 @@ def check_keywords(text: str, keywords: list[str]) -> tuple[list[str], list[str]
     found = [k for k in keywords if k.lower() in lower]
     missing = [k for k in keywords if k.lower() not in lower]
     return found, missing
+
+
+def run_template_eval(
+    engine: CoachingEngine,
+    positions: list[dict],
+) -> list[EvalResult]:
+    """Evaluate the template engine (no LLM) on the test positions."""
+    results = []
+    for pos in positions:
+        fen = pos["fen"]
+        level = pos["level"]
+        name = pos["name"]
+
+        print(f"    {name}...", end=" ", flush=True)
+
+        try:
+            report = engine.get_position_report(fen, multipv=3)
+        except Exception as e:
+            print(f"ENGINE ERROR: {e}")
+            continue
+
+        opening = lookup_fen(fen)
+        t0 = time.perf_counter()
+        response = generate_position_coaching(report, level=level, opening=opening)
+        latency = time.perf_counter() - t0
+
+        has_expected, missing_expected = check_keywords(response, pos["expect_keywords"])
+        has_bad, _ = check_keywords(response, pos["expect_not"])
+        word_count = len(response.split())
+
+        result = EvalResult(
+            model="template (no LLM)",
+            position_name=name,
+            fen=fen,
+            level=level,
+            response=response,
+            response_len=len(response),
+            latency_s=round(latency, 4),
+            has_expected=has_expected,
+            missing_expected=missing_expected,
+            has_bad=has_bad,
+            word_count=word_count,
+            opening_name=f"{opening.eco} {opening.name}" if opening else None,
+        )
+        results.append(result)
+
+        score = len(has_expected)
+        total = len(pos["expect_keywords"])
+        bad = len(has_bad)
+        print(f"{latency:.4f}s | {word_count}w | keywords {score}/{total} | bad {bad}")
+
+    return results
 
 
 def run_eval(
@@ -154,9 +207,7 @@ def print_summary(all_results: dict[str, list[EvalResult]]) -> None:
     print("=" * 70)
 
     for model, results in all_results.items():
-        total_expected = sum(
-            len(r.has_expected) + len(r.missing_expected) for r in results
-        )
+        total_expected = sum(len(r.has_expected) + len(r.missing_expected) for r in results)
         total_found = sum(len(r.has_expected) for r in results)
         total_bad = sum(len(r.has_bad) for r in results)
         avg_latency = sum(r.latency_s for r in results) / len(results) if results else 0
@@ -182,6 +233,14 @@ def main() -> None:
 
     all_results: dict[str, list[EvalResult]] = {}
 
+    # --- Template engine (no LLM) ---
+    print(f"\n{'=' * 50}")
+    print("  Model: template (no LLM)")
+    print(f"{'=' * 50}")
+    template_results = run_template_eval(engine, TEST_POSITIONS)
+    all_results["template (no LLM)"] = template_results
+
+    # --- LLM models ---
     for model in models:
         print(f"\n{'=' * 50}")
         print(f"  Model: {model}")
@@ -209,10 +268,7 @@ def main() -> None:
 
     # Save detailed results
     output_file = out_dir / "results.json"
-    serializable = {
-        model: [asdict(r) for r in results]
-        for model, results in all_results.items()
-    }
+    serializable = {model: [asdict(r) for r in results] for model, results in all_results.items()}
     with open(output_file, "w") as f:
         json.dump(serializable, f, indent=2)
     print(f"\nDetailed results saved to {output_file}")
