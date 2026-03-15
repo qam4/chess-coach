@@ -101,6 +101,7 @@ class Coach:
         max_tokens: int = 512,
         temperature: float = 0.7,
         play_elo: int = 0,
+        book_path: str = "",
     ):
         self.engine = engine
         self.llm = llm
@@ -110,7 +111,13 @@ class Coach:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.play_elo = play_elo
+        self.book_path = book_path
         self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
+
+        # Load opening book via UCI option if path is configured
+        if book_path and hasattr(engine, "set_option"):
+            engine.set_option("BookFile", book_path)
+            engine.set_option("Book", True)
 
     def _set_play_skill(self) -> None:
         """Set engine to reduced strength for play moves."""

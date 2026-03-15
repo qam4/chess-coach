@@ -63,6 +63,14 @@ def _resolve_engine_path(path_cfg: str | dict) -> str:  # type: ignore[type-arg]
     return str(Path(raw).expanduser())
 
 
+def _resolve_book_path(engine_cfg: dict) -> str:  # type: ignore[type-arg]
+    """Resolve the opening book path from engine config, or return empty string."""
+    book = engine_cfg.get("book", "")
+    if not book:
+        return ""
+    return str(Path(book).expanduser())
+
+
 def load_config(path: str | Path) -> dict:  # type: ignore[type-arg]
     """Load configuration from YAML file."""
     p = Path(path)
@@ -215,6 +223,7 @@ def explain(
             level=level or coaching_cfg.get("level", "intermediate"),
             max_tokens=llm_cfg.get("max_tokens", 512),
             temperature=llm_cfg.get("temperature", 0.7),
+            book_path=_resolve_book_path(engine_cfg),
         )
 
         t_check = time.perf_counter()
@@ -406,6 +415,7 @@ def serve(ctx: click.Context, port: int) -> None:
         max_tokens=llm_cfg.get("max_tokens", 512),
         temperature=llm_cfg.get("temperature", 0.7),
         play_elo=play_elo,
+        book_path=_resolve_book_path(engine_cfg),
     )
 
     app = create_app(coach)

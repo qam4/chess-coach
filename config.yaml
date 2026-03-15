@@ -8,7 +8,10 @@ engine:
   # Protocol: "uci" (recommended) or "xboard"
   protocol: "uci"
   # Extra arguments passed to the engine (--uci/--xboard added automatically)
-  args: ["--book", "~/src/fred/blunder/books/i-gm1950.bin"]
+  args: []
+  # Opening book file for play mode variety (polyglot .bin format)
+  # Blunder ships with: i-gm1950.bin, k-stfish.bin, n-larsen.bin
+  book: "~/src/fred/blunder/books/i-gm1950.bin"
   # Analysis depth (plies)
   depth: 8
   # Play strength: Elo rating for engine's play moves (500-2500)
