@@ -591,9 +591,16 @@ def create_app(coach: Coach) -> FastAPI:
 
         try:
             t0 = time.perf_counter()
+            trace: list[str] = []
 
             # 1. Evaluate user's move (engine only, no LLM)
+            trace.append(f"evaluate_move: fen={req.fen} move={req.user_move}")
             evaluation = await asyncio.to_thread(coach.evaluate_move, req.fen, req.user_move)
+            t1 = time.perf_counter()
+            trace.append(
+                f"evaluate_move done: {evaluation.classification} "
+                f"(drop {evaluation.eval_drop_cp}cp) [{t1 - t0:.1f}s]"
+            )
 
             # Generate template feedback for the move
             user_feedback = ""
@@ -603,22 +610,31 @@ def create_app(coach: Coach) -> FastAPI:
                         engine.get_comparison_report, req.fen, req.user_move
                     )
                     user_feedback = generate_move_coaching(report)
-                except Exception:
+                    trace.append(f"comparison_report: {report.classification}")
+                except Exception as e:
                     user_feedback = evaluation.feedback
+                    trace.append(f"comparison_report failed: {e}")
 
             # 2. Engine plays its response
             board.push(move)
             fen_after_user = board.fen()
 
             coach._set_play_skill()
+            trace.append(
+                f"engine.play: fen={fen_after_user} depth={coach.depth} "
+                f"play_elo={coach.play_elo} book=True"
+            )
+            t2 = time.perf_counter()
             engine_move_uci = await asyncio.to_thread(
                 engine.play, fen_after_user, depth=coach.depth
             )
+            t3 = time.perf_counter()
             coach._set_full_strength()
 
             engine_move_obj = chess.Move.from_uci(engine_move_uci)
             engine_move_san = board.san(engine_move_obj)
             board.push(engine_move_obj)
+            trace.append(f"engine played: {engine_move_san} ({engine_move_uci}) [{t3 - t2:.1f}s]")
 
             # 3. Template coaching for the position after engine's move
             opening = lookup_fen(board.fen()) or lookup_fen(fen_after_user)
@@ -662,6 +678,7 @@ def create_app(coach: Coach) -> FastAPI:
                     "engine_s": round(elapsed, 2),
                     "llm_s": 0.0,
                     "total_s": round(elapsed, 2),
+                    "trace": trace,
                 },
             }
         except Exception as exc:

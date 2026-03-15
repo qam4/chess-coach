@@ -13,6 +13,8 @@ engine:
   # Protocol: "uci" (recommended) or "xboard"
   protocol: "uci"
   # Extra arguments passed to the engine
+  # To enable the opening book for variety in play mode:
+  # args: ["--book", "path/to/books/i-gm1950.bin"]
   args: []
   # Analysis depth (plies)
   depth: 18

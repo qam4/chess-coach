@@ -250,6 +250,13 @@
   }
 
   function handlePlayMoveResponse(data) {
+        // Show debug trace if available
+        if (data.debug && data.debug.trace) {
+          data.debug.trace.forEach(function (line) {
+            appendDebug('[template] ' + line);
+          });
+        }
+
         // Show user feedback badge
         showUserFeedback(data.user_classification, data.user_feedback);
 

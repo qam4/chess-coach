@@ -26,6 +26,8 @@ def _create_engine(engine_cfg: dict) -> EngineProtocol:  # type: ignore[type-arg
     protocol = engine_cfg.get("protocol", "xboard")
     path = _resolve_engine_path(engine_cfg["path"])
     args = engine_cfg.get("args", [])
+    # Expand ~ in any arg that looks like a path
+    args = [str(Path(a).expanduser()) if "~" in a else a for a in args]
 
     if protocol == "uci":
         # Filter out --xboard if present (user may have switched protocols)

@@ -114,14 +114,20 @@ class Coach:
 
     def _set_play_skill(self) -> None:
         """Set engine to reduced strength for play moves."""
-        if self.play_elo > 0 and hasattr(self.engine, "set_option"):
-            self.engine.set_option("UCI_LimitStrength", True)
-            self.engine.set_option("UCI_Elo", self.play_elo)
+        if hasattr(self.engine, "set_option"):
+            # Enable opening book for variety in play mode
+            self.engine.set_option("Book", True)
+            if self.play_elo > 0:
+                self.engine.set_option("UCI_LimitStrength", True)
+                self.engine.set_option("UCI_Elo", self.play_elo)
 
     def _set_full_strength(self) -> None:
         """Restore engine to full strength for analysis."""
-        if self.play_elo > 0 and hasattr(self.engine, "set_option"):
-            self.engine.set_option("UCI_LimitStrength", False)
+        if hasattr(self.engine, "set_option"):
+            # Disable opening book for analysis (always search)
+            self.engine.set_option("Book", False)
+            if self.play_elo > 0:
+                self.engine.set_option("UCI_LimitStrength", False)
 
     @property
     def debug_config(self) -> dict[str, typing.Any]:
