@@ -46,6 +46,8 @@ class EvalBreakdown:
     mobility: int
     king_safety: int
     pawn_structure: int
+    tempo: int = 0
+    piece_bonuses: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -53,6 +55,8 @@ class EvalBreakdown:
             "mobility": self.mobility,
             "king_safety": self.king_safety,
             "pawn_structure": self.pawn_structure,
+            "tempo": self.tempo,
+            "piece_bonuses": self.piece_bonuses,
         }
 
     @classmethod
@@ -62,6 +66,8 @@ class EvalBreakdown:
             mobility=d["mobility"],
             king_safety=d["king_safety"],
             pawn_structure=d["pawn_structure"],
+            tempo=d.get("tempo", 0),
+            piece_bonuses=d.get("piece_bonuses", 0),
         )
 
 
@@ -85,6 +91,7 @@ class Threat:
     source_square: str
     target_squares: list[str]
     description: str
+    uci_move: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -92,6 +99,7 @@ class Threat:
             "source_square": self.source_square,
             "target_squares": list(self.target_squares),
             "description": self.description,
+            "uci_move": self.uci_move,
         }
 
     @classmethod
@@ -101,6 +109,7 @@ class Threat:
             source_square=d["source_square"],
             target_squares=list(d["target_squares"]),
             description=d["description"],
+            uci_move=d.get("uci_move", ""),
         )
 
 
@@ -238,6 +247,7 @@ class PositionReport:
     top_lines: list[PVLine]
     tactics: list[TacticalMotif]
     threat_map: list[ThreatMapEntry]
+    threat_map_summary: str | None
     critical_moment: bool
     critical_reason: str | None
 
@@ -258,6 +268,7 @@ class PositionReport:
             "top_lines": [line.to_dict() for line in self.top_lines],
             "tactics": [t.to_dict() for t in self.tactics],
             "threat_map": [e.to_dict() for e in self.threat_map],
+            "threat_map_summary": self.threat_map_summary,
             "critical_moment": self.critical_moment,
             "critical_reason": self.critical_reason,
         }
@@ -283,6 +294,7 @@ class PositionReport:
             top_lines=[PVLine.from_dict(line) for line in d["top_lines"]],
             tactics=[TacticalMotif.from_dict(t) for t in d["tactics"]],
             threat_map=[ThreatMapEntry.from_dict(e) for e in d["threat_map"]],
+            threat_map_summary=d.get("threat_map_summary"),
             critical_moment=d["critical_moment"],
             critical_reason=d["critical_reason"],
         )
@@ -517,6 +529,8 @@ def validate_position_report(data: dict[str, Any]) -> PositionReport:
     threat_map = _require_key(data, "threat_map", list)
     for i, entry in enumerate(threat_map):
         _validate_threat_map_entry(entry, f"threat_map[{i}]")
+
+    # threat_map_summary is optional (new in Blunder coaching protocol)
 
     _require_key(data, "critical_moment", bool)
     _require_key_nullable(data, "critical_reason", str)

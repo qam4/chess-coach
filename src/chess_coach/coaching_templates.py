@@ -54,6 +54,15 @@ def generate_position_coaching(
     if pawns:
         sections.append(pawns)
 
+    # Tactics (forks, pins, skewers, etc.)
+    tactics = _tactics_text(report)
+    if tactics:
+        sections.append(tactics)
+
+    # Threat map summary (from Blunder)
+    if report.threat_map_summary:
+        sections.append(f"Board tensions: {report.threat_map_summary}")
+
     # Best move recommendation
     best = _best_move_text(report)
     if best:
@@ -246,6 +255,16 @@ def _pawn_structure_text(report: PositionReport, level: str) -> str | None:
     if not parts:
         return None
     return "Pawn structure: " + ". ".join(parts) + "."
+
+
+def _tactics_text(report: PositionReport) -> str | None:
+    """Describe detected tactical motifs."""
+    if not report.tactics:
+        return None
+    items = []
+    for t in report.tactics:
+        items.append(f"{t.type}: {t.description}")
+    return "Tactics: " + ". ".join(items) + "."
 
 
 def _best_move_text(report: PositionReport) -> str | None:
