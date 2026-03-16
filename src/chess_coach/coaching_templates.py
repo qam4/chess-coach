@@ -180,27 +180,33 @@ def _hanging_pieces_text(report: PositionReport) -> str | None:
 
 
 def _threats_text(report: PositionReport) -> str | None:
-    """Describe active threats with piece names."""
+    """Describe active threats using board state and structured data."""
     items = []
-    board = chess.Board(report.fen)
+    try:
+        board = chess.Board(report.fen)
+    except ValueError:
+        return None
 
-    for t in report.threats.get("white", []):
-        # Enrich with piece name from the board
-        piece_name = _piece_name_at(board, t.source_square)
-        if piece_name:
-            items.append(f"White's {piece_name} on {t.source_square}: {t.description}")
-        else:
-            items.append(f"White: {t.description}")
-    for t in report.threats.get("black", []):
-        piece_name = _piece_name_at(board, t.source_square)
-        if piece_name:
-            items.append(f"Black's {piece_name} on {t.source_square}: {t.description}")
-        else:
-            items.append(f"Black: {t.description}")
+    for side_key, side_name in [("white", "White"), ("black", "Black")]:
+        for t in report.threats.get(side_key, []):
+            piece_name = _piece_name_at(board, t.source_square)
+            source = f"{side_name}'s {piece_name} on {t.source_square}" if piece_name else side_name
+
+            # Build description from structured fields when possible
+            if t.type == "check" and t.target_squares:
+                items.append(f"{source} can give check.")
+            elif t.type == "capture" and t.target_squares:
+                targets = ", ".join(t.target_squares)
+                items.append(f"{source} threatens to capture on {targets}.")
+            elif t.description:
+                # Fallback to engine description for types we don't handle yet
+                items.append(f"{source}: {t.description}")
+            else:
+                items.append(f"{source} has a threat ({t.type}).")
 
     if not items:
         return None
-    return "Threats: " + ". ".join(items) + "."
+    return "Threats: " + " ".join(items)
 
 
 def _piece_name_at(board: chess.Board, square_name: str) -> str | None:
@@ -224,29 +230,55 @@ def _piece_name_at(board: chess.Board, square_name: str) -> str | None:
 
 
 def _king_safety_text(report: PositionReport, level: str) -> str | None:
-    """Describe king safety concerns."""
-    parts = []
-    w = report.king_safety.get("white")
-    b = report.king_safety.get("black")
+    """Describe king safety concerns using board state, not engine descriptions.
 
-    if w and w.score < -10:
-        parts.append(f"White's king: {w.description}.")
-    if b and b.score < -10:
-        parts.append(f"Black's king: {b.description}.")
+    Suppresses warnings in the early opening (first ~8 moves) when not
+    castling is normal. Only warns when the king is actually in danger.
+    """
+    try:
+        board = chess.Board(report.fen)
+    except ValueError:
+        return None
+
+    move_number = board.fullmove_number
+    parts = []
+
+    for color, side_name in [(chess.WHITE, "White"), (chess.BLACK, "Black")]:
+        ks = report.king_safety.get(side_name.lower())
+        if not ks or ks.score >= -10:
+            continue
+
+        king_sq = board.king(color)
+        if king_sq is None:
+            continue
+
+        has_castling = board.has_castling_rights(color)
+        king_rank = chess.square_rank(king_sq)
+        home_rank = 0 if color == chess.WHITE else 7
+        is_on_home_rank = king_rank == home_rank
+
+        # Early opening: don't nag about not castling yet
+        if move_number <= 8 and is_on_home_rank and has_castling:
+            continue
+
+        # Build a context-aware description
+        if not is_on_home_rank:
+            parts.append(
+                f"{side_name}'s king has been displaced to "
+                f"{chess.square_name(king_sq)} — be careful."
+            )
+        elif move_number > 8 and has_castling:
+            parts.append(f"{side_name}'s king is still in the center. Consider castling soon.")
+        elif not has_castling and is_on_home_rank:
+            # Lost castling rights but king is still on home rank
+            parts.append(f"{side_name}'s king can no longer castle — keep it protected.")
+        elif ks.score < -30:
+            # Significant danger — use a stronger warning
+            parts.append(f"{side_name}'s king is exposed and vulnerable.")
 
     if not parts:
         return None
-
-    text = " ".join(parts)
-    if level == "beginner":
-        # Only suggest castling if both sides still have castling rights
-        try:
-            board = chess.Board(report.fen)
-            if board.has_castling_rights(chess.WHITE) or board.has_castling_rights(chess.BLACK):
-                text += " Try to castle early to keep your king safe."
-        except ValueError:
-            pass
-    return text
+    return " ".join(parts)
 
 
 def _pawn_structure_text(report: PositionReport, level: str) -> str | None:

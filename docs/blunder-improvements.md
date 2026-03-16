@@ -96,3 +96,53 @@ chess-coach via the coaching protocol. Ordered roughly by impact.
   outposts, weak squares.
 - **Critical moment detection**: Flag volatile positions. Currently
   `critical_moment` is always `false`.
+
+
+## Protocol Evolution: Structured Data over Descriptions
+
+**Goal**: Blunder should return structured facts; chess-coach owns the
+coaching voice and wording.
+
+**Current state**: Blunder returns both raw data (scores, squares) AND
+human-readable description strings (e.g. `"king uncastled, still has
+castling rights, missing e-pawn shield"`). Chess-coach currently passes
+these descriptions through to the coaching text.
+
+**Problem**: Every wording change requires an engine rebuild. The
+descriptions can't adapt to coaching level (beginner vs advanced),
+language, or context (early opening vs middlegame).
+
+**Proposed change**: Blunder returns structured flags and chess-coach
+generates all user-facing text. Example for king safety:
+
+```json
+// Current (Blunder returns description)
+"king_safety": {
+  "white": {
+    "score": -15,
+    "description": "king uncastled, still has castling rights, missing e-pawn shield"
+  }
+}
+
+// Proposed (Blunder returns structured flags)
+"king_safety": {
+  "white": {
+    "score": -15,
+    "castled": false,
+    "castling_rights": true,
+    "missing_shield_files": ["e"],
+    "open_files_near_king": [],
+    "pawn_storm": false,
+    "description": "..."  // kept for backward compat, chess-coach ignores it
+  }
+}
+```
+
+Chess-coach then decides what to say based on context:
+- Early opening + not castled → say nothing (normal)
+- Move 10+ and not castled → "Consider castling soon"
+- King exposed + open file → "Your king is vulnerable on the open e-file"
+
+**Migration**: Keep `description` field for backward compatibility.
+Add structured flags incrementally. Chess-coach starts ignoring
+descriptions and generating its own text from flags.
