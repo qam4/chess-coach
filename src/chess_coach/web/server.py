@@ -656,8 +656,11 @@ def create_app(coach: Coach) -> FastAPI:
             else:
                 coaching_text = opening_label + f"Engine played {engine_move_san}."
 
-            # 4. Eval and game state
-            eval_cp = evaluation.eval_after_cp
+            # 4. Eval and game state — use pos_report eval (current board)
+            if pos_report:
+                eval_cp = pos_report.eval_cp
+            else:
+                eval_cp = evaluation.eval_after_cp
             eval_score = f"{eval_cp / 100:+.2f}"
             game_over = board.is_game_over()
             result = board.result() if game_over else None
