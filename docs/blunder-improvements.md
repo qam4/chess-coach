@@ -5,112 +5,94 @@ chess-coach via the coaching protocol. Ordered roughly by impact.
 
 ## Bugs / Calibration Issues
 
-### BLUNDER-001: Eval breakdown doesn't sum to overall eval
+### BLUNDER-001: Eval breakdown doesn't sum to overall eval ⚠️ OPEN
 
-- **Observed**: Starting position after 1.e4 returns `eval_cp: -236` but
-  the top line eval is `-10 cp`. The breakdown shows `mobility: -240`,
-  `material: 0`, `king_safety: 15`, `pawn_structure: -24`.
-- **Impact**: The LLM gets a misleading overall eval and describes a
-  near-equal opening as "complex and unbalanced." The coaching text
-  quality depends heavily on accurate eval data.
-- **Expected**: Overall eval should be close to the top line eval, and
-  the breakdown components should roughly sum to the overall eval.
-- **Positions tested**: `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1`
+- **Observed (2026-03-16)**: After 1.e4, `eval_cp=0` but breakdown
+  sums to `-28` (mat=-24, mob=-24, ks=15, ps=5). Previously the
+  numbers were even more off (eval=-236, mob=-240).
+- **Improved**: The magnitude is much smaller now (off by 28cp vs 226cp
+  before), but the sign is still wrong (breakdown says -28, eval says 0).
+- **Impact**: Template coaching shows "roughly equal" (correct from
+  eval_cp) but the breakdown components tell a different story.
+- **Expected**: Breakdown components should sum to (or be close to)
+  the overall eval_cp.
 
-### BLUNDER-002: Mobility score seems miscalibrated
+### BLUNDER-002: Mobility score seems miscalibrated ✅ IMPROVED
 
-- **Observed**: Mobility component dominates the eval breakdown in
-  opening positions where both sides have similar piece activity.
-  Starting position after 1.e4: `mobility: -240 cp` (Black to move).
-  Italian Game position: `mobility: 220 cp` (White to move).
-- **Impact**: The LLM over-emphasizes mobility in its explanations
-  because the number is disproportionately large compared to other
-  components.
-- **Expected**: In roughly equal positions, mobility should be a
-  smaller component, not 5-10x larger than material/king safety.
+- **Previously**: Mobility was -240cp after 1.e4 — wildly dominant.
+- **Now (2026-03-16)**: Mobility is -24cp after 1.e4 — much more
+  reasonable and proportional to other components.
+- **Status**: Mostly fixed. No longer dominates the eval breakdown.
 
-### BLUNDER-003: Only 1 PV line returned despite multipv 3
+### BLUNDER-003: Only 1 PV line returned despite multipv 3 ⚠️ OPEN
 
-- **Observed**: `coach eval fen <FEN> multipv 3` returns 3 entries in
-  `top_lines`, but lines 2 and 3 have `depth: 0`, `moves: []`, and
-  just copy the eval from line 1.
-- **Impact**: The LLM can only explain one candidate move instead of
-  comparing alternatives. MultiPV is key for "what was missed" coaching.
-- **Expected**: All 3 lines should have actual PV moves and independent
-  eval scores at the requested depth.
+- **Observed (2026-03-16)**: `coach eval fen <FEN> multipv 3` returns
+  only 1 line (with actual moves and depth 15). Previously returned
+  3 entries but lines 2-3 were empty stubs.
+- **Improved**: The single line now has real data (depth, moves, eval).
+- **Still needed**: Multiple distinct PV lines for comparing candidate
+  moves. This is key for "what was missed" coaching.
 
-## Feature Requests
+## Fixed Issues
 
-### BLUNDER-004: Pawn structure detection for e-file after 1.e4
+### BLUNDER-009: "Pawn storm detected" false positive ✅ FIXED
 
-- **Observed**: After 1.e4, Black's pawn structure reports `doubled: ["e"]`
-  in the Italian Game position — but Black doesn't have doubled e-pawns
-  (e5 and e7 are on different ranks, and e7 hasn't moved yet in some
-  lines). This may be a false positive in the pawn structure analysis.
-- **Impact**: LLM tells beginners about "doubled e-pawns" that don't exist.
+- **Previously**: After 1.e4, king safety said "pawn storm detected."
+- **Now**: Says "king uncastled, still has castling rights, missing
+  e-pawn shield" — accurate, no false pawn storm.
+
+### BLUNDER-007: King safety description is static ✅ IMPROVED
+
+- **Previously**: Always said "king partially sheltered, missing
+  e-pawn shield" regardless of position.
+- **Now**: Descriptions are more position-aware — "king uncastled,
+  still has castling rights" vs "king displaced to e2" etc.
+
+### UCI_LimitStrength / UCI_Elo / Skill ✅ ADDED
+
+- Blunder now supports `Skill` (1-20), `UCI_LimitStrength`, and
+  `UCI_Elo` (500-2500) for adjustable play strength.
+- Coaching protocol commands (`coach eval`, `coach compare`) always
+  run at full strength regardless of the Skill/Elo setting.
+
+### Opening Book ✅ ADDED
+
+- Blunder supports `BookFile` UCI option for Polyglot opening books.
+
+## Feature Requests (still open)
+
+### BLUNDER-004: Pawn structure false positives
+
+- **Status**: Needs re-testing with current Blunder version.
 
 ### BLUNDER-005: Threat descriptions could be more specific
 
-- **Observed**: Threats like `"Bc4 can give check"` are useful but don't
-  specify the path (Bxf7+ is the actual threat, not just "check"). The
-  `target_squares` field says `["e8"]` but the real target is f7.
-- **Suggestion**: Include the move in UCI notation and the actual target
-  square/piece being threatened, not just the king square.
+- **Observed**: Threats like "Bc4 can give check" don't specify the
+  actual move (Bxf7+) or the real target (f7 pawn, not the king).
+- **Suggestion**: Include the move in UCI notation and the actual
+  target square/piece being threatened.
 
 ### BLUNDER-006: Expose tactical motif labels
 
-- **Observed**: `tactics: []` is always empty in positions where clear
-  tactics exist (e.g., Italian Game has Bxf7+ sacrifice ideas, pins
-  on the e-file after d3).
-- **Impact**: The LLM has to guess at tactical themes from PV lines
-  instead of getting labeled motifs from the engine.
-- **Suggestion**: Detect common patterns from the search tree — forks,
-  pins, skewers, discovered attacks, back-rank threats. Even basic
-  detection (piece attacks two higher-value pieces = fork) would help.
+- **Status**: Blunder now returns some tactics (discovered attacks
+  observed in testing). Forks, pins, skewers may still be missing.
+- **Suggestion**: Expand detection to cover common patterns from
+  the search tree.
 
-### BLUNDER-007: King safety description is static
+### BLUNDER-008: Threat map is too verbose
 
-- **Observed**: White's king safety always says "king partially sheltered,
-  missing e-pawn shield" after 1.e4, even in positions where White has
-  castled. The description seems template-based rather than position-aware.
-- **Suggestion**: Make descriptions reflect the actual position — castled
-  vs uncastled, pawn storm proximity, open files near the king.
-
-### BLUNDER-008: Threat map is too verbose for coaching
-
-- **Observed**: The threat map returns data for every occupied square
-  (32+ entries). Most entries show `net_attacked: false` and aren't
-  interesting for coaching.
-- **Suggestion**: Either (a) only return squares where `net_attacked`
-  is true or where there's a meaningful attacker/defender imbalance,
-  or (b) add a `summary` field that lists only the interesting squares.
-  Chess-coach currently filters client-side but it inflates the JSON.
+- **Status**: Chess-coach now filters client-side (only shows pieces
+  under attack). Blunder could add a `threat_map_summary` field
+  to reduce JSON size. Blunder has started returning a summary
+  string which chess-coach displays as "Board tensions."
 
 ## Future Protocol Extensions
 
-These are from IDEAS.md — things that would need Blunder changes:
-
-- **NNUE eval component exposure**: Break down the NNUE eval into
-  interpretable features (material, mobility, king safety, pawn
-  structure) with accurate calibration.
-- **"Why not" analysis**: Given a candidate move, explain why the engine
-  rejects it (what refutation does it see?). Not standard UCI.
-- **Positional feature extraction**: Passed pawns, open files, outposts,
-  weak squares — the engine knows these but doesn't report them.
-- **Critical moment detection**: Flag positions where the eval is
-  volatile (large swings between candidate moves). Currently
+- **MultiPV top lines**: The most impactful missing feature. Needed
+  for comparing candidate moves and "what was missed" coaching.
+- **NNUE eval component exposure**: Accurate breakdown calibration.
+- **"Why not" analysis**: Explain why the engine rejects a move.
+- **Positional feature extraction**: Passed pawns, open files,
+  outposts, weak squares.
+- **Critical moment detection**: Flag volatile positions. Currently
   `critical_moment` is always `false`.
-
-
-### BLUNDER-009: "Pawn storm detected" false positive in openings
-
-- **Observed**: After 1.e4, White's king safety description says
-  "king uncastled, still has castling rights, missing e-pawn shield,
-  pawn storm detected." The e-pawn advancing to e4 is a normal opening
-  move, not a pawn storm.
-- **Impact**: The coaching text tells beginners there's a pawn storm
-  on move 2, which is confusing and incorrect.
-- **Expected**: Pawn storm detection should require multiple pawns
-  advancing toward the opponent's king, not just a single central
-  pawn push. A pawn storm typically involves 2-3 pawns on the same
-  wing advancing past the 4th rank toward a castled king.
