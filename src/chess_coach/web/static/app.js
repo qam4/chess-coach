@@ -31,7 +31,7 @@
   var strengthLabel = document.getElementById('strengthLabel');
 
   // --- State ---
-  var mode = 'analyze'; // 'analyze' | 'play'
+  var mode = 'play'; // 'analyze' | 'play'
   var playerColor = 'white';
   var gameMoves = []; // [{uci, san, fen}]
   var gameOver = false;
@@ -72,15 +72,13 @@
     playControls.hidden = !isPlay;
     moveListPanel.hidden = !isPlay;
 
-    // Default: template ON in play mode (speed), OFF in analyze mode (depth)
-    document.getElementById('templateToggle').checked = isPlay;
+    // Quick mode ON by default in both modes
+    document.getElementById('templateToggle').checked = true;
 
     if (isPlay) {
-      coachingText.innerHTML = '<p class="placeholder">Choose your color to start playing.</p>';
+      coachingText.innerHTML = '<p class="placeholder">Click <strong>New Game</strong> to start playing.</p>';
       coachingMeta.textContent = '';
       userFeedback.hidden = true;
-      colorModal.removeAttribute('hidden');
-      colorModal.style.display = 'flex';
     } else {
       // Sync the current board position into the FEN input
       fenInput.value = game.fen();
@@ -90,6 +88,9 @@
       clearArrows();
     }
   }
+
+  // Initialize default mode on page load
+  setMode(mode);
 
   // =========================================================================
   // Depth slider
@@ -102,7 +103,6 @@
   // Strength slider (play mode)
   // =========================================================================
   function eloLabel(elo) {
-    if (elo === 0) return 'Full strength';
     var titles = [
       [2400, 'GM'], [2300, 'IM'], [2200, 'FM'],
       [2000, 'CM'], [1800, 'Class B'], [1600, 'Class C'],
@@ -126,6 +126,13 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ play_elo: elo }),
     });
+  });
+
+  // Send initial strength on page load
+  fetch('/api/play/strength', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ play_elo: parseInt(strengthSlider.value) }),
   });
 
   // =========================================================================
@@ -275,9 +282,12 @@
         updateEvalBar(data.eval_score);
         renderMoveList();
 
-        // Show coaching text
+        // Show coaching text with engine move label
         coachingMeta.textContent = data.opening_name || '';
-        coachingText.innerHTML = renderMarkdown(data.coaching_text || '');
+        var engineHeader = data.engine_move
+          ? '<p style="color:#a0c4ff;font-weight:600;margin-bottom:0.3rem;">Engine played: ' + escapeHtml(data.engine_move) + '</p><hr class="coaching-separator">'
+          : '';
+        coachingText.innerHTML = engineHeader + renderMarkdown(data.coaching_text || '');
 
         // Show hint button if hint available
         if (data.hint_san) {
@@ -586,6 +596,11 @@
     cp = Math.max(-500, Math.min(500, cp));
     var pct = 50 + (cp / 500) * 50;
     evalFill.style.height = pct + '%';
+    var label = document.getElementById('evalLabel');
+    if (label) {
+      var val = (cp / 100).toFixed(1);
+      label.textContent = cp >= 0 ? '+' + val : val;
+    }
   }
 
   // =========================================================================

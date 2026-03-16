@@ -101,8 +101,14 @@ def generate_move_coaching(
 
     # What the engine preferred
     if report.best_move and cls != "good":
+        try:
+            board = chess.Board(report.fen)
+            move = chess.Move.from_uci(report.best_move)
+            best_san = board.san(move)
+        except (ValueError, chess.InvalidMoveError):
+            best_san = report.best_move
         sections.append(
-            f"The engine preferred {report.best_move} (eval: {report.best_eval_cp / 100:+.2f})."
+            f"The engine preferred {best_san} (eval: {report.best_eval_cp / 100:+.2f})."
         )
 
     # Missed tactics
@@ -112,8 +118,19 @@ def generate_move_coaching(
 
     # Refutation line
     if report.refutation_line and cls in ("mistake", "blunder"):
-        moves = " ".join(report.refutation_line)
-        sections.append(f"The opponent can punish this with: {moves}")
+        try:
+            board = chess.Board(report.fen)
+            # Push user move first, then convert refutation to SAN
+            board.push(chess.Move.from_uci(report.user_move))
+            san_moves = []
+            for uci_move in report.refutation_line:
+                m = chess.Move.from_uci(uci_move)
+                san_moves.append(board.san(m))
+                board.push(m)
+            sections.append(f"The opponent can punish this with: {' '.join(san_moves)}")
+        except (ValueError, chess.InvalidMoveError):
+            moves = " ".join(report.refutation_line)
+            sections.append(f"The opponent can punish this with: {moves}")
 
     return "\n\n".join(sections)
 

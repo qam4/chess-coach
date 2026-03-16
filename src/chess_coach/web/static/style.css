@@ -105,6 +105,19 @@ header h1 {
   transition: height 0.4s ease;
 }
 
+.eval-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-family: monospace;
+  color: #888;
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* --- Controls --- */
 .controls {
   margin-top: 1rem;
@@ -303,6 +316,12 @@ header h1 {
 
 .coaching-text .placeholder { color: #667; font-style: italic; }
 .coaching-text .error { color: #e74c3c; }
+
+.coaching-separator {
+  border: none;
+  border-top: 1px solid #2a3a5e;
+  margin: 0.5rem 0;
+}
 
 /* --- User feedback badge --- */
 .user-feedback {

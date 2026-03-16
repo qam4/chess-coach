@@ -11,8 +11,8 @@
   <header>
     <h1>♟ Chess Coach</h1>
     <div class="mode-toggle" role="tablist" aria-label="Mode">
-      <button class="mode-btn active" data-mode="analyze" role="tab" aria-selected="true">Analyze</button>
-      <button class="mode-btn" data-mode="play" role="tab" aria-selected="false">Play</button>
+      <button class="mode-btn" data-mode="analyze" role="tab" aria-selected="false">Analyze</button>
+      <button class="mode-btn active" data-mode="play" role="tab" aria-selected="true">Play</button>
     </div>
   </header>
 
@@ -22,6 +22,7 @@
       <div class="board-wrapper">
         <div class="eval-bar" id="evalBar">
           <div class="eval-fill" id="evalFill"></div>
+          <span class="eval-label" id="evalLabel">0.0</span>
         </div>
         <div id="board" class="chess-board"></div>
       </div>
@@ -29,7 +30,7 @@
       <!-- Shared controls -->
       <div class="controls" style="padding: 4px 0;">
         <label for="templateToggle" style="font-size: 0.85em; cursor: pointer;">
-          <input type="checkbox" id="templateToggle"> Template mode (no LLM — instant)
+          <input type="checkbox" id="templateToggle" checked> Quick mode (instant, no LLM)
         </label>
       </div>
 
@@ -65,8 +66,8 @@
           <button id="undoBtn" class="btn-secondary">Undo</button>
         </div>
         <div class="strength-control">
-          <label for="strengthSlider">Engine: <span id="strengthLabel">Full strength</span></label>
-          <input type="range" id="strengthSlider" min="0" max="2500" step="100" value="0">
+          <label for="strengthSlider">Opponent: <span id="strengthLabel">Elo 1000 (Novice)</span></label>
+          <input type="range" id="strengthSlider" min="500" max="2500" step="100" value="1000">
         </div>
       </div>
     </section>
@@ -112,7 +113,7 @@
   <svg id="arrowSvg" class="arrow-overlay"></svg>
 
   <!-- Debug panel -->
-  <details class="debug-panel" id="debugPanel">
+  <details class="debug-panel" id="debugPanel" hidden>
     <summary>Debug</summary>
     <pre id="debugContent" class="debug-content">No data yet. Make a move or analyze a position.</pre>
   </details>
