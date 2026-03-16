@@ -268,44 +268,36 @@ def _tactics_text(report: PositionReport) -> str | None:
 
 
 def _best_move_text(report: PositionReport) -> str | None:
-    """Recommend the best move with context about what it does."""
+    """Position-aware advice without revealing the specific best move.
+
+    The hint button is for concrete move suggestions. The coaching text
+    should focus on what to think about, not what to play.
+    """
     if not report.top_lines or not report.top_lines[0].moves:
         return None
 
-    line = report.top_lines[0]
-    uci_move = line.moves[0]
-
     try:
         board = chess.Board(report.fen)
-        move = chess.Move.from_uci(uci_move)
-        san = board.san(move)
+        move = chess.Move.from_uci(report.top_lines[0].moves[0])
         piece = board.piece_at(move.from_square)
 
-        # Describe what the move does
-        context_parts = []
-        if san in ("O-O", "O-O-O"):
-            context_parts.append("getting the king to safety")
-        elif (
-            piece
-            and piece.piece_type in (chess.KNIGHT, chess.BISHOP)
-            and board.fullmove_number <= 10
-        ):
-            context_parts.append("developing a piece toward the center")
+        # Give positional guidance based on what the best move does
+        if board.san(move) in ("O-O", "O-O-O"):
+            return "Consider castling to get your king to safety."
+
+        if piece and piece.piece_type in (chess.KNIGHT, chess.BISHOP):
+            back_rank = 0 if board.turn == chess.WHITE else 7
+            if chess.square_rank(move.from_square) == back_rank:
+                return "Look for ways to develop your remaining pieces."
+
         if board.is_capture(move):
-            captured = board.piece_at(move.to_square)
-            if captured:
-                names = {1: "pawn", 2: "knight", 3: "bishop", 4: "rook", 5: "queen"}
-                cap_name = names.get(captured.piece_type, "piece")
-                context_parts.append(f"capturing the {cap_name}")
+            return "There's a tactical opportunity — look for captures."
 
-        # Check if the move defends a hanging piece
-        for hp in report.hanging_pieces.get("white", []) + report.hanging_pieces.get("black", []):
-            if move.to_square == chess.parse_square(hp.square):
-                context_parts.append(f"defending the {hp.piece}")
+        # Check if there are hanging pieces to address
+        side = "white" if board.turn == chess.WHITE else "black"
+        if report.hanging_pieces.get(side):
+            return "You have an undefended piece — address that first."
 
-        rec = f"The engine recommends {san} (eval: {line.eval_cp / 100:+.2f})"
-        if context_parts:
-            rec += " — " + ", ".join(context_parts)
-        return rec + "."
+        return None
     except (ValueError, chess.InvalidMoveError):
-        return f"The engine recommends {uci_move} (eval: {line.eval_cp / 100:+.2f})."
+        return None
