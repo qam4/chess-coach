@@ -239,7 +239,7 @@
             setLoading(true, data.message);
             var toolTag = data.tool ? '[' + data.tool + '] ' : '';
             appendDebug(toolTag + data.message);
-            if (data.detail) appendDebugDetail('detail', data.detail);
+            formatDebugDetail(data.detail);
           }
         });
       })
@@ -257,10 +257,11 @@
   }
 
   function handlePlayMoveResponse(data) {
-        // Show debug trace if available
-        if (data.debug && data.debug.trace) {
+        // Show debug trace only for template mode (SSE already streamed events)
+        if (data.mode === 'template' && data.debug && data.debug.trace) {
           data.debug.trace.forEach(function (line) {
-            appendDebug('[template] ' + line);
+            var text = typeof line === 'string' ? line : (line.message || JSON.stringify(line));
+            appendDebug('[trace] ' + text);
           });
         }
 
@@ -750,6 +751,20 @@
       debugContent.textContent += '  ┗ ' + label + ': ' + text + '\n';
       debugContent.scrollTop = debugContent.scrollHeight;
     }
+  }
+
+  function formatDebugDetail(d) {
+    if (!d) return;
+    if (d.engine_command) appendDebug('  >> ' + d.engine_command);
+    if (d.input_fen) appendDebug('  fen: ' + d.input_fen);
+    if (d.classification !== undefined) {
+      appendDebug('  << classification=' + d.classification + ' drop=' + (d.eval_drop_cp || 0) + 'cp nag=' + (d.nag || ''));
+    }
+    if (d.eval_cp !== undefined && !d.classification) appendDebug('  << eval=' + d.eval_cp + 'cp');
+    if (d.engine_move_uci) appendDebug('  << move: ' + (d.engine_move_san || d.engine_move_uci));
+    if (d.llm_prompt) appendDebug('  >> LLM prompt (' + d.llm_prompt.length + ' chars)');
+    if (d.llm_response) appendDebug('  << LLM response (' + d.llm_response.length + ' chars): ' + d.llm_response.substring(0, 200));
+    if (d.position_report) appendDebug('  << position_report: eval=' + d.position_report.eval_cp + 'cp');
   }
 
   function clearDebug() {

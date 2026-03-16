@@ -118,6 +118,13 @@
     <pre id="debugContent" class="debug-content">No data yet. Make a move or analyze a position.</pre>
   </details>
 
+  <script>
+    // Show debug panel with ?debug=1 in URL
+    if (new URLSearchParams(window.location.search).has('debug')) {
+      document.getElementById('debugPanel').removeAttribute('hidden');
+    }
+  </script>
+
   <script src="/static/vendor/jquery.min.js"></script>
   <script src="/static/vendor/chess.js"></script>
   <script src="/static/vendor/chessboard.js"></script>

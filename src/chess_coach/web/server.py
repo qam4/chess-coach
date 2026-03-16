@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from chess_coach.analyzer import analyze_position
-from chess_coach.coach import Coach, CoachingResponse, TraceStep
+from chess_coach.coach import Coach, CoachingResponse, MoveEvaluation, TraceStep
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -404,6 +404,19 @@ def create_app(coach: Coach) -> FastAPI:
                 try:
                     t0 = time.perf_counter()
 
+                    # Config summary
+                    from chess_coach.engine import CoachingEngine as _CE
+
+                    _is_coaching = isinstance(coach.engine, _CE) and coach.engine.coaching_available
+                    _proto = "coaching" if _is_coaching else "uci"
+                    _emit(
+                        "config",
+                        f"mode=llm protocol={_proto} depth={coach.depth} "
+                        f"play_elo={coach.play_elo} "
+                        f"llm={getattr(coach.llm, 'model', '?')}",
+                        tool="system",
+                    )
+
                     # Step 1: Evaluate user's move
                     evaluation = await asyncio.to_thread(
                         coach.evaluate_move,
@@ -593,43 +606,81 @@ def create_app(coach: Coach) -> FastAPI:
             t0 = time.perf_counter()
             trace: list[str] = []
 
-            # 1. Evaluate user's move (engine only, no LLM)
-            trace.append(f"evaluate_move: fen={req.fen} move={req.user_move}")
-            evaluation = await asyncio.to_thread(coach.evaluate_move, req.fen, req.user_move)
-            t1 = time.perf_counter()
+            # Config summary
+            is_coaching = isinstance(engine, CoachingEngine) and engine.coaching_available
+            protocol = "coaching" if is_coaching else "uci"
             trace.append(
-                f"evaluate_move done: {evaluation.classification} "
-                f"(drop {evaluation.eval_drop_cp}cp) [{t1 - t0:.1f}s]"
+                f"config: mode=template protocol={protocol} "
+                f"depth={coach.depth} play_elo={coach.play_elo}"
             )
 
-            # Generate template feedback for the move
+            # 1. Evaluate user's move via comparison report
             user_feedback = ""
-            if evaluation.classification != "good" and isinstance(engine, CoachingEngine):
-                try:
-                    report = await asyncio.to_thread(
-                        engine.get_comparison_report, req.fen, req.user_move
-                    )
+            if isinstance(engine, CoachingEngine) and engine.coaching_available:
+                trace.append(f">> coach compare fen {req.fen} move {req.user_move}")
+                t_eval = time.perf_counter()
+                report = await asyncio.to_thread(
+                    engine.get_comparison_report, req.fen, req.user_move
+                )
+                t1 = time.perf_counter()
+                import json as _json_cmp
+
+                trace.append(
+                    "<< comparison_report:\n" + _json_cmp.dumps(report.to_dict(), indent=2)
+                )
+
+                # Classify using our threshold
+                board_tmp = chess.Board(req.fen)
+                board_tmp.push(move)
+                from chess_coach.openings import lookup_fen as _lfen
+
+                is_book = _lfen(board_tmp.fen()) is not None
+                skip_threshold = 150 if is_book else 50
+                if report.eval_drop_cp <= skip_threshold:
+                    classification = "good"
+                elif report.eval_drop_cp <= 100:
+                    classification = "inaccuracy"
+                else:
+                    classification = Coach.classify_move(report.eval_drop_cp)
+                evaluation = MoveEvaluation(
+                    classification=classification,
+                    eval_before_cp=report.best_eval_cp,
+                    eval_after_cp=report.user_eval_cp,
+                    eval_drop_cp=report.eval_drop_cp,
+                    feedback="",
+                )
+                trace.append(
+                    f"classification={classification} "
+                    f"drop={report.eval_drop_cp}cp "
+                    f"(threshold={skip_threshold}cp, "
+                    f"book={is_book}) [{t1 - t_eval:.1f}s]"
+                )
+                if classification != "good":
                     user_feedback = generate_move_coaching(report)
-                    trace.append(f"comparison_report: {report.classification}")
-                except Exception as e:
-                    user_feedback = evaluation.feedback
-                    trace.append(f"comparison_report failed: {e}")
+            else:
+                trace.append(f"evaluate_move (UCI): fen={req.fen} move={req.user_move}")
+                evaluation = await asyncio.to_thread(coach.evaluate_move, req.fen, req.user_move)
+                t1 = time.perf_counter()
+                trace.append(
+                    f"<< classification={evaluation.classification} "
+                    f"drop={evaluation.eval_drop_cp}cp "
+                    f"[{t1 - t0:.1f}s]"
+                )
 
             # 2. Engine plays its response
             board.push(move)
             fen_after_user = board.fen()
 
             coach._set_play_skill()
-            trace.append(
-                f"engine.play: fen={fen_after_user} depth={coach.depth} "
-                f"play_elo={coach.play_elo} book=True"
-            )
+            trace.append(f">> setoption UCI_LimitStrength true / UCI_Elo {coach.play_elo}")
+            trace.append(f">> position fen {fen_after_user}\\n>> go depth {coach.depth}")
             t2 = time.perf_counter()
             engine_move_uci = await asyncio.to_thread(
                 engine.play, fen_after_user, depth=coach.depth
             )
             t3 = time.perf_counter()
             coach._set_full_strength()
+            trace.append(">> setoption UCI_LimitStrength false")
 
             engine_move_obj = chess.Move.from_uci(engine_move_uci)
             engine_move_san = board.san(engine_move_obj)
@@ -643,6 +694,7 @@ def create_app(coach: Coach) -> FastAPI:
 
             if isinstance(engine, CoachingEngine) and engine.coaching_available:
                 try:
+                    trace.append(f">> coach eval fen {board.fen()} multipv {coach.top_moves}")
                     pos_report = await asyncio.to_thread(
                         engine.get_position_report,
                         board.fen(),
@@ -650,6 +702,12 @@ def create_app(coach: Coach) -> FastAPI:
                     )
                     coaching_text = opening_label + generate_position_coaching(
                         pos_report, level=coach.level, opening=opening
+                    )
+                    # Full position report in debug trace
+                    import json as _json
+
+                    trace.append(
+                        "<< position_report:\n" + _json.dumps(pos_report.to_dict(), indent=2)
                     )
                 except Exception:
                     coaching_text = opening_label + f"Engine played {engine_move_san}."
