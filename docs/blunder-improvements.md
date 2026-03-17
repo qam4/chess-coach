@@ -5,17 +5,13 @@ chess-coach via the coaching protocol. Ordered roughly by impact.
 
 ## Bugs / Calibration Issues
 
-### BLUNDER-001: Eval breakdown doesn't sum to overall eval ⚠️ OPEN
+### BLUNDER-001: Eval breakdown doesn't sum to overall eval ✅ FIXED
 
-- **Observed (2026-03-16)**: After 1.e4, `eval_cp=0` but breakdown
-  sums to `-28` (mat=-24, mob=-24, ks=15, ps=5). Previously the
-  numbers were even more off (eval=-236, mob=-240).
-- **Improved**: The magnitude is much smaller now (off by 28cp vs 226cp
-  before), but the sign is still wrong (breakdown says -28, eval says 0).
-- **Impact**: Template coaching shows "roughly equal" (correct from
-  eval_cp) but the breakdown components tell a different story.
-- **Expected**: Breakdown components should sum to (or be close to)
-  the overall eval_cp.
+- **Fixed (2026-03-16)**: Blunder now computes eval_cp as the sum of
+  breakdown components. New fields `tempo` and `piece_bonuses` added.
+  After 1.e4: eval_cp=0, breakdown=-24+-24+15+5+28+0=0. Matches.
+- **Chess-coach**: EvalBreakdown dataclass already supports the new
+  fields with defaults for backward compatibility.
 
 ### BLUNDER-002: Mobility score seems miscalibrated ✅ IMPROVED
 
@@ -24,14 +20,11 @@ chess-coach via the coaching protocol. Ordered roughly by impact.
   reasonable and proportional to other components.
 - **Status**: Mostly fixed. No longer dominates the eval breakdown.
 
-### BLUNDER-003: Only 1 PV line returned despite multipv 3 ⚠️ OPEN
+### BLUNDER-003: Only 1 PV line returned despite multipv 3 ✅ FIXED
 
-- **Observed (2026-03-16)**: `coach eval fen <FEN> multipv 3` returns
-  only 1 line (with actual moves and depth 15). Previously returned
-  3 entries but lines 2-3 were empty stubs.
-- **Improved**: The single line now has real data (depth, moves, eval).
-- **Still needed**: Multiple distinct PV lines for comparing candidate
-  moves. This is key for "what was missed" coaching.
+- **Fixed (2026-03-16)**: MultiPV now returns all requested lines with
+  actual moves, independent depths, and eval scores. Root causes were
+  TT cutoff at root and abort flag not reset between PV iterations.
 
 ## Fixed Issues
 

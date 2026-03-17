@@ -156,11 +156,18 @@ def _eval_summary(report: PositionReport) -> str:
         side = "White" if cp > 0 else "Black"
         assessment = f"{side} is winning ({cp / 100:+.2f} pawns)."
 
-    # Add mobility context if the breakdown is available
-    mob = report.eval_breakdown.mobility
-    if abs(mob) > 100:
-        better = "White" if mob > 0 else "Black"
-        assessment += f" {better}'s pieces are more active and control more squares."
+    # Add context from the dominant breakdown factor
+    eb = report.eval_breakdown
+    factors = [
+        (abs(eb.mobility), eb.mobility, "piece activity"),
+        (abs(eb.king_safety), eb.king_safety, "king safety"),
+        (abs(eb.pawn_structure), eb.pawn_structure, "pawn structure"),
+    ]
+    factors.sort(reverse=True)
+    top_abs, top_val, top_name = factors[0]
+    if top_abs > 30 and abs_cp > 30:
+        better = "White" if top_val > 0 else "Black"
+        assessment += f" The main factor is {top_name} ({better} is better)."
 
     return assessment
 
