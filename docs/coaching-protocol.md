@@ -120,13 +120,19 @@ Requests a full position evaluation with rich structured data.
 
 **Request:**
 ```
-coach eval fen <FEN> [multipv <N>]
+coach eval fen <FEN> [multipv <N>] [depth <D>] [movetime <MS>]
 ```
 
 | Parameter   | Type    | Required | Default | Description |
 |-------------|---------|----------|---------|-------------|
 | `fen`       | string  | yes      | —       | FEN string describing the position (all 6 fields) |
 | `multipv`   | integer | no       | 3       | Number of principal variation lines to return |
+| `depth`     | integer | no       | —       | Search depth limit (plies). Mutually exclusive with `movetime` |
+| `movetime`  | integer | no       | —       | Search time limit in milliseconds. Mutually exclusive with `depth` |
+
+If neither `depth` nor `movetime` is specified, the engine uses its
+default search budget. When specified, the engine MUST respect the
+limit — the search stops when the depth or time is reached.
 
 **Response type:** `"position_report"`
 
@@ -289,7 +295,7 @@ Compares a user's move against the engine's top moves with rich context.
 
 **Request:**
 ```
-coach compare fen <FEN> move <MOVE>
+coach compare fen <FEN> move <MOVE> [depth <D>] [movetime <MS>]
 ```
 
 | Parameter | Type   | Required | Description |

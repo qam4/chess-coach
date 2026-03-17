@@ -653,6 +653,12 @@ def format_coaching_command(cmd_type: str, **params: object) -> str:
         multipv = params.get("multipv")
         if multipv is not None:
             parts.append(f"multipv {multipv}")
+        depth = params.get("depth")
+        if depth is not None:
+            parts.append(f"depth {depth}")
+        movetime = params.get("movetime")
+        if movetime is not None:
+            parts.append(f"movetime {movetime}")
         return " ".join(parts)
 
     if cmd_type == "compare":
@@ -662,7 +668,14 @@ def format_coaching_command(cmd_type: str, **params: object) -> str:
             raise ValueError("'compare' command requires a 'fen' parameter")
         if move is None:
             raise ValueError("'compare' command requires a 'move' parameter")
-        return f"coach compare fen {fen} move {move}"
+        parts = [f"coach compare fen {fen} move {move}"]
+        depth = params.get("depth")
+        if depth is not None:
+            parts.append(f"depth {depth}")
+        movetime = params.get("movetime")
+        if movetime is not None:
+            parts.append(f"movetime {movetime}")
+        return " ".join(parts)
 
     raise ValueError(f"unknown coaching command type: {cmd_type!r}")
 

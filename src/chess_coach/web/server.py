@@ -709,10 +709,22 @@ def create_app(coach: Coach) -> FastAPI:
                     trace.append(
                         "<< position_report:\n" + _json.dumps(pos_report.to_dict(), indent=2)
                     )
-                except Exception:
-                    coaching_text = opening_label + f"Engine played {engine_move_san}."
+                except Exception as exc:
+                    trace.append(f"<< coach eval FAILED: {exc}")
+                    # Fall back to basic eval from comparison report
+                    coaching_text = opening_label
+                    if evaluation.eval_after_cp is not None:
+                        cp = evaluation.eval_after_cp
+                        if abs(cp) < 30:
+                            coaching_text += "The position is roughly equal."
+                        else:
+                            side = "White" if cp > 0 else "Black"
+                            coaching_text += (
+                                f"{side} has an edge "
+                                f"({cp / 100:+.2f} pawns)."
+                            )
             else:
-                coaching_text = opening_label + f"Engine played {engine_move_san}."
+                coaching_text = opening_label
 
             # 4. Eval and game state — use pos_report eval (current board)
             if pos_report:
