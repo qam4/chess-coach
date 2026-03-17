@@ -700,7 +700,7 @@ def create_app(coach: Coach) -> FastAPI:
                         board.fen(),
                         multipv=coach.top_moves,
                     )
-                    coaching_text = opening_label + generate_position_coaching(
+                    coaching_text = generate_position_coaching(
                         pos_report, level=coach.level, opening=opening
                     )
                     # Full position report in debug trace

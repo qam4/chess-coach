@@ -27,9 +27,7 @@ def generate_position_coaching(
     """
     sections: list[str] = []
 
-    # Opening
-    if opening:
-        sections.append(f"This is the {opening.name} ({opening.eco}).")
+    # Opening name is shown in the UI header — don't repeat it in the body
 
     # Overall eval
     sections.append(_eval_summary(report))
@@ -59,9 +57,10 @@ def generate_position_coaching(
     if tactics:
         sections.append(tactics)
 
-    # Threat map summary (from Blunder)
-    if report.threat_map_summary:
-        sections.append(f"Board tensions: {report.threat_map_summary}")
+    # Board tensions — generated from threat_map data, not Blunder's summary
+    tensions = _board_tensions_text(report)
+    if tensions:
+        sections.append(tensions)
 
     # Best move recommendation
     best = _best_move_text(report)
@@ -350,3 +349,39 @@ def _best_move_text(report: PositionReport) -> str | None:
         return None
     except (ValueError, chess.InvalidMoveError):
         return None
+
+
+def _board_tensions_text(report: PositionReport) -> str | None:
+    """Describe key board tensions from the threat map.
+
+    Only mentions squares that are genuinely contested (attacked by both
+    sides) or where a piece is under-defended.
+    """
+    if not report.threat_map:
+        return None
+
+    contested = []
+    under_defended = []
+
+    for entry in report.threat_map:
+        w_atk = entry.white_attackers
+        b_atk = entry.black_attackers
+
+        # Genuinely contested: both sides attack the square
+        if w_atk > 0 and b_atk > 0:
+            contested.append(entry.square)
+
+        # Piece under attack with insufficient defense
+        if entry.piece and entry.net_attacked:
+            under_defended.append(f"{entry.piece} on {entry.square}")
+
+    parts = []
+    if under_defended:
+        parts.append("Under-defended: " + ", ".join(under_defended))
+    if contested:
+        squares = ", ".join(contested)
+        parts.append(f"Contested squares: {squares}")
+
+    if not parts:
+        return None
+    return "Board tensions: " + ". ".join(parts) + "."
