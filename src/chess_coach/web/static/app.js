@@ -292,7 +292,12 @@
 
         // Show hint button if hint available
         if (data.hint_san) {
-          hintText.textContent = 'Consider playing: ' + data.hint_san;
+          var hintContent = 'Consider playing: ' + data.hint_san;
+          if (data.hint_alternatives) {
+            hintContent += '\n' + data.hint_alternatives;
+          }
+          hintText.textContent = hintContent;
+          hintText.style.whiteSpace = 'pre-line';
           hintText.hidden = true;
           hintBtn.textContent = '💡 Show hint';
           hintContainer.hidden = false;

@@ -750,6 +750,15 @@ def create_app(coach: Coach) -> FastAPI:
                     except (ValueError, AssertionError):
                         hint_san = hint_uci
 
+            # Build alternative moves text from MultiPV
+            hint_alternatives = None
+            if pos_report:
+                from chess_coach.coaching_templates import (
+                    _alternative_moves_text,
+                )
+
+                hint_alternatives = _alternative_moves_text(pos_report)
+
             elapsed = time.perf_counter() - t0
 
             return {
@@ -765,6 +774,7 @@ def create_app(coach: Coach) -> FastAPI:
                 "opening_name": opening.name if opening else None,
                 "hint_uci": hint_uci,
                 "hint_san": hint_san,
+                "hint_alternatives": hint_alternatives,
                 "mode": "template",
                 "debug": {
                     "engine_s": round(elapsed, 2),

@@ -358,6 +358,42 @@ def _best_move_text(report: PositionReport) -> str | None:
         return None
 
 
+def _alternative_moves_text(report: PositionReport) -> str | None:
+    """Show alternative candidate moves from MultiPV lines.
+
+    Only shown when there are 2+ lines with moves. Converts UCI to SAN
+    and shows the eval difference from the best line.
+    """
+    if len(report.top_lines) < 2:
+        return None
+
+    lines_with_moves = [pv for pv in report.top_lines if pv.moves]
+    if len(lines_with_moves) < 2:
+        return None
+
+    try:
+        board = chess.Board(report.fen)
+        best_eval = lines_with_moves[0].eval_cp
+
+        alts = []
+        for line in lines_with_moves[1:]:
+            move = chess.Move.from_uci(line.moves[0])
+            san = board.san(move)
+            diff = best_eval - line.eval_cp
+            if abs(diff) < 5:
+                alts.append(f"{san} (equally good)")
+            elif diff > 0:
+                alts.append(f"{san} (slightly worse, {diff}cp)")
+            else:
+                alts.append(f"{san} (also strong)")
+
+        if not alts:
+            return None
+        return "Other ideas: " + ", ".join(alts) + "."
+    except (ValueError, chess.InvalidMoveError):
+        return None
+
+
 def _board_tensions_text(report: PositionReport) -> str | None:
     """Describe key board tensions from the threat map.
 
