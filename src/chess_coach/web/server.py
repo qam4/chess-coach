@@ -719,10 +719,7 @@ def create_app(coach: Coach) -> FastAPI:
                             coaching_text += "The position is roughly equal."
                         else:
                             side = "White" if cp > 0 else "Black"
-                            coaching_text += (
-                                f"{side} has an edge "
-                                f"({cp / 100:+.2f} pawns)."
-                            )
+                            coaching_text += f"{side} has an edge ({cp / 100:+.2f} pawns)."
             else:
                 coaching_text = opening_label
 
