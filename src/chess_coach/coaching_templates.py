@@ -244,9 +244,7 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
             if board:
                 piece_name = _piece_name_at(board, threat.source_square) or ""
             source = (
-                f"{side_name}'s {piece_name} on {threat.source_square}"
-                if piece_name
-                else side_name
+                f"{side_name}'s {piece_name} on {threat.source_square}" if piece_name else side_name
             )
             if threat.type == "check" and threat.target_squares:
                 items.append(f"{source} can give check.")
