@@ -540,26 +540,38 @@ class UciEngine(EngineProtocol):
             self._stdin.flush()
 
     def _read_line(self, timeout: float = 1.0) -> str | None:
-        """Read a single line with timeout."""
+        """Read a single line with timeout.
+
+        Uses a shared queue fed by a persistent reader thread to avoid
+        orphaned threads stealing lines from subsequent reads.
+        """
         if not self._stdout:
             return None
 
-        result: list[str] = []
-        done = threading.Event()
+        if not hasattr(self, "_line_queue"):
+            import queue as _queue
 
-        def _reader() -> None:
-            assert self._stdout is not None
-            line = self._stdout.readline()
-            result.append(line)
-            done.set()
+            self._line_queue: _queue.Queue[str] = _queue.Queue()
 
-        t = threading.Thread(target=_reader, daemon=True)
-        t.start()
-        done.wait(timeout=timeout)
+            def _reader_loop() -> None:
+                assert self._stdout is not None
+                try:
+                    while True:
+                        line = self._stdout.readline()
+                        if not line:
+                            break
+                        self._line_queue.put(line)
+                except (ValueError, OSError):
+                    pass
 
-        if result:
-            return result[0].strip()
-        return None
+            t = threading.Thread(target=_reader_loop, daemon=True)
+            t.start()
+
+        try:
+            line = self._line_queue.get(timeout=timeout)
+            return line.strip()
+        except Exception:
+            return None
 
     def _read_until(self, marker: str, timeout: float = 5.0) -> list[str]:
         """Read lines until one contains the marker."""
@@ -774,6 +786,12 @@ class CoachingEngine(EngineProtocol):
         proc = self._inner._proc
         if proc is None or proc.poll() is not None:
             raise EngineTerminatedError("engine process is not running")
+
+        # Flush the pipe: send isready and drain until readyok.
+        # This ensures no leftover output from previous commands
+        # (e.g. setoption) interferes with the coaching response.
+        self._inner._send("isready")
+        self._inner._read_until("readyok", timeout=5.0)
 
         self._inner._send(cmd)
 

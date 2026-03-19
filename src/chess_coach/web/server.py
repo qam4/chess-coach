@@ -679,8 +679,10 @@ def create_app(coach: Coach) -> FastAPI:
                 engine.play, fen_after_user, depth=coach.depth
             )
             t3 = time.perf_counter()
-            coach._set_full_strength()
-            trace.append(">> setoption UCI_LimitStrength false")
+            # Don't call _set_full_strength() here — it sends setoption
+            # commands that corrupt the stdout stream for the next coaching
+            # command. Blunder ignores UCI_LimitStrength for coach commands
+            # anyway, so it's safe to leave it on.
 
             engine_move_obj = chess.Move.from_uci(engine_move_uci)
             engine_move_san = board.san(engine_move_obj)

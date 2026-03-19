@@ -402,8 +402,9 @@ class Coach:
 
         _trace("config", "Pipeline config", tool="system", **self.debug_config)
 
-        # Ensure full strength for analysis (play strength may be active)
-        self._set_full_strength()
+        # Note: coaching commands always run at full strength in Blunder
+        # (UCI_LimitStrength is ignored for coach commands), so no need
+        # to toggle strength here.
 
         # ----- Coaching protocol path (single round-trip) -----
         if self._coaching_available:

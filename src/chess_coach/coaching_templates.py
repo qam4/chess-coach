@@ -37,10 +37,10 @@ def generate_position_coaching(
     if hanging:
         sections.append(hanging)
 
-    # Threats
-    threats = _threats_text(report)
-    if threats:
-        sections.append(threats)
+    # Threats and tactics — merged to avoid duplication
+    threats_and_tactics = _threats_and_tactics_text(report)
+    if threats_and_tactics:
+        sections.append(threats_and_tactics)
 
     # King safety
     king = _king_safety_text(report, level)
@@ -51,11 +51,6 @@ def generate_position_coaching(
     pawns = _pawn_structure_text(report, level)
     if pawns:
         sections.append(pawns)
-
-    # Tactics (forks, pins, skewers, etc.)
-    tactics = _tactics_text(report)
-    if tactics:
-        sections.append(tactics)
 
     # Board tensions — generated from threat_map data, not Blunder's summary
     tensions = _board_tensions_text(report)
@@ -213,6 +208,57 @@ def _threats_text(report: PositionReport) -> str | None:
     if not items:
         return None
     return "Threats: " + " ".join(items)
+
+
+def _threats_and_tactics_text(report: PositionReport) -> str | None:
+    """Merge threats and tactics into one section, deduplicating."""
+    items: list[str] = []
+    seen_types: set[str] = set()
+
+    try:
+        board = chess.Board(report.fen)
+    except ValueError:
+        board = None
+
+    # Tactics first (more specific)
+    for t in report.tactics:
+        key = t.type.lower()
+        seen_types.add(key)
+        piece_name = ""
+        if board and t.squares:
+            piece_name = _piece_name_at(board, t.squares[0]) or ""
+        if piece_name and t.squares:
+            items.append(
+                f"{t.type.capitalize()}: {piece_name} on "
+                f"{t.squares[0]} targets {', '.join(t.squares[1:])}"
+            )
+        else:
+            items.append(f"{t.type.capitalize()}: {t.description}")
+
+    # Add threats that aren't already covered by tactics
+    for side_key, side_name in [("white", "White"), ("black", "Black")]:
+        for threat in report.threats.get(side_key, []):
+            if threat.type.lower() in seen_types:
+                continue
+            piece_name = ""
+            if board:
+                piece_name = _piece_name_at(board, threat.source_square) or ""
+            source = (
+                f"{side_name}'s {piece_name} on {threat.source_square}"
+                if piece_name
+                else side_name
+            )
+            if threat.type == "check" and threat.target_squares:
+                items.append(f"{source} can give check.")
+            elif threat.type == "capture" and threat.target_squares:
+                targets = ", ".join(threat.target_squares)
+                items.append(f"{source} threatens to capture on {targets}.")
+            elif threat.description:
+                items.append(f"{source}: {threat.description}")
+
+    if not items:
+        return None
+    return " ".join(items)
 
 
 def _piece_name_at(board: chess.Board, square_name: str) -> str | None:
