@@ -439,6 +439,10 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
                 f"{label}: {piece_name} on "
                 f"{t.squares[0]} targets {', '.join(t.squares[1:])}"
             )
+        elif t.in_pv:
+            # Tactic is in the principal variation, not on the board yet.
+            # Skip it — the threat will be shown when it's on the board.
+            continue
         else:
             text = f"{label}: {t.description}"
         # Skip duplicate text

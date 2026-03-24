@@ -291,9 +291,33 @@
 
         // Use structured sections if available, otherwise flat text
         if (data.sections && data.sections.length > 0) {
-          renderCoaching(data);
-          // Prepend engine move header
-          coachingText.innerHTML = engineHeader + coachingText.innerHTML;
+          // In play mode, skip the meta line (best move/score) — just show sections
+          var html = '';
+          data.sections.forEach(function(section) {
+            var hasArrows = section.arrows && section.arrows.length > 0;
+            var arrowAttr = hasArrows ? ' data-arrows=\'' + JSON.stringify(section.arrows).replace(/'/g, '&#39;') + '\'' : '';
+            var hoverClass = hasArrows ? ' coaching-section--hoverable' : '';
+            html += '<div class="coaching-section' + hoverClass + '"' + arrowAttr + '>';
+            html += '<div class="coaching-section__label">' + escapeHtml(section.label) + '</div>';
+            html += '<div class="coaching-section__text">' + renderMarkdown(section.text) + '</div>';
+            html += '</div>';
+          });
+          coachingText.innerHTML = engineHeader + html;
+
+          // Add hover handlers for arrow display
+          var sectionEls = coachingText.querySelectorAll('.coaching-section--hoverable');
+          sectionEls.forEach(function(el) {
+            el.addEventListener('mouseenter', function() {
+              clearArrows();
+              var arrows = JSON.parse(el.getAttribute('data-arrows'));
+              arrows.forEach(function(a) {
+                drawArrow(a.from, a.to, a.color);
+              });
+            });
+            el.addEventListener('mouseleave', function() {
+              clearArrows();
+            });
+          });
         } else {
           coachingText.innerHTML = engineHeader + renderMarkdown(data.coaching_text || '');
         }
