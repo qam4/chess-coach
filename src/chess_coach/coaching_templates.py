@@ -18,12 +18,36 @@ from chess_coach.openings import OpeningInfo
 
 
 @dataclass
+class CoachingArrow:
+    """An arrow to draw on the board."""
+
+    from_sq: str  # e.g. "c4"
+    to_sq: str  # e.g. "f7"
+    color: str = "#e74c3c"  # red by default
+
+
+@dataclass
 class CoachingSection:
     """A single section of coaching output."""
 
     category: str  # assessment, piece_safety, tactics, strategy, tensions, suggestion
     label: str  # human-readable label for UI rendering
     text: str  # the coaching text
+    arrows: list[CoachingArrow] | None = None  # optional board arrows
+
+    def to_dict(self) -> dict:
+        """Serialize for JSON API responses."""
+        d: dict = {
+            "category": self.category,
+            "label": self.label,
+            "text": self.text,
+        }
+        if self.arrows:
+            d["arrows"] = [
+                {"from": a.from_sq, "to": a.to_sq, "color": a.color}
+                for a in self.arrows
+            ]
+        return d
 
 
 # Category constants
@@ -69,22 +93,32 @@ def generate_position_coaching_structured(
     # Piece safety — hanging pieces
     hanging = _hanging_pieces_text(report)
     if hanging:
+        # Highlight hanging piece squares
+        hanging_arrows = []
+        for side in ("white", "black"):
+            for hp in report.hanging_pieces.get(side, []):
+                hanging_arrows.append(
+                    CoachingArrow(hp.square, hp.square, "#e74c3c")
+                )
         sections.append(
             CoachingSection(
                 CAT_PIECE_SAFETY,
                 _CATEGORY_LABELS[CAT_PIECE_SAFETY],
                 hanging,
+                arrows=hanging_arrows or None,
             )
         )
 
     # Tactics — threats, checks, captures, motifs
     threats_and_tactics = _threats_and_tactics_text(report)
     if threats_and_tactics:
+        tactic_arrows = _extract_arrows(report)
         sections.append(
             CoachingSection(
                 CAT_TACTICS,
                 _CATEGORY_LABELS[CAT_TACTICS],
                 threats_and_tactics,
+                arrows=tactic_arrows or None,
             )
         )
 
@@ -128,6 +162,29 @@ def generate_position_coaching_structured(
         )
 
     return sections
+
+
+def _extract_arrows(report: PositionReport) -> list[CoachingArrow]:
+    """Extract board arrows from threats and tactics."""
+    arrows: list[CoachingArrow] = []
+
+    # Tactics: source → targets
+    for t in report.tactics:
+        if t.squares and len(t.squares) >= 2:
+            src = t.squares[0]
+            for tgt in t.squares[1:]:
+                arrows.append(CoachingArrow(src, tgt, "#f59e0b"))
+
+    # Threats: source → target squares
+    for side in ("white", "black"):
+        color = "#3b82f6" if side == "white" else "#e74c3c"
+        for threat in report.threats.get(side, []):
+            for tgt in threat.target_squares:
+                arrows.append(
+                    CoachingArrow(threat.source_square, tgt, color)
+                )
+
+    return arrows
 
 
 def generate_position_coaching(

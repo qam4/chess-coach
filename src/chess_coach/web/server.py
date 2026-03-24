@@ -69,7 +69,9 @@ def create_app(coach: Coach) -> FastAPI:
     @app.post("/api/analyze/template")
     async def analyze_template(req: AnalyzeRequest) -> dict:  # type: ignore[type-arg]
         """Analyze using template engine — no LLM, instant, no hallucination."""
-        from chess_coach.coaching_templates import generate_position_coaching
+        from chess_coach.coaching_templates import (
+            generate_position_coaching_structured,
+        )
         from chess_coach.engine import CoachingEngine
         from chess_coach.openings import lookup_fen
 
@@ -90,7 +92,10 @@ def create_app(coach: Coach) -> FastAPI:
                 multipv=coach.top_moves,
             )
             opening = lookup_fen(req.fen)
-            coaching_text = generate_position_coaching(report, level=req.level, opening=opening)
+            sections = generate_position_coaching_structured(
+                report, level=req.level, opening=opening
+            )
+            coaching_text = "\n\n".join(s.text for s in sections)
             elapsed = time.perf_counter() - t0
 
             best_line = report.top_lines[0] if report.top_lines else None
@@ -99,6 +104,7 @@ def create_app(coach: Coach) -> FastAPI:
 
             return {
                 "coaching_text": coaching_text,
+                "sections": [s.to_dict() for s in sections],
                 "best_move": best_move,
                 "score": score,
                 "fen": req.fen,

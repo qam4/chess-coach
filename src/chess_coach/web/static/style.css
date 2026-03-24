@@ -477,6 +477,35 @@ header h1 {
   z-index: 10;
 }
 
+/* --- Coaching sections --- */
+.coaching-section {
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.3rem;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+
+.coaching-section--hoverable {
+  cursor: pointer;
+}
+
+.coaching-section--hoverable:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.coaching-section__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin-bottom: 0.15rem;
+}
+
+.coaching-section__text {
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 /* --- Responsive --- */
 @media (max-width: 900px) {
   .app-layout {
