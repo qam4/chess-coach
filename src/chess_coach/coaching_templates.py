@@ -9,10 +9,125 @@ used standalone or passed to an LLM for tone/personality rephrasing.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import chess
 
 from chess_coach.models import ComparisonReport, PositionReport
 from chess_coach.openings import OpeningInfo
+
+
+@dataclass
+class CoachingSection:
+    """A single section of coaching output."""
+
+    category: str  # assessment, piece_safety, tactics, strategy, tensions, suggestion
+    label: str  # human-readable label for UI rendering
+    text: str  # the coaching text
+
+
+# Category constants
+CAT_ASSESSMENT = "assessment"
+CAT_PIECE_SAFETY = "piece_safety"
+CAT_TACTICS = "tactics"
+CAT_STRATEGY = "strategy"
+CAT_TENSIONS = "tensions"
+CAT_SUGGESTION = "suggestion"
+
+_CATEGORY_LABELS = {
+    CAT_ASSESSMENT: "Assessment",
+    CAT_PIECE_SAFETY: "Piece safety",
+    CAT_TACTICS: "Tactics",
+    CAT_STRATEGY: "Strategy",
+    CAT_TENSIONS: "Tensions",
+    CAT_SUGGESTION: "Suggestion",
+}
+
+
+def generate_position_coaching_structured(
+    report: PositionReport,
+    level: str = "intermediate",
+    opening: OpeningInfo | None = None,
+) -> list[CoachingSection]:
+    """Generate structured coaching sections from a PositionReport.
+
+    Returns a list of CoachingSection objects, each with a category,
+    label, and text. The UI can render these as tabs, collapsible
+    sections, or a flat list.
+    """
+    sections: list[CoachingSection] = []
+
+    # Assessment
+    sections.append(
+        CoachingSection(
+            CAT_ASSESSMENT,
+            _CATEGORY_LABELS[CAT_ASSESSMENT],
+            _eval_summary(report),
+        )
+    )
+
+    # Piece safety — hanging pieces
+    hanging = _hanging_pieces_text(report)
+    if hanging:
+        sections.append(
+            CoachingSection(
+                CAT_PIECE_SAFETY,
+                _CATEGORY_LABELS[CAT_PIECE_SAFETY],
+                hanging,
+            )
+        )
+
+    # Tactics — threats, checks, captures, motifs
+    threats_and_tactics = _threats_and_tactics_text(report)
+    if threats_and_tactics:
+        sections.append(
+            CoachingSection(
+                CAT_TACTICS,
+                _CATEGORY_LABELS[CAT_TACTICS],
+                threats_and_tactics,
+            )
+        )
+
+    # Strategy — king safety + pawn structure
+    strategy_parts: list[str] = []
+    king = _king_safety_text(report, level)
+    if king:
+        strategy_parts.append(king)
+    pawns = _pawn_structure_text(report, level)
+    if pawns:
+        strategy_parts.append(pawns)
+    if strategy_parts:
+        sections.append(
+            CoachingSection(
+                CAT_STRATEGY,
+                _CATEGORY_LABELS[CAT_STRATEGY],
+                " ".join(strategy_parts),
+            )
+        )
+
+    # Tensions — contested squares, under-defended pieces
+    tensions = _board_tensions_text(report)
+    if tensions:
+        sections.append(
+            CoachingSection(
+                CAT_TENSIONS,
+                _CATEGORY_LABELS[CAT_TENSIONS],
+                tensions,
+            )
+        )
+
+    # Suggestion — what to think about
+    best = _best_move_text(report)
+    if best:
+        sections.append(
+            CoachingSection(
+                CAT_SUGGESTION,
+                _CATEGORY_LABELS[CAT_SUGGESTION],
+                best,
+            )
+        )
+
+    return sections
 
 
 def generate_position_coaching(
@@ -23,46 +138,13 @@ def generate_position_coaching(
     """Generate coaching text from a PositionReport without an LLM.
 
     Returns a multi-paragraph coaching explanation built entirely from
-    the structured engine data.
+    the structured engine data. For structured output (categories),
+    use generate_position_coaching_structured() instead.
     """
-    sections: list[str] = []
-
-    # Opening name is shown in the UI header — don't repeat it in the body
-
-    # Overall eval
-    sections.append(_eval_summary(report))
-
-    # Hanging pieces — most urgent for beginners
-    hanging = _hanging_pieces_text(report)
-    if hanging:
-        sections.append(hanging)
-
-    # Threats and tactics — merged to avoid duplication
-    threats_and_tactics = _threats_and_tactics_text(report)
-    if threats_and_tactics:
-        sections.append(threats_and_tactics)
-
-    # King safety
-    king = _king_safety_text(report, level)
-    if king:
-        sections.append(king)
-
-    # Pawn structure
-    pawns = _pawn_structure_text(report, level)
-    if pawns:
-        sections.append(pawns)
-
-    # Board tensions — generated from threat_map data, not Blunder's summary
-    tensions = _board_tensions_text(report)
-    if tensions:
-        sections.append(tensions)
-
-    # Best move recommendation
-    best = _best_move_text(report)
-    if best:
-        sections.append(best)
-
-    return "\n\n".join(sections)
+    sections = generate_position_coaching_structured(
+        report, level=level, opening=opening
+    )
+    return "\n\n".join(s.text for s in sections)
 
 
 def _move_number_from_fen(fen: str) -> int:
