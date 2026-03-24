@@ -107,10 +107,15 @@ Tracked issues discovered during development and testing.
   move `d8a5`.
 - **Impact**: Play mode crashes when the user plays certain moves.
   The web UI would show an error instead of coaching feedback.
-- **Root cause**: Likely an edge case in Blunder's `coach compare`
-  command — possibly triggered by unusual queen moves from the back rank.
-  Needs investigation in the engine protocol layer.
-- **Status**: OPEN
+- **Root cause**: The move `d8a5` (Qa5) is actually illegal in this
+  position — the d7 pawn blocks the queen's path. The engine correctly
+  returns an error response (`"type": "error"`, `"code": "invalid_move"`),
+  but `parse_coaching_response` didn't check the `type` field and passed
+  the error data to `validate_comparison_report`, which failed with a
+  confusing "missing required field: fen" message.
+- **Status**: FIXED — `parse_coaching_response` now checks for
+  `"type": "error"` and raises `CoachingProtocolError` with the engine's
+  error code and message. The original test case was invalid (illegal move).
 
 ### BUG-008: Mainline opening moves classified as inaccuracies/mistakes
 - **Observed**: At depth 8, the engine penalizes well-known opening moves:

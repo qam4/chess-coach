@@ -761,6 +761,14 @@ def parse_coaching_response(lines: list[str]) -> dict[str, Any]:
     if "data" not in envelope:
         raise CoachingParseError("coaching response envelope missing 'data' field")
 
+    # --- check for engine-reported errors ---------------------------------
+    resp_type = envelope.get("type")
+    if resp_type == "error":
+        err_data = envelope["data"]
+        code = err_data.get("code", "unknown")
+        message = err_data.get("message", "unknown error")
+        raise CoachingProtocolError(f"engine error ({code}): {message}")
+
     data: dict[str, Any] = envelope["data"]
     return data
 
