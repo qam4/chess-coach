@@ -288,7 +288,15 @@
         var engineHeader = data.engine_move
           ? '<p style="color:#a0c4ff;font-weight:600;margin-bottom:0.3rem;">Engine played: ' + escapeHtml(data.engine_move) + '</p><hr class="coaching-separator">'
           : '';
-        coachingText.innerHTML = engineHeader + renderMarkdown(data.coaching_text || '');
+
+        // Use structured sections if available, otherwise flat text
+        if (data.sections && data.sections.length > 0) {
+          renderCoaching(data);
+          // Prepend engine move header
+          coachingText.innerHTML = engineHeader + coachingText.innerHTML;
+        } else {
+          coachingText.innerHTML = engineHeader + renderMarkdown(data.coaching_text || '');
+        }
 
         // Show hint button if hint available
         if (data.hint_san) {

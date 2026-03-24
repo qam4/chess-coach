@@ -588,7 +588,7 @@ def create_app(coach: Coach) -> FastAPI:
         """Play a move with template-based coaching — no LLM, fast."""
         from chess_coach.coaching_templates import (
             generate_move_coaching,
-            generate_position_coaching,
+            generate_position_coaching_structured,
         )
         from chess_coach.engine import CoachingEngine
         from chess_coach.openings import lookup_fen
@@ -701,6 +701,7 @@ def create_app(coach: Coach) -> FastAPI:
             opening_label = f"**{opening.name}** ({opening.eco})\n\n" if opening else ""
 
             if isinstance(engine, CoachingEngine) and engine.coaching_available:
+                coaching_sections: list[dict] = []  # type: ignore[type-arg]
                 try:
                     trace.append(f">> coach eval fen {board.fen()} multipv {coach.top_moves}")
                     pos_report = await asyncio.to_thread(
@@ -708,9 +709,11 @@ def create_app(coach: Coach) -> FastAPI:
                         board.fen(),
                         multipv=coach.top_moves,
                     )
-                    coaching_text = generate_position_coaching(
+                    sections_list = generate_position_coaching_structured(
                         pos_report, level=coach.level, opening=opening
                     )
+                    coaching_text = "\n\n".join(s.text for s in sections_list)
+                    coaching_sections = [s.to_dict() for s in sections_list]
                     # Full position report in debug trace
                     import json as _json
 
@@ -730,6 +733,7 @@ def create_app(coach: Coach) -> FastAPI:
                             coaching_text += f"{side} has an edge ({cp / 100:+.2f} pawns)."
             else:
                 coaching_text = opening_label
+                coaching_sections = []
 
             # 4. Eval and game state — use pos_report eval (current board)
             if pos_report:
@@ -782,6 +786,7 @@ def create_app(coach: Coach) -> FastAPI:
                 "engine_move": engine_move_san,
                 "engine_move_uci": engine_move_uci,
                 "coaching_text": coaching_text,
+                "sections": coaching_sections,
                 "user_feedback": user_feedback or evaluation.feedback,
                 "user_classification": evaluation.classification,
                 "eval_cp": eval_cp,
