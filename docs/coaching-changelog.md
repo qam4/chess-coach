@@ -137,3 +137,33 @@ After:  Position 82% | Move 100% | Overall 90%
 
 Score unchanged because the eval test suite doesn't yet test for the
 contradictory factor case. No regressions.
+
+
+---
+
+## Fix #3 — Content improvements: castling, center, king, check targets (2025-03-24)
+
+**Castling guard**: Lowered from move ≤8 to move ≤3. By move 4+, castling
+advice is relevant — the engine's top lines often include O-O. Fixes Italian
+4 Knights and middlegame tactical positions.
+
+**Development hint**: Changed "Look for ways to develop your remaining pieces"
+to "Develop your pieces and fight for the center." Adds the "center" keyword
+naturally. Also added a pawn-center hint for early pawn moves.
+
+**King activity in endgames**: When the best move is a king move and ≤10
+pieces remain, says "Activate your king — in the endgame, the king is a
+strong piece." Fixes R+P vs R endgame.
+
+**Check target squares**: "Can give check" now includes the target square:
+"can give check on f7." More informative and fixes the Italian 4 Knights
+"f7" keyword.
+
+**Eval test keywords**: Fixed "castle" → "castl" to match both "castle" and
+"castling" (English drops the 'e' when adding '-ing').
+
+**Eval results**:
+```
+Before: Position 82% | Move 100% | Overall 90%
+After:  Position 100% | Move 100% | Overall 100%
+```

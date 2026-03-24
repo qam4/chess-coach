@@ -330,7 +330,8 @@ def _threats_text(report: PositionReport) -> str | None:
 
             # Build description from structured fields when possible
             if t.type == "check" and t.target_squares:
-                items.append(f"{source} can give check.")
+                via = ", ".join(t.target_squares)
+                items.append(f"{source} can give check on {via}.")
             elif t.type == "capture" and t.target_squares:
                 targets = ", ".join(t.target_squares)
                 items.append(f"{source} threatens to capture on {targets}.")
@@ -387,7 +388,8 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
                 f"{side_name}'s {piece_name} on {threat.source_square}" if piece_name else side_name
             )
             if threat.type == "check" and threat.target_squares:
-                items.append(f"{source} can give check.")
+                via = ", ".join(threat.target_squares)
+                items.append(f"{source} can give check on {via}.")
             elif threat.type == "capture" and threat.target_squares:
                 targets = ", ".join(threat.target_squares)
                 items.append(f"{source} threatens to capture on {targets}.")
@@ -454,8 +456,10 @@ def _king_safety_text(report: PositionReport, level: str) -> str | None:
         home_rank = 0 if color == chess.WHITE else 7
         is_on_home_rank = king_rank == home_rank
 
-        # Early opening: don't nag about not castling yet
-        if move_number <= 8 and is_on_home_rank and has_castling:
+        # Very early opening (moves 1-3): don't nag about not castling yet.
+        # By move 4+, castling advice becomes relevant — the engine's top
+        # lines often include O-O by this point.
+        if move_number <= 3 and is_on_home_rank and has_castling:
             continue
 
         # Build a context-aware description
@@ -464,7 +468,7 @@ def _king_safety_text(report: PositionReport, level: str) -> str | None:
                 f"{side_name}'s king has been displaced to "
                 f"{chess.square_name(king_sq)} — be careful."
             )
-        elif move_number > 8 and has_castling:
+        elif has_castling:
             parts.append(f"{side_name}'s king is still in the center. Consider castling soon.")
         elif not has_castling and is_on_home_rank:
             # Lost castling rights but king is still on home rank
@@ -532,10 +536,21 @@ def _best_move_text(report: PositionReport) -> str | None:
         if board.san(move) in ("O-O", "O-O-O"):
             return "Consider castling to get your king to safety."
 
+        # King moves in endgames — king activity is key
+        total_pieces = len(board.piece_map())
+        if piece and piece.piece_type == chess.KING and total_pieces <= 10:
+            return "Activate your king — in the endgame, the king is a strong piece."
+
         if piece and piece.piece_type in (chess.KNIGHT, chess.BISHOP):
             back_rank = 0 if board.turn == chess.WHITE else 7
             if chess.square_rank(move.from_square) == back_rank:
-                return "Look for ways to develop your remaining pieces."
+                return "Develop your pieces and fight for the center."
+
+        # Pawn moves toward the center in the opening
+        if piece and piece.piece_type == chess.PAWN:
+            target_file = chess.square_file(move.to_square)
+            if target_file in (2, 3, 4, 5) and board.fullmove_number <= 6:
+                return "Control the center with your pawns and develop your pieces."
 
         if board.is_capture(move):
             return "There's a tactical opportunity — look for captures."
