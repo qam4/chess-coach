@@ -195,6 +195,16 @@ MOVE_TESTS: list[dict] = [
         "expect_not": ["inaccuracy", "mistake", "blunder"],
         "notes": "1.d4 is a mainline opening. Must be 'good'.",
     },
+    {
+        "name": "Middlegame inaccuracy: Nd2",
+        "fen": "r1bq1rk1/ppp1bppp/2np1n2/4p3/4P3/3P1N2/PPP1BPPP/RNBQ1RK1 w - - 8 8",
+        "move": "f3d2",
+        "level": "intermediate",
+        "expect_class": ["inaccuracy", "mistake"],
+        "expect_keywords": ["inaccuracy", "mistake"],
+        "expect_not": ["Good move"],
+        "notes": "Nd2 retreats the knight passively. Should be flagged as inaccuracy or worse.",
+    },
 ]
 
 

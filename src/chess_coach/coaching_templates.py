@@ -189,20 +189,26 @@ def generate_move_coaching(
 
     if cls == "good":
         sections.append("Good move!")
-    elif cls == "inaccuracy":
-        sections.append(
-            f"That's a small inaccuracy — you lost about {drop / 100:.1f} pawns "
-            f"of advantage compared to the best move."
-        )
-    elif cls == "mistake":
-        sections.append(
-            f"That's a mistake — it costs about {drop / 100:.1f} pawns."
-        )
-    elif cls == "blunder":
-        sections.append(
-            f"That's a blunder — it drops {drop / 100:.1f} pawns. "
-            f"Let's look at what went wrong."
-        )
+    else:
+        before = report.best_eval_cp / 100
+        after = report.user_eval_cp / 100
+        eval_shift = f" (eval {before:+.1f} → {after:+.1f})"
+        if cls == "inaccuracy":
+            sections.append(
+                f"That's a small inaccuracy — you lost about "
+                f"{drop / 100:.1f} pawns of advantage{eval_shift}."
+            )
+        elif cls == "mistake":
+            sections.append(
+                f"That's a mistake — it costs about "
+                f"{drop / 100:.1f} pawns{eval_shift}."
+            )
+        elif cls == "blunder":
+            sections.append(
+                f"That's a blunder — it drops "
+                f"{drop / 100:.1f} pawns{eval_shift}. "
+                f"Let's look at what went wrong."
+            )
 
     # What was stronger
     if report.best_move and cls != "good":
