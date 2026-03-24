@@ -137,7 +137,10 @@ def generate_move_coaching(
     # Missed tactics
     if report.missed_tactics:
         for tactic in report.missed_tactics:
-            sections.append(f"You missed a {tactic.type}: {tactic.description}")
+            sections.append(
+                f"You missed a {tactic.type.replace('_', ' ')}: "
+                f"{tactic.description}"
+            )
 
     # Refutation line
     if report.refutation_line and cls in ("mistake", "blunder"):
@@ -180,7 +183,11 @@ def _eval_summary(report: PositionReport) -> str:
         side = "White" if cp > 0 else "Black"
         assessment = f"{side} is winning ({cp / 100:+.2f} pawns)."
 
-    # Add context from the dominant breakdown factor
+    # Add context from the eval breakdown factors.
+    # If the dominant factor aligns with the overall eval, present it as
+    # "the main factor."  If it contradicts (e.g. White is ahead but Black
+    # has better king safety), present both sides — that's actually more
+    # insightful coaching.
     eb = report.eval_breakdown
     factors = [
         (abs(eb.mobility), eb.mobility, "piece activity"),
@@ -188,10 +195,27 @@ def _eval_summary(report: PositionReport) -> str:
         (abs(eb.pawn_structure), eb.pawn_structure, "pawn structure"),
     ]
     factors.sort(reverse=True)
-    top_abs, top_val, top_name = factors[0]
-    if top_abs > 30 and abs_cp > 30:
-        better = "White" if top_val > 0 else "Black"
-        assessment += f" The main factor is {top_name} ({better} is better)."
+    if abs_cp > 30:
+        top_abs, top_val, top_name = factors[0]
+        if top_abs > 30:
+            top_better = "White" if top_val > 0 else "Black"
+            eval_side = "White" if cp > 0 else "Black"
+            if top_better == eval_side:
+                assessment += (
+                    f" The main factor is {top_name}"
+                    f" ({top_better} is better)."
+                )
+            else:
+                # Dominant factor favours the other side — find what
+                # actually drives the advantage and present both.
+                for _, val, name in factors[1:]:
+                    aligned = "White" if val > 0 else "Black"
+                    if abs(val) > 20 and aligned == eval_side:
+                        assessment += (
+                            f" {eval_side}'s {name} outweighs"
+                            f" {top_better}'s {top_name} edge."
+                        )
+                        break
 
     return assessment
 
@@ -232,7 +256,10 @@ def _threats_text(report: PositionReport) -> str | None:
                 # Fallback to engine description for types we don't handle yet
                 items.append(f"{source}: {t.description}")
             else:
-                items.append(f"{source} has a threat ({t.type}).")
+                items.append(
+                    f"{source} has a threat"
+                    f" ({t.type.replace('_', ' ')})."
+                )
 
     if not items:
         return None
@@ -253,16 +280,18 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
     for t in report.tactics:
         key = t.type.lower()
         seen_types.add(key)
+        # Human-friendly tactic label: replace underscores, title-case
+        label = t.type.replace("_", " ").capitalize()
         piece_name = ""
         if board and t.squares:
             piece_name = _piece_name_at(board, t.squares[0]) or ""
         if piece_name and t.squares:
             items.append(
-                f"{t.type.capitalize()}: {piece_name} on "
+                f"{label}: {piece_name} on "
                 f"{t.squares[0]} targets {', '.join(t.squares[1:])}"
             )
         else:
-            items.append(f"{t.type.capitalize()}: {t.description}")
+            items.append(f"{label}: {t.description}")
 
     # Add threats that aren't already covered by tactics
     for side_key, side_name in [("white", "White"), ("black", "Black")]:
@@ -312,11 +341,18 @@ def _king_safety_text(report: PositionReport, level: str) -> str | None:
     """Describe king safety concerns using board state, not engine descriptions.
 
     Suppresses warnings in the early opening (first ~8 moves) when not
-    castling is normal. Only warns when the king is actually in danger.
+    castling is normal. Also suppresses castling advice in endgames where
+    it's irrelevant.
     """
     try:
         board = chess.Board(report.fen)
     except ValueError:
+        return None
+
+    # Suppress king safety advice in endgames (few pieces left).
+    # Castling and king exposure are irrelevant when there's no attack.
+    total_pieces = len(board.piece_map())
+    if total_pieces <= 6:
         return None
 
     move_number = board.fullmove_number
@@ -391,7 +427,8 @@ def _tactics_text(report: PositionReport) -> str | None:
         return None
     items = []
     for t in report.tactics:
-        items.append(f"{t.type}: {t.description}")
+        label = t.type.replace("_", " ").capitalize()
+        items.append(f"{label}: {t.description}")
     return "Tactics: " + ". ".join(items) + "."
 
 

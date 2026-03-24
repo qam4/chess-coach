@@ -113,3 +113,27 @@ After:  Position 82% | Move 100% | Overall 90%
 
 Failing move tests fixed: 1...e5, 1...d5, 1.d4 — all now classified "good".
 No regressions (170 unit tests pass).
+
+
+---
+
+## Fix #2 — BUG-009 + BUG-010: Endgame king safety + eval summary (2025-03-24)
+
+**BUG-009**: Castling warning in K+R vs K endgame.
+Fix: suppress `_king_safety_text()` when ≤6 pieces remain on the board.
+K+R vs K test: 80% → 100%.
+
+**BUG-010**: Eval summary says "White is ahead, main factor is king safety
+(Black is better)" — contradictory.
+Fix: when the dominant factor contradicts the overall eval, find the aligned
+factor and present both: "White's piece activity outweighs Black's king
+safety edge." Honest and more insightful than hiding the contradiction.
+
+**Eval results**:
+```
+Before: Position 82% | Move 100% | Overall 90%
+After:  Position 82% | Move 100% | Overall 90%
+```
+
+Score unchanged because the eval test suite doesn't yet test for the
+contradictory factor case. No regressions.

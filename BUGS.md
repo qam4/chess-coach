@@ -151,4 +151,19 @@ Tracked issues discovered during development and testing.
 - **Fix**: Add a piece-count guard — suppress castling warnings when
   total material is below an endgame threshold (e.g., ≤1 major piece
   per side, or ≤10 total pieces on the board).
-- **Status**: OPEN
+- **Status**: FIXED — suppress king safety warnings when ≤6 pieces
+  remain on the board. Added piece-count guard at the top of
+  `_king_safety_text()` in `coaching_templates.py`.
+
+
+### BUG-010: Eval summary reports contradictory factor
+- **Observed**: "White has a clear advantage (+1.68 pawns). The main
+  factor is king safety (Black is better)." — contradictory.
+- **Impact**: Confusing coaching. Says White is ahead but the "main
+  factor" favours Black.
+- **Root cause**: `_eval_summary` picked the factor with the largest
+  absolute value without checking whether it aligned with the overall
+  eval direction.
+- **Status**: FIXED — when the dominant factor contradicts the eval,
+  find the factor that does explain the advantage and present both:
+  "White's piece activity outweighs Black's king safety edge."

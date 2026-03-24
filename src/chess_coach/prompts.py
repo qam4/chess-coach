@@ -271,7 +271,8 @@ def _format_tactics(report: PositionReport) -> str | None:
     lines = ["--- Tactical Motifs ---"]
     for tactic in report.tactics:
         pv_note = " (in PV)" if tactic.in_pv else " (on board)"
-        lines.append(f"{tactic.type}: {tactic.description}{pv_note}")
+        label = tactic.type.replace("_", " ")
+        lines.append(f"{label}: {tactic.description}{pv_note}")
     return "\n".join(lines)
 
 
@@ -399,7 +400,8 @@ def _format_missed_tactics(report: ComparisonReport) -> str | None:
     lines = ["--- Missed Tactics ---"]
     for tactic in report.missed_tactics:
         pv_note = " (in PV)" if tactic.in_pv else " (on board)"
-        lines.append(f"{tactic.type}: {tactic.description}{pv_note}")
+        label = tactic.type.replace("_", " ")
+        lines.append(f"{label}: {tactic.description}{pv_note}")
     return "\n".join(lines)
 
 
