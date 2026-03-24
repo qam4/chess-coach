@@ -421,21 +421,30 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
         board = None
 
     # Tactics first (more specific)
+    seen_descriptions: set[str] = set()
     for t in report.tactics:
         key = t.type.lower()
         seen_types.add(key)
+        # If this tactic involves a check, also suppress the "check" threat
+        desc_lower = t.description.lower() if t.description else ""
+        if "check" in desc_lower:
+            seen_types.add("check")
         # Human-friendly tactic label: replace underscores, title-case
         label = t.type.replace("_", " ").capitalize()
         piece_name = ""
         if board and t.squares:
             piece_name = _piece_name_at(board, t.squares[0]) or ""
-        if piece_name and t.squares:
-            items.append(
+        if piece_name and len(t.squares) >= 2:
+            text = (
                 f"{label}: {piece_name} on "
                 f"{t.squares[0]} targets {', '.join(t.squares[1:])}"
             )
         else:
-            items.append(f"{label}: {t.description}")
+            text = f"{label}: {t.description}"
+        # Skip duplicate text
+        if text not in seen_descriptions:
+            seen_descriptions.add(text)
+            items.append(text)
 
     # Add threats that aren't already covered by tactics
     for side_key, side_name in [("white", "White"), ("black", "Black")]:
