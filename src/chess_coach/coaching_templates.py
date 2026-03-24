@@ -188,7 +188,7 @@ def generate_move_coaching(
     drop = abs(report.eval_drop_cp)
 
     if cls == "good":
-        sections.append("Good move! That's in line with what the engine recommends.")
+        sections.append("Good move!")
     elif cls == "inaccuracy":
         sections.append(
             f"That's a small inaccuracy — you lost about {drop / 100:.1f} pawns "
@@ -196,15 +196,15 @@ def generate_move_coaching(
         )
     elif cls == "mistake":
         sections.append(
-            f"That's a mistake — it costs about {drop / 100:.1f} pawns. "
-            f"The engine had a better idea."
+            f"That's a mistake — it costs about {drop / 100:.1f} pawns."
         )
     elif cls == "blunder":
         sections.append(
-            f"That's a blunder — it drops {drop / 100:.1f} pawns. Let's look at what went wrong."
+            f"That's a blunder — it drops {drop / 100:.1f} pawns. "
+            f"Let's look at what went wrong."
         )
 
-    # What the engine preferred
+    # What was stronger
     if report.best_move and cls != "good":
         try:
             board = chess.Board(report.fen)
@@ -212,9 +212,7 @@ def generate_move_coaching(
             best_san = board.san(move)
         except (ValueError, chess.InvalidMoveError):
             best_san = report.best_move
-        sections.append(
-            f"The engine preferred {best_san} (eval: {report.best_eval_cp / 100:+.2f})."
-        )
+        sections.append(f"{best_san} was stronger here.")
 
     # Missed tactics
     if report.missed_tactics:

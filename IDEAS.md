@@ -113,6 +113,11 @@ inventing chess facts. The prompt is shorter, so it's faster too.
 
 ## UI / UX
 
+- [ ] Board arrows on coaching hover: when the user hovers over a coaching
+      line like "White's bishop on c4 can give check on f7", draw a c4→f7
+      arrow on the board. The structured coaching data already has source
+      and target squares from threats/tactics. Needs SVG overlay inside the
+      board container (not document body — that causes scroll bugs).
 - [ ] Board themes (wood, marble, tournament green)
 - [ ] Piece set options (Merida, Alpha, Leipzig)
 - [ ] Move animations and sound effects
