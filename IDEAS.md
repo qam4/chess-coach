@@ -232,6 +232,73 @@ needs to practice against. Create positions that test their weak spots.
 - [ ] Interactive follow-up questions about a position (User Story 10)
 - [ ] Game navigation (forward/backward through loaded PGN)
 
+## Coaching Quality — Eval-Driven Improvements
+
+*Tracked via eval runs (scripts/eval_coaching_quick.py). Each item links
+to the eval observation that motivated it.*
+
+### Template coaching is too thin in quiet positions
+- **Observed**: Starting position and post-1.e4 both produce only
+  "The position is roughly equal. Look for ways to develop your remaining
+  pieces." — two sentences with no real guidance.
+- **Why it matters**: A beginner gets zero actionable advice. The coach
+  should at least mention center control, development, or king safety
+  as general principles when there's nothing tactically urgent.
+- **Idea**: Add a "general principles" fallback section to
+  `generate_position_coaching` that fires when no threats, hanging
+  pieces, or tactics are detected. Content varies by coaching level:
+  beginner gets "control the center," advanced gets "improve your worst
+  piece."
+
+### "Develop your remaining pieces" fires too often
+- **Observed**: The `_best_move_text` fallback triggers on almost every
+  opening position because the best move is usually a piece development.
+  It's the same sentence every time.
+- **Why it matters**: Repetitive advice teaches nothing. Users tune it out.
+- **Idea**: Either vary the text (rotate between several development
+  hints) or replace it with more specific guidance based on *which*
+  piece should develop and *where* (e.g., "Your dark-squared bishop
+  is still on its starting square").
+
+### Move feedback doesn't explain *why* a move is bad
+- **Observed**: For 1...f6 (a genuine mistake), the coach says "The
+  engine had a better idea" but doesn't explain that f6 weakens the
+  king diagonal and blocks the knight.
+- **Why it matters**: The whole point of coaching is teaching the *why*.
+  "The engine had a better idea" is what Stockfish already tells you.
+- **Idea**: For the template path (`generate_move_coaching`), add
+  heuristic explanations for common mistake patterns:
+  - Pawn moves that weaken king safety (f3/f6, g3/g6 without fianchetto)
+  - Moves that block piece development
+  - Moves that lose control of key squares
+  The comparison report already has `missed_tactics` and `refutation_line`
+  for tactical mistakes — this would cover positional mistakes.
+
+### Eval breakdown is underused
+- **Observed**: The `eval_breakdown` (mobility, king_safety,
+  pawn_structure) only surfaces in `_eval_summary` when the dominant
+  factor is >30cp. In many positions it could add useful color.
+- **Idea**: Lower the threshold or always mention the top factor when
+  the position isn't dead equal. "White's advantage comes mainly from
+  better piece mobility" is useful even at +0.40.
+
+### Context-inappropriate advice in endgames
+- **Observed**: Castling warnings, development advice, and opening
+  principles fire in endgame positions where they're irrelevant.
+- **Idea**: Add a position-phase detector (opening/middlegame/endgame
+  based on piece count and move number) and gate template sections
+  accordingly. Endgames should focus on king activity, pawn promotion,
+  and technique — not castling.
+
+### Opening moves penalized too harshly
+- **Observed**: 1...e5 called an inaccuracy at depth 8. See BUG-008.
+- **Idea**: Use the opening book as a whitelist. If a move leads to a
+  known opening position, treat it as "good" regardless of the engine's
+  shallow eval. The current code already checks `lookup_fen` and uses
+  a 150cp threshold for book moves, but it checks the *post-move*
+  position — the move itself (e5) might not be in the book while the
+  resulting position is. Needs investigation.
+
 ## Research Questions
 
 - How much chess knowledge can an LLM extract from just PV lines + eval scores?

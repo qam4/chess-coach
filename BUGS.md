@@ -93,3 +93,62 @@ Tracked issues discovered during development and testing.
   3. UCI engine is faster than Xboard for the same depth.
   Remaining opportunities: lower play-mode depth, batch LLM calls,
   background pre-analysis while user reads coaching text.
+
+## Coaching Quality Issues
+
+*Found during coaching eval run (2025-03-24, scripts/eval_coaching_quick.py)*
+
+### BUG-007: Comparison report fails for some moves (missing `fen` field)
+- **Observed**: `engine.get_comparison_report()` for `Qa5` from the
+  starting position raises `CoachingValidationError: missing required
+  field: fen`. The engine returns a comparison report without the `fen`
+  key.
+- **Repro**: FEN `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1`,
+  move `d8a5`.
+- **Impact**: Play mode crashes when the user plays certain moves.
+  The web UI would show an error instead of coaching feedback.
+- **Root cause**: Likely an edge case in Blunder's `coach compare`
+  command — possibly triggered by unusual queen moves from the back rank.
+  Needs investigation in the engine protocol layer.
+- **Status**: OPEN
+
+### BUG-008: Mainline opening moves classified as inaccuracies/mistakes
+- **Observed**: At depth 8, the engine penalizes well-known opening moves:
+  - 1...e5 → inaccuracy (44cp drop vs Nf6)
+  - 1...d5 → mistake (114cp drop vs Nf6) — Scandinavian Defense
+  - 1.d4 → inaccuracy (40cp drop vs e4)
+  All three are among the most popular moves in chess history.
+- **Impact**: Misleading coaching — tells students that perfectly good
+  opening moves are mistakes. Undermines trust in the coach. This is
+  the single biggest quality issue, responsible for 3 of 3 failing
+  move tests in the eval suite (overall score drops from ~90% to 76%).
+- **Root cause**: Two factors:
+  1. Depth 8 is too shallow for reliable opening eval — engine
+     preferences are volatile and don't match master-level play.
+  2. The 50cp "skip LLM" threshold is too tight for opening moves
+     where eval differences between top moves are noise.
+- **Potential fixes**:
+  - Widen the skip threshold for early moves (first 5-6 moves) to
+    ~80-100cp, since opening eval at low depth is unreliable.
+  - Use the opening book to whitelist known good moves — if a move
+    leads to a recognized opening position, don't call it an inaccuracy.
+- **Status**: FIXED — opening leniency: in the first 6 moves, only
+  flag moves with eval drop >150cp. Implemented via
+  `effective_move_classification()` in `coaching_templates.py`, used
+  by both the template path and `Coach.evaluate_move()`.
+  Trade-off: genuinely bad opening moves like 1...f6 (121cp) also
+  get a pass in the first few moves. This is acceptable — the position
+  coaching will teach through analysis rather than move criticism.
+
+### BUG-009: Castling warning in K+R vs K endgame
+- **Observed**: In a K+R vs K position (FEN `8/8/8/4k3/8/8/8/4K2R w - - 0 1`),
+  the coach says "White's king can no longer castle — keep it protected."
+- **Impact**: Nonsensical advice. There are no pieces to threaten the
+  king in a K+R vs K endgame. Confusing for students.
+- **Root cause**: The `_king_safety_text` template fires based on
+  castling rights being absent, without checking whether the position
+  is an endgame where castling is irrelevant.
+- **Fix**: Add a piece-count guard — suppress castling warnings when
+  total material is below an endgame threshold (e.g., ≤1 major piece
+  per side, or ≤10 total pieces on the board).
+- **Status**: OPEN

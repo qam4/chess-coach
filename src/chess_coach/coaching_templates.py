@@ -65,6 +65,32 @@ def generate_position_coaching(
     return "\n\n".join(sections)
 
 
+def _move_number_from_fen(fen: str) -> int:
+    """Extract the full-move number from a FEN string.
+
+    The move number is the last field in a FEN. Returns 1 if parsing fails.
+    """
+    try:
+        return int(fen.split()[-1])
+    except (IndexError, ValueError):
+        return 1
+
+
+def effective_move_classification(report: ComparisonReport) -> str:
+    """Return the coaching-adjusted classification for a move.
+
+    In the opening (first 6 moves), engine eval at shallow depth is
+    unreliable — only flag moves with a large eval drop (>150cp).
+    This prevents sound openings like 1...e5, 1.d4, or the Scandinavian
+    from being called inaccuracies or mistakes.
+    """
+    cls = report.classification
+    if cls != "good" and _move_number_from_fen(report.fen) <= 6:
+        if report.eval_drop_cp <= 150:
+            return "good"
+    return cls
+
+
 def generate_move_coaching(
     report: ComparisonReport,
     level: str = "intermediate",
@@ -72,8 +98,11 @@ def generate_move_coaching(
     """Generate move evaluation coaching from a ComparisonReport."""
     sections: list[str] = []
 
-    # Classification
-    cls = report.classification
+    # Override engine classification for early opening moves.
+    # At shallow depth, the engine's eval is unreliable for opening moves —
+    # it may penalize perfectly sound openings (e.g. 1...e5, 1.d4, Scandinavian).
+    # In the first few moves, only flag moves with a large eval drop.
+    cls = effective_move_classification(report)
     drop = abs(report.eval_drop_cp)
 
     if cls == "good":

@@ -83,3 +83,18 @@ def lookup_moves(moves: list[str]) -> OpeningInfo | None:
             best = OpeningInfo(eco=entry["eco"], name=entry["name"], pgn=entry["pgn"])
 
     return best
+
+
+def is_book_move(fen_before: str, user_move_uci: str) -> bool:
+    """Check whether a move leads to a known opening position.
+
+    If the position after the move is in the ECO opening database,
+    the move is a recognized book move and should not be penalized
+    by the coach regardless of the engine's eval at shallow depth.
+    """
+    try:
+        board = chess.Board(fen_before)
+        board.push(chess.Move.from_uci(user_move_uci))
+        return lookup_fen(board.fen()) is not None
+    except (ValueError, chess.InvalidMoveError):
+        return False

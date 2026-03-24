@@ -432,14 +432,24 @@ class Coach:
             )
 
             # Skip LLM for good moves — no need to explain what's not wrong.
-            # If the user's move leads to a known opening position, it's a
-            # book move — use a very high threshold (only critique real blunders).
-            # Otherwise use the normal 50cp threshold.
-            board_tmp = chess.Board(fen_before)
-            board_tmp.push(chess.Move.from_uci(user_move))
-            is_book_move = lookup_fen(board_tmp.fen()) is not None
-            skip_threshold = 150 if is_book_move else 50
-            if report.eval_drop_cp <= skip_threshold:
+            # In the opening (first ~6 moves), engine eval at shallow depth
+            # is unreliable — only critique moves with a large eval drop.
+            move_number = int(fen_before.split()[-1]) if fen_before.split() else 1
+            if move_number <= 6 and report.eval_drop_cp <= 150:
+                _trace(
+                    "eval_skip_llm",
+                    f"Opening move (move {move_number}, "
+                    f"drop {report.eval_drop_cp}cp) — skipping LLM",
+                    tool="llm",
+                )
+                return MoveEvaluation(
+                    classification="good",
+                    eval_before_cp=report.best_eval_cp,
+                    eval_after_cp=report.user_eval_cp,
+                    eval_drop_cp=report.eval_drop_cp,
+                    feedback="",
+                )
+            if report.eval_drop_cp <= 50:
                 _trace(
                     "eval_skip_llm",
                     f"Good move (drop {report.eval_drop_cp}cp) — skipping LLM",
@@ -569,10 +579,23 @@ class Coach:
         )
 
         # Skip LLM for good moves — no need to explain what's not wrong.
-        # If the user's move leads to a known opening, it's a book move.
-        is_book_move = lookup_fen(fen_after) is not None
-        skip_threshold = 150 if is_book_move else 50
-        if eval_drop <= skip_threshold:
+        # In the opening, engine eval at shallow depth is unreliable.
+        move_number = int(fen_before.split()[-1]) if fen_before.split() else 1
+        if move_number <= 6 and eval_drop <= 150:
+            _trace(
+                "eval_skip_llm",
+                f"Opening move (move {move_number}, drop {eval_drop}cp) — skipping LLM feedback",
+                tool="llm",
+            )
+            return MoveEvaluation(
+                classification="good",
+                eval_before_cp=eval_before,
+                eval_after_cp=eval_after,
+                eval_drop_cp=eval_drop,
+                feedback="",
+                _result_after=result_after,
+            )
+        if eval_drop <= 50:
             _trace(
                 "eval_skip_llm",
                 f"Good move (drop {eval_drop}cp) — skipping LLM feedback",
