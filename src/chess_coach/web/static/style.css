@@ -83,6 +83,7 @@ header h1 {
 .chess-board {
   width: 400px;
   height: 400px;
+  touch-action: none;
 }
 
 /* --- Eval bar --- */
