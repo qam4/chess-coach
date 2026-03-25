@@ -49,6 +49,42 @@
     onSnapEnd: onSnapEnd,
   });
 
+  // Resize board when container size changes (mobile orientation, fluid layout)
+  if (typeof ResizeObserver !== 'undefined') {
+    var boardContainer = document.getElementById('board');
+    var ro = new ResizeObserver(function () {
+      board.resize();
+      clearArrows();
+    });
+    ro.observe(boardContainer);
+  } else {
+    // Fallback for older browsers
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        board.resize();
+        clearArrows();
+      }, 150);
+    });
+  }
+
+  // =========================================================================
+  // Mobile mode detection (?mobile=1 in URL)
+  // =========================================================================
+  var isMobile = new URLSearchParams(window.location.search).has('mobile');
+  if (isMobile) {
+    // Hide template toggle — always on in mobile mode
+    var templateLabel = document.getElementById('templateToggle').parentElement;
+    if (templateLabel) templateLabel.hidden = true;
+    // Hide debug panel
+    var debugPanel = document.getElementById('debugPanel');
+    if (debugPanel) debugPanel.hidden = true;
+    // Hide analyze mode — mobile is play-only
+    var analyzeBtn = document.querySelector('[data-mode="analyze"]');
+    if (analyzeBtn) analyzeBtn.hidden = true;
+  }
+
   // =========================================================================
   // Mode toggle
   // =========================================================================

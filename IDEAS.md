@@ -334,3 +334,38 @@ commands or a custom protocol extension in Blunder itself.
       weak squares — engine knows these but doesn't report them
 - [ ] Custom protocol extension or JSON-based API for richer coach ↔ engine
       communication beyond UCI's `info` lines
+
+
+## Android / Mobile
+
+*Implemented: mobile-responsive CSS, NullProvider, template_only mode,
+mobile_entry.py, config.mobile.yaml with {APP_DATA} placeholders.
+See docs/android-integration.md for the full integration guide.*
+
+### Done
+- [x] Mobile-responsive CSS (480px breakpoint, fluid board, stacked panels)
+- [x] Touch-friendly UI (44px min tap targets, full-width modal buttons)
+- [x] ResizeObserver for board resize on orientation change
+- [x] NullProvider (provider: "none") for LLM-free operation
+- [x] template_only flag on Coach — skips all LLM calls
+- [x] ?mobile=1 query param hides template toggle, debug panel, analyze tab
+- [x] mobile_entry.py — clean server entrypoint for Android wrapper
+- [x] config.mobile.yaml with {APP_DATA} placeholder resolution
+- [x] Viewport meta disables pinch-to-zoom (prevents accidental zoom while dragging)
+
+### Future Mobile Improvements
+- [ ] On-device LLM: run a small model (1-3B) via llama.cpp on the phone
+      for optional coaching personality. Template coaching stays the default.
+- [ ] Native Android UI: replace WebView with a Kotlin/Compose chessboard
+      for smoother touch, animations, and haptic feedback
+- [ ] Tap-to-move alternative: tap source square, tap target square (easier
+      than drag on small screens for some users)
+- [ ] Move confirmation: optional "confirm move" button to prevent accidental
+      drops on small screens
+- [ ] Portrait/landscape layouts: landscape puts coaching beside the board,
+      portrait stacks them (current behavior)
+- [ ] Offline opening explorer: browse the ECO database without engine
+- [ ] Game save/load: persist games to local storage, resume later
+- [ ] Push notification for daily puzzle (if puzzle feature is added)
+- [ ] Battery-aware depth: reduce engine depth when battery is low
+- [ ] APK size optimization: strip unused Python stdlib modules

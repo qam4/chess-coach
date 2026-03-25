@@ -1,0 +1,30 @@
+# Chess Coach — Mobile (Android) configuration
+#
+# Optimized for on-device use: no LLM, lower engine depth,
+# template-only coaching for instant feedback.
+#
+# {APP_DATA} is resolved at runtime to the app's private files directory.
+# The Android wrapper extracts blunder-android-arm64.zip here.
+
+engine:
+  path: "{APP_DATA}/engine/blunder"
+  protocol: "uci"
+  args: ["--uci"]
+
+  # Opening book for play mode variety (bundled in the engine zip).
+  # Available books (pick one):
+  #   books/n-larsen.bin    — 991KB, compact (recommended for mobile)
+  #   books/k-stfish.bin    — 5.5MB, Stockfish-style
+  #   books/i-gm1950.bin    — 19MB, GM games (largest, most variety)
+  book: "{APP_DATA}/books/n-larsen.bin"
+
+  # Analysis depth — 8 is fast on mobile (~1-3s), good enough for coaching
+  depth: 8
+
+llm:
+  provider: "none"
+
+coaching:
+  level: intermediate
+  top_moves: 3
+  template_only: true

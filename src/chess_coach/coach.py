@@ -102,6 +102,7 @@ class Coach:
         temperature: float = 0.7,
         play_elo: int = 0,
         book_path: str = "",
+        template_only: bool = False,
     ):
         self.engine = engine
         self.llm = llm
@@ -112,6 +113,7 @@ class Coach:
         self.temperature = temperature
         self.play_elo = play_elo
         self.book_path = book_path
+        self.template_only = template_only
         self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
 
         # Load opening book via UCI option if path is configured
@@ -464,30 +466,41 @@ class Coach:
                 )
 
             prompt = build_rich_move_evaluation_prompt(report, level=self.level)
-            _trace(
-                "eval_llm_start",
-                f"LLM evaluating move ({len(prompt)} chars prompt)",
-                tool="llm",
-                model=getattr(self.llm, "model", "?"),
-                base_url=getattr(self.llm, "base_url", "?"),
-                llm_prompt=prompt,
-            )
-            t2 = time.perf_counter()
-            feedback = self.llm.generate(
-                prompt,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-            )
-            t3 = time.perf_counter()
-            logger.info("evaluate_move: LLM feedback took %.1fs", t3 - t2)
-            logger.info("evaluate_move: total %.1fs", t3 - t0)
-            _trace(
-                "eval_llm_done",
-                f"Move feedback ready: {report.classification}",
-                tool="llm",
-                elapsed=t3 - t2,
-                llm_response=feedback,
-            )
+
+            if self.template_only:
+                from chess_coach.coaching_templates import generate_move_coaching
+
+                feedback = generate_move_coaching(report, level=self.level)
+                _trace(
+                    "eval_template",
+                    f"Template feedback: {report.classification}",
+                    tool="engine",
+                )
+            else:
+                _trace(
+                    "eval_llm_start",
+                    f"LLM evaluating move ({len(prompt)} chars prompt)",
+                    tool="llm",
+                    model=getattr(self.llm, "model", "?"),
+                    base_url=getattr(self.llm, "base_url", "?"),
+                    llm_prompt=prompt,
+                )
+                t2 = time.perf_counter()
+                feedback = self.llm.generate(
+                    prompt,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                )
+                t3 = time.perf_counter()
+                logger.info("evaluate_move: LLM feedback took %.1fs", t3 - t2)
+                logger.info("evaluate_move: total %.1fs", t3 - t0)
+                _trace(
+                    "eval_llm_done",
+                    f"Move feedback ready: {report.classification}",
+                    tool="llm",
+                    elapsed=t3 - t2,
+                    llm_response=feedback,
+                )
 
             return MoveEvaluation(
                 classification=report.classification,
@@ -615,42 +628,47 @@ class Coach:
             result_before,
             level=self.level,
         )
-        prompt = build_move_evaluation_prompt(
-            fen_before=fen_before,
-            fen_after=fen_after,
-            user_move=user_move,
-            eval_before=eval_before,
-            eval_after=eval_after,
-            eval_drop=eval_drop,
-            classification=classification,
-            analysis_text=analysis_text,
-            level=self.level,
-        )
-        _trace(
-            "eval_llm_start",
-            f"LLM evaluating move ({len(prompt)} chars prompt)",
-            tool="llm",
-            model=getattr(self.llm, "model", "?"),
-            base_url=getattr(self.llm, "base_url", "?"),
-            endpoint="/api/generate",
-            llm_prompt=prompt,
-        )
-        t4 = time.perf_counter()
-        feedback = self.llm.generate(
-            prompt,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-        )
-        t5 = time.perf_counter()
-        logger.info("evaluate_move: LLM feedback took %.1fs", t5 - t4)
-        logger.info("evaluate_move: total %.1fs", t5 - t0)
-        _trace(
-            "eval_llm_done",
-            f"Move feedback ready: {classification}",
-            tool="llm",
-            elapsed=t5 - t4,
-            llm_response=feedback,
-        )
+
+        if self.template_only:
+            feedback = ""
+            _trace("eval_template", f"Template-only mode — skipping LLM ({classification})")
+        else:
+            prompt = build_move_evaluation_prompt(
+                fen_before=fen_before,
+                fen_after=fen_after,
+                user_move=user_move,
+                eval_before=eval_before,
+                eval_after=eval_after,
+                eval_drop=eval_drop,
+                classification=classification,
+                analysis_text=analysis_text,
+                level=self.level,
+            )
+            _trace(
+                "eval_llm_start",
+                f"LLM evaluating move ({len(prompt)} chars prompt)",
+                tool="llm",
+                model=getattr(self.llm, "model", "?"),
+                base_url=getattr(self.llm, "base_url", "?"),
+                endpoint="/api/generate",
+                llm_prompt=prompt,
+            )
+            t4 = time.perf_counter()
+            feedback = self.llm.generate(
+                prompt,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            t5 = time.perf_counter()
+            logger.info("evaluate_move: LLM feedback took %.1fs", t5 - t4)
+            logger.info("evaluate_move: total %.1fs", t5 - t0)
+            _trace(
+                "eval_llm_done",
+                f"Move feedback ready: {classification}",
+                tool="llm",
+                elapsed=t5 - t4,
+                llm_response=feedback,
+            )
 
         return MoveEvaluation(
             classification=classification,
@@ -720,6 +738,10 @@ class Coach:
             result,
             level=self.level,
         )
+
+        if self.template_only:
+            return ""
+
         prompt = build_engine_move_explanation_prompt(
             fen_before=fen_before,
             engine_move=engine_move,
@@ -776,12 +798,17 @@ class Coach:
             t_compare = time.perf_counter()
 
             # Build user feedback from comparison report
-            user_prompt = build_rich_move_evaluation_prompt(comparison, level=self.level)
-            user_feedback = self.llm.generate(
-                user_prompt,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-            )
+            if self.template_only:
+                from chess_coach.coaching_templates import generate_move_coaching
+
+                user_feedback = generate_move_coaching(comparison, level=self.level)
+            else:
+                user_prompt = build_rich_move_evaluation_prompt(comparison, level=self.level)
+                user_feedback = self.llm.generate(
+                    user_prompt,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                )
             t_user_llm = time.perf_counter()
 
             # 2. Push user's move to get new FEN
@@ -817,11 +844,18 @@ class Coach:
                 level=self.level,
                 opening_name=opening_label,
             )
-            coaching_text = self.llm.generate(
-                coaching_prompt,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-            )
+            if self.template_only:
+                from chess_coach.coaching_templates import generate_position_coaching
+
+                coaching_text = generate_position_coaching(
+                    pos_report, level=self.level, opening=opening
+                )
+            else:
+                coaching_text = self.llm.generate(
+                    coaching_prompt,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                )
             t_explain = time.perf_counter()
 
             eval_cp = pos_report.eval_cp

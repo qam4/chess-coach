@@ -506,10 +506,16 @@ header h1 {
   line-height: 1.4;
 }
 
-/* --- Responsive --- */
+/* --- Responsive: tablet --- */
 @media (max-width: 900px) {
   .app-layout {
     flex-direction: column;
+    align-items: center;
+  }
+
+  .board-section {
+    width: 100%;
+    max-width: 432px;
   }
 
   .chess-board {
@@ -527,10 +533,130 @@ header h1 {
   .coaching-panel,
   .move-list-panel {
     max-height: none;
+    width: 100%;
+    max-width: 432px;
   }
 
   .move-list-panel {
     flex: 0 0 auto;
+  }
+}
+
+/* --- Responsive: mobile phone --- */
+@media (max-width: 480px) {
+  header {
+    padding: 0.5rem 0.75rem;
+  }
+
+  header h1 {
+    font-size: 1rem;
+  }
+
+  .app-layout {
+    padding: 0.5rem;
+    gap: 0.75rem;
+  }
+
+  .board-section {
+    max-width: 100%;
+  }
+
+  .board-wrapper {
+    gap: 0.25rem;
+  }
+
+  /* Board fills available width minus eval bar */
+  .chess-board {
+    max-width: calc(100vw - 1rem - 24px - 0.25rem);
+  }
+
+  .eval-bar {
+    width: 20px;
+  }
+
+  .controls {
+    max-width: 100%;
+    margin-top: 0.5rem;
+  }
+
+  .fen-row input {
+    font-size: 0.7rem;
+  }
+
+  .options-row {
+    gap: 0.5rem;
+  }
+
+  /* Coaching panel full width, no max-width constraint */
+  .coaching-panel,
+  .move-list-panel {
+    max-width: 100%;
+    border-radius: 6px;
+    padding: 0.75rem;
+  }
+
+  .coaching-panel h2,
+  .move-list-panel h2 {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .coaching-text {
+    font-size: 0.85rem;
+  }
+
+  .coaching-section__text {
+    font-size: 0.82rem;
+  }
+
+  /* Larger touch targets for buttons */
+  .btn-primary,
+  .btn-secondary {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+    min-height: 44px;
+  }
+
+  .mode-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    min-height: 44px;
+  }
+
+  .color-btn {
+    padding: 0.75rem 1.25rem;
+    min-height: 48px;
+  }
+
+  .hint-btn {
+    min-height: 44px;
+    padding: 0.5rem 0.8rem;
+  }
+
+  /* Strength slider easier to grab */
+  .strength-control input[type="range"] {
+    height: 32px;
+  }
+
+  /* Move list compact */
+  .move-list {
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+
+  /* Modal fits phone screen */
+  .modal {
+    margin: 1rem;
+    min-width: auto;
+    width: calc(100vw - 2rem);
+  }
+
+  .color-buttons {
+    flex-direction: column;
+  }
+
+  .color-btn {
+    width: 100%;
   }
 }
 
