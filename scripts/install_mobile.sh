@@ -19,30 +19,39 @@ echo "=== Chess Coach Mobile Setup ==="
 echo ""
 
 # --- 1. Install system packages ---
-echo "[1/6] Installing packages..."
+echo "[1/7] Installing packages..."
 pkg update -y
-pkg install -y python git
+pkg install -y python git termux-api
 
-# --- 2. Clone chess-coach ---
-if [ -d "$REPO_DIR" ]; then
-    echo "[2/6] Updating chess-coach..."
-    cd "$REPO_DIR"
-    git pull
+# --- 2. Grant storage access if needed ---
+if [ ! -d "$HOME/storage" ]; then
+    echo "[2/7] Setting up storage access..."
+    termux-setup-storage
+    echo "  Please grant storage permission if prompted."
+    echo "  Press Enter to continue after granting..."
+    read -r
 else
-    echo "[2/6] Cloning chess-coach..."
-    git clone https://github.com/qam4/chess-coach.git "$REPO_DIR"
-    cd "$REPO_DIR"
+    echo "[2/7] Storage access already set up."
 fi
 
-# --- 3. Install Python dependencies ---
-echo "[3/6] Installing Python dependencies..."
+# --- 3. Clone chess-coach ---
+if [ -d "$REPO_DIR" ]; then
+    echo "[3/7] Updating chess-coach..."
+    git -C "$REPO_DIR" pull
+else
+    echo "[3/7] Cloning chess-coach..."
+    git clone https://github.com/qam4/chess-coach.git "$REPO_DIR"
+fi
+
+# --- 4. Install Python dependencies ---
+echo "[4/7] Installing Python dependencies..."
 # Use mobile requirements to avoid pydantic v2 (needs Rust compiler).
 # FastAPI 0.99.1 + pydantic v1 works without native compilation.
 pip install -r "$REPO_DIR/requirements-mobile.txt"
 pip install -e "$REPO_DIR" --no-deps
 
-# --- 4. Set up engine ---
-echo "[4/6] Setting up engine..."
+# --- 5. Set up engine ---
+echo "[5/7] Setting up engine..."
 mkdir -p "$DATA_DIR"
 
 # Check if engine already extracted
@@ -54,6 +63,7 @@ else
     for candidate in \
         "$DATA_DIR/blunder-android-arm64.zip" \
         "$HOME/storage/downloads/blunder-android-arm64.zip" \
+        "$HOME/storage/shared/Download/blunder-android-arm64.zip" \
         "/sdcard/Download/blunder-android-arm64.zip" \
         "/sdcard/blunder-android-arm64.zip"; do
         if [ -f "$candidate" ]; then
@@ -87,36 +97,70 @@ else
     echo "  Engine installed."
 fi
 
-# --- 5. Create config ---
-echo "[5/6] Creating config..."
+# --- 6. Create config ---
+echo "[6/7] Creating config..."
 sed "s|{APP_DATA}|$DATA_DIR|g" "$REPO_DIR/config.mobile.yaml" > "$DATA_DIR/config.yaml"
 echo "  Config written to $DATA_DIR/config.yaml"
 
-# --- 6. Create launcher script ---
-echo "[6/6] Creating launcher..."
-cat > "$HOME/chess-coach-start.sh" << 'LAUNCHER'
+# --- 7. Create launcher + Termux:Widget shortcut ---
+echo "[7/7] Creating launcher..."
+
+# Main launcher script
+cat > "$HOME/chess-coach-start.sh" << LAUNCHER
 #!/bin/bash
-DATA_DIR="$HOME/chess-coach-data"
-PORT=8361
-echo "Starting Chess Coach on http://localhost:$PORT"
-echo "Open Chrome and go to: http://localhost:$PORT?mobile=1"
-echo "Press Ctrl+C to stop."
+PORT=$PORT
+DATA_DIR="$DATA_DIR"
+URL="http://localhost:\$PORT?mobile=1"
+
+echo "♟ Chess Coach starting..."
+echo ""
+
+# Start server in background
 python -c "
 from chess_coach.mobile_entry import start_server
-start_server('$DATA_DIR/config.yaml', $PORT, '$DATA_DIR')
-"
+start_server('\$DATA_DIR/config.yaml', \$PORT, '\$DATA_DIR')
+" &
+SERVER_PID=\$!
+
+# Wait for server to be ready
+echo "Waiting for server..."
+for i in \$(seq 1 30); do
+    if curl -s "http://localhost:\$PORT/" > /dev/null 2>&1; then
+        echo "Server ready!"
+        echo ""
+        # Open Chrome automatically
+        termux-open-url "\$URL" 2>/dev/null || am start -a android.intent.action.VIEW -d "\$URL" 2>/dev/null || echo "Open in browser: \$URL"
+        echo "Chess Coach is running. Press Ctrl+C to stop."
+        wait \$SERVER_PID
+        exit 0
+    fi
+    sleep 1
+done
+
+echo "Server failed to start. Check logs."
+kill \$SERVER_PID 2>/dev/null
+exit 1
 LAUNCHER
-# Re-expand variables in the launcher
-sed -i "s|\$DATA_DIR|$DATA_DIR|g" "$HOME/chess-coach-start.sh"
-sed -i "s|\$PORT|$PORT|g" "$HOME/chess-coach-start.sh"
 chmod +x "$HOME/chess-coach-start.sh"
+
+# Termux:Widget shortcut (tap from home screen)
+WIDGET_DIR="$HOME/.shortcuts"
+mkdir -p "$WIDGET_DIR"
+cat > "$WIDGET_DIR/Chess Coach" << WIDGET
+#!/bin/bash
+bash $HOME/chess-coach-start.sh
+WIDGET
+chmod +x "$WIDGET_DIR/Chess Coach"
 
 echo ""
 echo "=== Setup complete! ==="
 echo ""
 echo "To start Chess Coach:"
-echo "  bash ~/chess-coach-start.sh"
 echo ""
-echo "Then open Chrome on your phone:"
-echo "  http://localhost:$PORT?mobile=1"
+echo "  Option 1: Run in Termux:"
+echo "    bash ~/chess-coach-start.sh"
+echo ""
+echo "  Option 2: Home screen shortcut (install Termux:Widget from F-Droid):"
+echo "    Add a Termux:Widget widget → pick 'Chess Coach'"
+echo "    Tap it to launch — Chrome opens automatically."
 echo ""
