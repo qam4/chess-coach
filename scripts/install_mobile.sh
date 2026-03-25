@@ -36,7 +36,10 @@ fi
 
 # --- 3. Install Python dependencies ---
 echo "[3/6] Installing Python dependencies..."
-pip install -e "$REPO_DIR"
+# Use mobile requirements to avoid pydantic v2 (needs Rust compiler).
+# FastAPI 0.99.1 + pydantic v1 works without native compilation.
+pip install -r "$REPO_DIR/requirements-mobile.txt"
+pip install -e "$REPO_DIR" --no-deps
 
 # --- 4. Set up engine ---
 echo "[4/6] Setting up engine..."
