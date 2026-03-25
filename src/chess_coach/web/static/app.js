@@ -298,7 +298,7 @@
             var arrowAttr = hasArrows ? ' data-arrows=\'' + JSON.stringify(section.arrows).replace(/'/g, '&#39;') + '\'' : '';
             var hoverClass = hasArrows ? ' coaching-section--hoverable' : '';
             html += '<div class="coaching-section' + hoverClass + '"' + arrowAttr + '>';
-            html += '<div class="coaching-section__label">' + escapeHtml(section.label) + '</div>';
+            html += '<div class="coaching-section__label">' + (hasArrows ? '🎯 ' : '') + escapeHtml(section.label) + '</div>';
             html += '<div class="coaching-section__text">' + renderMarkdown(section.text) + '</div>';
             html += '</div>';
           });
@@ -631,7 +631,7 @@
         var arrowAttr = hasArrows ? ' data-arrows=\'' + JSON.stringify(section.arrows).replace(/'/g, '&#39;') + '\'' : '';
         var hoverClass = hasArrows ? ' coaching-section--hoverable' : '';
         html += '<div class="coaching-section' + hoverClass + '"' + arrowAttr + '>';
-        html += '<div class="coaching-section__label">' + escapeHtml(section.label) + '</div>';
+        html += '<div class="coaching-section__label">' + (hasArrows ? '🎯 ' : '') + escapeHtml(section.label) + '</div>';
         html += '<div class="coaching-section__text">' + renderMarkdown(section.text) + '</div>';
         html += '</div>';
       });
