@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import chess
 
-from chess_coach.models import ComparisonReport, PositionReport
+from chess_coach.models import ComparisonReport, EvalBreakdown, PositionReport
 from chess_coach.openings import OpeningInfo
 
 
@@ -66,6 +66,122 @@ _CATEGORY_LABELS = {
     CAT_TENSIONS: "Tensions",
     CAT_SUGGESTION: "Suggestion",
 }
+
+
+# ---------------------------------------------------------------------------
+# Eval breakdown diff — compares two positions to explain what changed
+# ---------------------------------------------------------------------------
+
+_BREAKDOWN_LABELS = {
+    "material": "material",
+    "mobility": "piece activity",
+    "king_safety": "king safety",
+    "pawn_structure": "pawn structure",
+}
+
+
+def diff_eval_breakdowns(
+    before: EvalBreakdown, after: EvalBreakdown
+) -> list[tuple[str, int]]:
+    """Return (label, delta_cp) pairs sorted by absolute delta, largest first.
+
+    Positive delta = component improved for the side that moved.
+    Negative delta = component worsened.
+    Only includes components with |delta| >= 5cp (noise filter).
+    """
+    diffs: list[tuple[str, int]] = []
+    for field in ("material", "mobility", "king_safety", "pawn_structure"):
+        before_val = getattr(before, field)
+        after_val = getattr(after, field)
+        # After a move, eval perspective flips (opponent's turn), so negate
+        delta = -(after_val) - before_val
+        if abs(delta) >= 5:
+            label = _BREAKDOWN_LABELS.get(field, field)
+            diffs.append((label, delta))
+    diffs.sort(key=lambda x: abs(x[1]), reverse=True)
+    return diffs
+
+
+def generate_move_impact_text(
+    before: PositionReport,
+    after: PositionReport,
+    user_move_san: str = "",
+) -> str | None:
+    """Generate text explaining what the user's move changed.
+
+    Compares eval breakdowns before and after the move to explain
+    which positional factors improved or worsened.
+    """
+    diffs = diff_eval_breakdowns(before.eval_breakdown, after.eval_breakdown)
+    if not diffs:
+        return None
+
+    improved = [(label, d) for label, d in diffs if d > 0]
+    worsened = [(label, d) for label, d in diffs if d < 0]
+
+    parts: list[str] = []
+    if improved:
+        items = [f"{label} (+{d}cp)" for label, d in improved]
+        parts.append("Improved: " + ", ".join(items) + ".")
+    if worsened:
+        items = [f"{label} ({d}cp)" for label, d in worsened]
+        parts.append("Worsened: " + ", ".join(items) + ".")
+
+    return " ".join(parts)
+
+
+def generate_priority_coaching(
+    report: PositionReport,
+    level: str = "intermediate",
+) -> str | None:
+    """Generate prioritized coaching: what matters most right now.
+
+    Looks at the position and picks the 1-2 most important things
+    to focus on, rather than listing everything.
+
+    Priority order:
+    1. Hanging pieces (immediate material loss)
+    2. Threats in PV (engine plans to exploit this)
+    3. Weakest eval component (strategic weakness to address)
+    4. Best move direction (what the engine suggests)
+    """
+    parts: list[str] = []
+
+    # 1. Hanging pieces — most urgent
+    for side in ("white", "black"):
+        for hp in report.hanging_pieces.get(side, []):
+            parts.append(
+                f"Your {hp.piece} on {hp.square} is undefended — protect it or move it."
+            )
+
+    # 2. Real threats — only those in PV lines
+    for side in ("white", "black"):
+        for threat in report.threats.get(side, []):
+            if threat.in_pv:
+                parts.append(f"Watch out: {threat.description}")
+
+    # 3. Weakest component — strategic direction
+    if not parts:  # only if no immediate tactical concerns
+        breakdown = report.eval_breakdown
+        components = {
+            "piece activity": breakdown.mobility,
+            "king safety": breakdown.king_safety,
+            "pawn structure": breakdown.pawn_structure,
+        }
+        # Find the worst component (most negative = biggest weakness)
+        worst_label, worst_val = min(components.items(), key=lambda x: x[1])
+        if worst_val < -15:
+            parts.append(f"Your biggest weakness is {worst_label} ({worst_val}cp). Focus on improving it.")
+
+    # 4. Best move hint from top line theme
+    if report.top_lines and report.top_lines[0].theme:
+        theme = report.top_lines[0].theme
+        if theme and len(parts) < 2:
+            parts.append(f"The engine suggests: {theme}.")
+
+    if not parts:
+        return None
+    return " ".join(parts[:3])  # cap at 3 items
 
 
 def generate_position_coaching_structured(
