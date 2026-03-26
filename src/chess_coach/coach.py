@@ -12,6 +12,7 @@ import chess
 from chess_coach.analyzer import analyze_position, format_analysis_for_llm
 from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol, UciEngine
 from chess_coach.llm.base import LLMProvider
+from chess_coach.models import PositionReport
 from chess_coach.openings import lookup_fen
 from chess_coach.prompts import (
     build_coaching_prompt,
@@ -115,6 +116,7 @@ class Coach:
         self.book_path = book_path
         self.template_only = template_only
         self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
+        self._last_position_report: PositionReport | None = None  # for breakdown diffs
 
         # Load opening book via UCI option if path is configured
         if book_path and hasattr(engine, "set_option"):
@@ -817,6 +819,30 @@ class Coach:
             board.push(move)
             fen_after_user = board.fen()
 
+            # 2b. Get position report after user's move (NEW — for breakdown diff)
+            user_pos_report = self.engine.get_position_report(
+                fen_after_user, multipv=self.top_moves
+            )
+            t_user_eval = time.perf_counter()
+
+            # Generate move impact text (what did the user's move change?)
+            move_impact: str | None = None
+            priority_advice: str | None = None
+            if self._last_position_report is not None:
+                from chess_coach.coaching_templates import (
+                    generate_move_impact_text,
+                    generate_priority_coaching,
+                )
+
+                # Convert user move to SAN for display
+                user_san = chess.Board(fen).san(chess.Move.from_uci(user_move))
+                move_impact = generate_move_impact_text(
+                    self._last_position_report, user_pos_report, user_move_san=user_san
+                )
+                priority_advice = generate_priority_coaching(
+                    user_pos_report, level=self.level
+                )
+
             # 3. Engine plays its response (at reduced skill if configured)
             self._set_play_skill()
             engine_move_uci = self.engine.play(
@@ -858,8 +884,21 @@ class Coach:
                 )
             t_explain = time.perf_counter()
 
+            # Save position report for next turn's breakdown diff
+            self._last_position_report = pos_report
+
             eval_cp = pos_report.eval_cp
             eval_score = f"{eval_cp / 100:+.2f}"
+
+            # Prepend move impact and priority advice to coaching text
+            coaching_parts: list[str] = []
+            if move_impact:
+                coaching_parts.append(move_impact)
+            if priority_advice:
+                coaching_parts.append(priority_advice)
+            if coaching_text:
+                coaching_parts.append(coaching_text)
+            coaching_text = "\n\n".join(coaching_parts) if coaching_parts else coaching_text
 
             debug = {
                 "fen_input": fen,
@@ -871,11 +910,14 @@ class Coach:
                 "eval_after_cp": comparison.user_eval_cp,
                 "eval_drop_cp": comparison.eval_drop_cp,
                 "final_eval_cp": eval_cp,
+                "move_impact": move_impact,
+                "priority_advice": priority_advice,
                 "coaching_protocol": True,
                 "timings": {
                     "comparison_report_s": round(t_compare - t_start, 2),
                     "user_feedback_llm_s": round(t_user_llm - t_compare, 2),
-                    "engine_play_s": round(t_engine_play - t_user_llm, 2),
+                    "user_eval_s": round(t_user_eval - t_user_llm, 2),
+                    "engine_play_s": round(t_engine_play - t_user_eval, 2),
                     "position_report_s": round(t_pos_report - t_engine_play, 2),
                     "explain_move_s": round(t_explain - t_pos_report, 2),
                     "total_s": round(t_explain - t_start, 2),

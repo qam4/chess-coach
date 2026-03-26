@@ -154,11 +154,10 @@ def generate_priority_coaching(
                 f"Your {hp.piece} on {hp.square} is undefended — protect it or move it."
             )
 
-    # 2. Real threats — only those in PV lines
-    for side in ("white", "black"):
-        for threat in report.threats.get(side, []):
-            if threat.in_pv:
-                parts.append(f"Watch out: {threat.description}")
+    # 2. Real threats — only those backed by engine PV (from tactics)
+    for tactic in report.tactics:
+        if tactic.in_pv:
+            parts.append(f"Watch out: {tactic.description}")
 
     # 3. Weakest component — strategic direction
     if not parts:  # only if no immediate tactical concerns
