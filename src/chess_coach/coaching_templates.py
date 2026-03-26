@@ -526,60 +526,87 @@ def _threats_text(report: PositionReport) -> str | None:
 
 
 def _threats_and_tactics_text(report: PositionReport) -> str | None:
-    """Merge threats and tactics into one section, deduplicating."""
-    items: list[str] = []
-    seen_types: set[str] = set()
+    """Merge threats and tactics into one section, deduplicating.
 
+    Side-aware: distinguishes between "your opportunity" and "opponent's
+    threat" based on which side's piece executes the tactic.
+    Deduplicates: if the same piece appears in multiple tactics (e.g.,
+    Ne2 fork + Ne2 back rank), only show the most important one.
+    """
     try:
         board = chess.Board(report.fen)
+        side_to_move = board.turn  # chess.WHITE or chess.BLACK
     except ValueError:
         board = None
+        side_to_move = chess.WHITE
 
-    # Tactics first (more specific)
-    seen_descriptions: set[str] = set()
-    # Separate PV tactics (engine plans to play) from board tactics
-    pv_items: list[str] = []
-    board_items: list[str] = []
+    opportunities: list[str] = []  # tactics for the side to move
+    warnings: list[str] = []  # threats from the opponent
+    seen_squares: set[str] = set()  # dedup by source square
+    seen_types: set[str] = set()
 
-    for t in report.tactics:
-        key = t.type.lower()
-        seen_types.add(key)
-        desc_lower = t.description.lower() if t.description else ""
-        if "check" in desc_lower:
+    # Sort tactics: PV first (most important), then non-PV
+    pv_tactics = [t for t in report.tactics if t.in_pv]
+    non_pv_tactics = [t for t in report.tactics if not t.in_pv]
+
+    for t in pv_tactics + non_pv_tactics:
+        seen_types.add(t.type.lower())
+        if "check" in (t.description or "").lower():
             seen_types.add("check")
+
+        # Strip engine jargon and label duplication from description
+        desc = t.description or ""
+        desc = desc.replace("in PV: ", "").replace("In PV: ", "")
+        desc = desc.replace(" in PV", "").replace(" In PV", "")
         label = t.type.replace("_", " ").capitalize()
+        # Remove label duplication: "Discovered attack: Discovered attack: ..."
+        prefix = f"{label}: "
+        if desc.startswith(prefix):
+            desc = desc[len(prefix):]
+        prefix_lower = f"{label.lower()}: "
+        if desc.lower().startswith(prefix_lower):
+            desc = desc[len(prefix_lower):]
 
-        if t.in_pv:
-            # PV tactic — engine plans to execute this. Most important.
-            text = f"{label} available: {t.description}"
-            if text not in seen_descriptions:
-                seen_descriptions.add(text)
-                pv_items.append(text)
-        else:
-            # Board tactic — currently on the board
-            piece_name = ""
-            if board and t.squares:
-                piece_name = _piece_name_at(board, t.squares[0]) or ""
-            if piece_name and len(t.squares) >= 2:
-                text = (
-                    f"{label}: {piece_name} on "
-                    f"{t.squares[0]} targets {', '.join(t.squares[1:])}"
-                )
+        # Determine whose tactic this is by checking the first piece
+        is_own_tactic = True
+        if board and t.squares:
+            try:
+                sq = chess.parse_square(t.squares[0])
+                piece = board.piece_at(sq)
+                if piece is not None:
+                    is_own_tactic = piece.color == side_to_move
+                elif t.in_pv:
+                    is_own_tactic = True
+            except ValueError:
+                pass
+
+        # Dedup by source square — keep only the first (most important) tactic
+        # per piece. E.g., Ne2 fork + Ne2 back rank → just show the fork.
+        source_sq = t.squares[0] if t.squares else ""
+        if source_sq in seen_squares:
+            continue
+        seen_squares.add(source_sq)
+
+        # If we already have PV tactics, skip non-PV ones (noise reduction)
+        if not t.in_pv and (opportunities or warnings):
+            continue
+
+        if is_own_tactic:
+            if t.in_pv:
+                opportunities.append(f"{label} available: {desc}")
             else:
-                text = f"{label}: {t.description}"
-            if text not in seen_descriptions:
-                seen_descriptions.add(text)
-                board_items.append(text)
+                opportunities.append(f"{label}: {desc}")
+        else:
+            if t.in_pv:
+                warnings.append(f"Watch out — {label.lower()}: {desc}")
+            else:
+                warnings.append(f"Be careful: {label.lower()}: {desc}")
+    # Already handled above — PV and non-PV are both in report.tactics
 
-    # PV tactics first (actionable), then board tactics
-    items.extend(pv_items)
-    items.extend(board_items)
-
-    # Add threats that aren't already covered by tactics.
-    # If we have PV tactics (concrete, actionable), skip generic threats
-    # to avoid noise (e.g., "bishop can skewer" when engine won't play it).
-    if not pv_items:
+    # Add threats from the threats dict (only if no PV tactics exist)
+    if not opportunities and not warnings:
         for side_key, side_name in [("white", "White"), ("black", "Black")]:
+            is_opponent = (side_key == "white") != (side_to_move == chess.WHITE)
             for threat in report.threats.get(side_key, []):
                 if threat.type.lower() in seen_types:
                     continue
@@ -593,12 +620,20 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
                 )
                 if threat.type == "check" and threat.target_squares:
                     via = ", ".join(threat.target_squares)
-                    items.append(f"{source} can give check on {via}.")
+                    text = f"{source} can give check on {via}."
                 elif threat.type == "capture" and threat.target_squares:
                     targets = ", ".join(threat.target_squares)
-                    items.append(f"{source} threatens to capture on {targets}.")
+                    text = f"{source} threatens to capture on {targets}."
                 elif threat.description:
-                    items.append(f"{source}: {threat.description}")
+                    text = f"{source}: {threat.description}"
+                else:
+                    continue
+                if is_opponent:
+                    warnings.append(text)
+                else:
+                    opportunities.append(text)
+
+    items = opportunities + warnings
 
     if not items:
         return None
