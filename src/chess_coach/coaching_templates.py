@@ -537,53 +537,68 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
 
     # Tactics first (more specific)
     seen_descriptions: set[str] = set()
+    # Separate PV tactics (engine plans to play) from board tactics
+    pv_items: list[str] = []
+    board_items: list[str] = []
+
     for t in report.tactics:
         key = t.type.lower()
         seen_types.add(key)
-        # If this tactic involves a check, also suppress the "check" threat
         desc_lower = t.description.lower() if t.description else ""
         if "check" in desc_lower:
             seen_types.add("check")
-        # Human-friendly tactic label: replace underscores, title-case
         label = t.type.replace("_", " ").capitalize()
-        piece_name = ""
-        if board and t.squares:
-            piece_name = _piece_name_at(board, t.squares[0]) or ""
-        if piece_name and len(t.squares) >= 2:
-            text = (
-                f"{label}: {piece_name} on "
-                f"{t.squares[0]} targets {', '.join(t.squares[1:])}"
-            )
-        elif t.in_pv:
-            # Tactic is in the principal variation, not on the board yet.
-            # Skip it — the threat will be shown when it's on the board.
-            continue
-        else:
-            text = f"{label}: {t.description}"
-        # Skip duplicate text
-        if text not in seen_descriptions:
-            seen_descriptions.add(text)
-            items.append(text)
 
-    # Add threats that aren't already covered by tactics
-    for side_key, side_name in [("white", "White"), ("black", "Black")]:
-        for threat in report.threats.get(side_key, []):
-            if threat.type.lower() in seen_types:
-                continue
+        if t.in_pv:
+            # PV tactic — engine plans to execute this. Most important.
+            text = f"{label} available: {t.description}"
+            if text not in seen_descriptions:
+                seen_descriptions.add(text)
+                pv_items.append(text)
+        else:
+            # Board tactic — currently on the board
             piece_name = ""
-            if board:
-                piece_name = _piece_name_at(board, threat.source_square) or ""
-            source = (
-                f"{side_name}'s {piece_name} on {threat.source_square}" if piece_name else side_name
-            )
-            if threat.type == "check" and threat.target_squares:
-                via = ", ".join(threat.target_squares)
-                items.append(f"{source} can give check on {via}.")
-            elif threat.type == "capture" and threat.target_squares:
-                targets = ", ".join(threat.target_squares)
-                items.append(f"{source} threatens to capture on {targets}.")
-            elif threat.description:
-                items.append(f"{source}: {threat.description}")
+            if board and t.squares:
+                piece_name = _piece_name_at(board, t.squares[0]) or ""
+            if piece_name and len(t.squares) >= 2:
+                text = (
+                    f"{label}: {piece_name} on "
+                    f"{t.squares[0]} targets {', '.join(t.squares[1:])}"
+                )
+            else:
+                text = f"{label}: {t.description}"
+            if text not in seen_descriptions:
+                seen_descriptions.add(text)
+                board_items.append(text)
+
+    # PV tactics first (actionable), then board tactics
+    items.extend(pv_items)
+    items.extend(board_items)
+
+    # Add threats that aren't already covered by tactics.
+    # If we have PV tactics (concrete, actionable), skip generic threats
+    # to avoid noise (e.g., "bishop can skewer" when engine won't play it).
+    if not pv_items:
+        for side_key, side_name in [("white", "White"), ("black", "Black")]:
+            for threat in report.threats.get(side_key, []):
+                if threat.type.lower() in seen_types:
+                    continue
+                piece_name = ""
+                if board:
+                    piece_name = _piece_name_at(board, threat.source_square) or ""
+                source = (
+                    f"{side_name}'s {piece_name} on {threat.source_square}"
+                    if piece_name
+                    else side_name
+                )
+                if threat.type == "check" and threat.target_squares:
+                    via = ", ".join(threat.target_squares)
+                    items.append(f"{source} can give check on {via}.")
+                elif threat.type == "capture" and threat.target_squares:
+                    targets = ", ".join(threat.target_squares)
+                    items.append(f"{source} threatens to capture on {targets}.")
+                elif threat.description:
+                    items.append(f"{source}: {threat.description}")
 
     if not items:
         return None
