@@ -522,7 +522,7 @@ def _threats_text(report: PositionReport) -> str | None:
 
     if not items:
         return None
-    return "Threats: " + " ".join(items)
+    return "Threats: " + "\n".join(items)
 
 
 def _threats_and_tactics_text(report: PositionReport) -> str | None:
@@ -587,7 +587,7 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
 
     if not items:
         return None
-    return " ".join(items)
+    return "\n".join(items)
 
 
 def _piece_name_at(board: chess.Board, square_name: str) -> str | None:
