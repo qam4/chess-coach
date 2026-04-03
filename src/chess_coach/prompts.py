@@ -290,17 +290,14 @@ def _format_threat_map(report: PositionReport) -> str | None:
         if entry.piece is None:
             continue
         # Only show pieces that are attacked by the opposing side
-        is_white_piece = entry.white_defenders > 0 or (
-            entry.white_attackers == 0 and entry.black_attackers == 0
-        )
+        is_white_piece = entry.white_defenders > 0 or (entry.white_attackers == 0 and entry.black_attackers == 0)
         opponent_attackers = entry.black_attackers if is_white_piece else entry.white_attackers
         own_defenders = entry.white_defenders if is_white_piece else entry.black_defenders
         if opponent_attackers == 0:
             continue
         status = "UNDER-DEFENDED" if entry.net_attacked else "defended"
         lines.append(
-            f"{entry.piece} on {entry.square}: attacked {opponent_attackers}x, "
-            f"defended {own_defenders}x [{status}]"
+            f"{entry.piece} on {entry.square}: attacked {opponent_attackers}x, defended {own_defenders}x [{status}]"
         )
     if len(lines) == 1:
         return None
@@ -418,9 +415,7 @@ def _format_comparison_top_lines(report: ComparisonReport) -> str:
     lines = ["--- Top Engine Lines ---"]
     for i, pv in enumerate(report.top_lines, 1):
         moves_str = " ".join(pv.moves)
-        lines.append(
-            f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}"
-        )
+        lines.append(f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}")
     return "\n".join(lines)
 
 

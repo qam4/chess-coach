@@ -89,9 +89,7 @@ class TestTemplateOnlyCoach:
                     best_move_idea="Controls the center",
                     refutation_line=None,
                     missed_tactics=[],
-                    top_lines=[
-                        PVLine(depth=8, eval_cp=0, moves=["d2d4"], theme="open game")
-                    ],
+                    top_lines=[PVLine(depth=8, eval_cp=0, moves=["d2d4"], theme="open game")],
                     critical_moment=False,
                     critical_reason=None,
                 )
@@ -135,10 +133,7 @@ class TestMobileEntry:
         from chess_coach.mobile_entry import load_mobile_config
 
         config = tmp_path / "config.yaml"
-        config.write_text(
-            "engine:\n"
-            '  path: "{APP_DATA}/blunder"\n'
-        )
+        config.write_text('engine:\n  path: "{APP_DATA}/blunder"\n')
         cfg = load_mobile_config(str(config))
         # Should resolve to the directory containing config.yaml
         assert cfg["engine"]["path"] == f"{tmp_path}/blunder"

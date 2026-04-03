@@ -98,9 +98,7 @@ def _make_fake_proc(
     return proc, fake_stdin, fake_stdout
 
 
-def _setup_engine(
-    stdout_lines: list[str], poll_return: int | None = None
-) -> tuple[XboardEngine, FakeStdin]:
+def _setup_engine(stdout_lines: list[str], poll_return: int | None = None) -> tuple[XboardEngine, FakeStdin]:
     """Create an XboardEngine and inject a fake process (bypasses real start)."""
     proc, fake_stdin, fake_stdout = _make_fake_proc(stdout_lines, poll_return)
     engine = XboardEngine("/fake/engine")

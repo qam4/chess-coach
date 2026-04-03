@@ -165,9 +165,7 @@ class TestOpenAICompatProviderGenerate:
             assert body["model"] == "local-model"
             assert body["messages"][0]["role"] == "user"
             assert body["messages"][0]["content"] == "Explain this"
-            return _json_response(
-                {"choices": [{"message": {"content": "Here is the explanation."}}]}
-            )
+            return _json_response({"choices": [{"message": {"content": "Here is the explanation."}}]})
 
         provider = OpenAICompatProvider(model="local-model")
         _inject_transport(provider, handler)

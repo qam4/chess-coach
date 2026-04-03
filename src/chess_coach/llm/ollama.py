@@ -84,9 +84,7 @@ class OllamaProvider(LLMProvider):
                     )
                     break
         result = "".join(chunks)
-        logger.debug(
-            "Ollama generate finished: %d chars in %.1fs", len(result), time.perf_counter() - t0
-        )
+        logger.debug("Ollama generate finished: %d chars in %.1fs", len(result), time.perf_counter() - t0)
         return result
 
     def is_available(self) -> bool:

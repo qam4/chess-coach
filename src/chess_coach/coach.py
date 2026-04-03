@@ -97,6 +97,7 @@ class Coach:
         engine: EngineProtocol,
         llm: LLMProvider,
         depth: int = 18,
+        coaching_depth: int | None = None,
         top_moves: int = 3,
         level: str = "intermediate",
         max_tokens: int = 512,
@@ -107,7 +108,8 @@ class Coach:
     ):
         self.engine = engine
         self.llm = llm
-        self.depth = depth
+        self.depth = depth  # play depth (engine as opponent)
+        self.coaching_depth = coaching_depth or depth  # analysis depth (engine as coach)
         self.top_moves = top_moves
         self.level = level
         self.max_tokens = max_tokens
@@ -146,9 +148,7 @@ class Coach:
         if isinstance(self.engine, CoachingEngine):
             engine_path = getattr(self.engine, "_inner", None)
             engine_path = getattr(engine_path, "_path", "?") if engine_path else "?"
-            engine_args = (
-                getattr(self.engine._inner, "_args", []) if hasattr(self.engine, "_inner") else []
-            )
+            engine_args = getattr(self.engine._inner, "_args", []) if hasattr(self.engine, "_inner") else []
             protocol = "coaching" if self._coaching_available else "uci"
         else:
             engine_path = getattr(self.engine, "_path", "?")
@@ -226,11 +226,7 @@ class Coach:
             t1 = time.perf_counter()
             logger.info("Coaching position report took %.1fs", t1 - t0)
 
-            best = (
-                report.top_lines[0].moves[0]
-                if report.top_lines and report.top_lines[0].moves
-                else "?"
-            )
+            best = report.top_lines[0].moves[0] if report.top_lines and report.top_lines[0].moves else "?"
             score = f"{report.eval_cp / 100:+.2f}"
             _trace(
                 "engine_done",
@@ -271,9 +267,7 @@ class Coach:
                 elapsed=t3 - t2,
                 llm_response=coaching_text,
             )
-            _progress(
-                f"LLM done ({t3 - t2:.1f}s, {len(coaching_text)} chars). Total: {t3 - t0:.1f}s"
-            )
+            _progress(f"LLM done ({t3 - t2:.1f}s, {len(coaching_text)} chars). Total: {t3 - t0:.1f}s")
 
             return CoachingResponse(
                 fen=fen,
@@ -309,9 +303,7 @@ class Coach:
 
         best = result.best_move or "?"
         score = result.top_line.score_str if result.top_line else "?"
-        lines_raw = [
-            {"depth": ln.depth, "score_cp": ln.score_cp, "pv": ln.pv[:6]} for ln in result.lines
-        ]
+        lines_raw = [{"depth": ln.depth, "score_cp": ln.score_cp, "pv": ln.pv[:6]} for ln in result.lines]
         _trace(
             "engine_done",
             f"Engine done — best: {best} ({score})",
@@ -421,13 +413,12 @@ class Coach:
                 user_move=user_move,
             )
             t0 = time.perf_counter()
-            report = self.engine.get_comparison_report(fen_before, user_move)
+            report = self.engine.get_comparison_report(fen_before, user_move, depth=self.coaching_depth)
             t1 = time.perf_counter()
             logger.info("evaluate_move: coaching comparison report took %.1fs", t1 - t0)
             _trace(
                 "eval_engine_coaching_done",
-                f"Comparison report ready — {report.classification} "
-                f"(drop {report.eval_drop_cp}cp, {report.nag})",
+                f"Comparison report ready — {report.classification} (drop {report.eval_drop_cp}cp, {report.nag})",
                 tool="engine",
                 elapsed=t1 - t0,
                 classification=report.classification,
@@ -442,8 +433,7 @@ class Coach:
             if move_number <= 6 and report.eval_drop_cp <= 150:
                 _trace(
                     "eval_skip_llm",
-                    f"Opening move (move {move_number}, "
-                    f"drop {report.eval_drop_cp}cp) — skipping LLM",
+                    f"Opening move (move {move_number}, drop {report.eval_drop_cp}cp) — skipping LLM",
                     tool="llm",
                 )
                 return MoveEvaluation(
@@ -520,24 +510,21 @@ class Coach:
             "Analyzing position before move",
             tool="engine",
             input_fen=fen_before,
-            depth=self.depth,
+            depth=self.coaching_depth,
             commands=["force", f"setboard {fen_before}", "analyze"],
         )
         t0 = time.perf_counter()
         result_before = analyze_position(
             self.engine,
             fen_before,
-            depth=self.depth,
+            depth=self.coaching_depth,
             top_n=1,
         )
         t1 = time.perf_counter()
         logger.info("evaluate_move: engine analysis (before) took %.1fs", t1 - t0)
         eval_before = result_before.top_line.score_cp if result_before.top_line else 0
         best_before = result_before.best_move or "?"
-        lines_before = [
-            {"depth": ln.depth, "score_cp": ln.score_cp, "pv": ln.pv[:6]}
-            for ln in result_before.lines
-        ]
+        lines_before = [{"depth": ln.depth, "score_cp": ln.score_cp, "pv": ln.pv[:6]} for ln in result_before.lines]
         _trace(
             "eval_engine_before_done",
             f"Position analyzed — best: {best_before}, eval: {eval_before}cp",
@@ -566,7 +553,7 @@ class Coach:
         result_after = analyze_position(
             self.engine,
             fen_after,
-            depth=self.depth,
+            depth=self.coaching_depth,
             top_n=1,
         )
         t3 = time.perf_counter()
@@ -582,8 +569,7 @@ class Coach:
         classification = self.classify_move(eval_drop)
         _trace(
             "eval_engine_after_done",
-            f"Move analyzed — eval: {eval_before}→{eval_after}cp, "
-            f"drop: {eval_drop}cp, {classification}",
+            f"Move analyzed — eval: {eval_before}→{eval_after}cp, drop: {eval_drop}cp, {classification}",
             tool="engine",
             elapsed=t3 - t2,
             eval_before_cp=eval_before,
@@ -721,13 +707,11 @@ class Coach:
             result = analyze_position(
                 self.engine,
                 fen_before,
-                depth=self.depth,
+                depth=self.coaching_depth,
                 top_n=1,
             )
             t1 = time.perf_counter()
-            lines_raw = [
-                {"depth": ln.depth, "score_cp": ln.score_cp, "pv": ln.pv[:6]} for ln in result.lines
-            ]
+            lines_raw = [{"depth": ln.depth, "score_cp": ln.score_cp, "pv": ln.pv[:6]} for ln in result.lines]
             _trace(
                 "explain_engine_done",
                 f"Analysis ready ({t1 - t0:.1f}s)",
@@ -796,7 +780,7 @@ class Coach:
             assert isinstance(self.engine, CoachingEngine)
 
             # 1. Evaluate user's move via comparison report
-            comparison = self.engine.get_comparison_report(fen, user_move)
+            comparison = self.engine.get_comparison_report(fen, user_move, depth=self.coaching_depth)
             t_compare = time.perf_counter()
 
             # Build user feedback from comparison report
@@ -821,26 +805,32 @@ class Coach:
 
             # 2b. Get position report after user's move (NEW — for breakdown diff)
             user_pos_report = self.engine.get_position_report(
-                fen_after_user, multipv=self.top_moves
+                fen_after_user, multipv=self.top_moves, depth=self.coaching_depth
             )
             t_user_eval = time.perf_counter()
 
             # Generate move impact text (what did the user's move change?)
             move_impact: str | None = None
             priority_advice: str | None = None
+            user_move_insight = None
             if self._last_position_report is not None:
                 from chess_coach.coaching_templates import (
                     generate_move_impact_text,
                     generate_priority_coaching,
                 )
+                from chess_coach.insights import extract_move_insight
 
                 # Convert user move to SAN for display
                 user_san = chess.Board(fen).san(chess.Move.from_uci(user_move))
                 move_impact = generate_move_impact_text(
                     self._last_position_report, user_pos_report, user_move_san=user_san
                 )
-                priority_advice = generate_priority_coaching(
-                    user_pos_report, level=self.level
+                priority_advice = generate_priority_coaching(user_pos_report, level=self.level)
+                user_move_insight = extract_move_insight(
+                    self._last_position_report,
+                    user_pos_report,
+                    user_move,
+                    user_san,
                 )
 
             # 3. Engine plays its response (at reduced skill if configured)
@@ -860,7 +850,9 @@ class Coach:
             board.push(engine_move_obj)
             fen_after_engine = board.fen()
 
-            pos_report = self.engine.get_position_report(fen_after_engine, multipv=self.top_moves)
+            pos_report = self.engine.get_position_report(
+                fen_after_engine, multipv=self.top_moves, depth=self.coaching_depth
+            )
             t_pos_report = time.perf_counter()
 
             opening = lookup_fen(fen_after_engine)
@@ -873,9 +865,7 @@ class Coach:
             if self.template_only:
                 from chess_coach.coaching_templates import generate_position_coaching
 
-                coaching_text = generate_position_coaching(
-                    pos_report, level=self.level, opening=opening
-                )
+                coaching_text = generate_position_coaching(pos_report, level=self.level, opening=opening)
             else:
                 coaching_text = self.llm.generate(
                     coaching_prompt,
@@ -890,9 +880,15 @@ class Coach:
             eval_cp = pos_report.eval_cp
             eval_score = f"{eval_cp / 100:+.2f}"
 
-            # Prepend move impact and priority advice to coaching text
+            # Prepend move insight and priority advice to coaching text
             coaching_parts: list[str] = []
-            if move_impact:
+            if user_move_insight is not None:
+                from chess_coach.insights import render_insight_text
+
+                insight_text = render_insight_text(user_move_insight)
+                if insight_text:
+                    coaching_parts.append(insight_text)
+            elif move_impact:
                 coaching_parts.append(move_impact)
             if priority_advice:
                 coaching_parts.append(priority_advice)
@@ -912,6 +908,7 @@ class Coach:
                 "final_eval_cp": eval_cp,
                 "move_impact": move_impact,
                 "priority_advice": priority_advice,
+                "insight": user_move_insight.to_dict() if user_move_insight else None,
                 "coaching_protocol": True,
                 "timings": {
                     "comparison_report_s": round(t_compare - t_start, 2),

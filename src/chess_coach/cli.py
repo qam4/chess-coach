@@ -117,9 +117,7 @@ def cli(ctx: click.Context, config: str, verbose: bool) -> None:
     help="Use template engine (no LLM, instant, no hallucination)",
 )
 @click.pass_context
-def explain(
-    ctx: click.Context, fen: str, depth: int | None, level: str | None, template: bool
-) -> None:
+def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, template: bool) -> None:
     """Explain a chess position given as a FEN string."""
     cfg = load_config(ctx.obj["config_path"])
 
@@ -147,13 +145,9 @@ def explain(
 
                 t0 = time.perf_counter()
                 if isinstance(engine, CoachingEngine) and engine.coaching_available:
-                    report = engine.get_position_report(
-                        fen, multipv=coaching_cfg.get("top_moves", 3)
-                    )
+                    report = engine.get_position_report(fen, multipv=coaching_cfg.get("top_moves", 3))
                     opening = lookup_fen(fen)
-                    coaching_text = generate_position_coaching(
-                        report, level=use_level, opening=opening
-                    )
+                    coaching_text = generate_position_coaching(report, level=use_level, opening=opening)
                     best_line = report.top_lines[0] if report.top_lines else None
                     best_move = best_line.moves[0] if best_line and best_line.moves else "?"
                     score = f"{report.eval_cp / 100:+.2f}"
@@ -165,8 +159,7 @@ def explain(
                     opening = lookup_fen(fen)
                     # Can't use rich templates without coaching protocol
                     console.print(
-                        "[yellow]Template mode requires coaching protocol. "
-                        "Falling back to basic analysis.[/]"
+                        "[yellow]Template mode requires coaching protocol. Falling back to basic analysis.[/]"
                     )
                     best_move = result.top_line.pv[0] if result.top_line else "?"
                     score = result.top_line.score_str if result.top_line else "?"
@@ -185,9 +178,7 @@ def explain(
                     border_style="green",
                 )
             )
-            console.print(
-                f"  [dim]Engine: {elapsed:.1f}s | LLM: 0.0s (template) | Total: {elapsed:.1f}s[/]"
-            )
+            console.print(f"  [dim]Engine: {elapsed:.1f}s | LLM: 0.0s (template) | Total: {elapsed:.1f}s[/]")
         finally:
             engine.stop()
         return
@@ -288,15 +279,10 @@ def explain(
                 )
                 sys.exit(1)
             except httpx.HTTPStatusError as exc:
-                console.print(
-                    f"\n[red]✗[/] LLM returned HTTP {exc.response.status_code}.\n  Detail: {exc}"
-                )
+                console.print(f"\n[red]✗[/] LLM returned HTTP {exc.response.status_code}.\n  Detail: {exc}")
                 sys.exit(1)
             except httpx.HTTPError as exc:
-                console.print(
-                    f"\n[red]✗[/] LLM connection error (httpx).\n"
-                    f"  Is Ollama still running? Detail: {exc}"
-                )
+                console.print(f"\n[red]✗[/] LLM connection error (httpx).\n  Is Ollama still running? Detail: {exc}")
                 sys.exit(1)
             except TimeoutError as exc:
                 console.print(f"\n[red]✗[/] Engine timed out — it may have hung.\n  Detail: {exc}")

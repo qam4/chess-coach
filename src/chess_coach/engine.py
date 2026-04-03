@@ -63,9 +63,7 @@ class EngineProtocol(ABC):
     def stop(self) -> None: ...
 
     @abstractmethod
-    def analyze(
-        self, fen: str, depth: int = 18, time_limit: float | None = None
-    ) -> AnalysisResult: ...
+    def analyze(self, fen: str, depth: int = 18, time_limit: float | None = None) -> AnalysisResult: ...
 
     @abstractmethod
     def is_ready(self) -> bool: ...
@@ -133,9 +131,7 @@ class XboardEngine(EngineProtocol):
             logger.debug("Engine raw: %s", line)
             parsed = self._parse_thinking_line(line)
             if parsed:
-                logger.debug(
-                    "Parsed depth=%d score=%d pv=%s", parsed.depth, parsed.score_cp, parsed.pv[:3]
-                )
+                logger.debug("Parsed depth=%d score=%d pv=%s", parsed.depth, parsed.score_cp, parsed.pv[:3])
                 # Keep only the deepest line per search
                 result.lines = [ln for ln in result.lines if ln.depth != parsed.depth]
                 result.lines.append(parsed)
@@ -653,11 +649,23 @@ class CoachingEngine(EngineProtocol):
         """Whether the connected engine supports the coaching protocol."""
         return self._coaching_available
 
-    def get_position_report(self, fen: str, multipv: int = 3) -> "PositionReport":
+    def get_position_report(
+        self,
+        fen: str,
+        multipv: int = 3,
+        depth: int | None = None,
+        movetime: int | None = None,
+    ) -> "PositionReport":
         """Request a rich position evaluation from the engine.
 
         Sends ``coach eval fen <FEN> multipv <N>`` and parses the JSON
         response into a :class:`PositionReport`.
+
+        Args:
+            fen: FEN string of the position to evaluate.
+            multipv: Number of principal variation lines to return.
+            depth: Search depth limit in plies. Mutually exclusive with movetime.
+            movetime: Search time limit in milliseconds. Mutually exclusive with depth.
 
         Raises:
             CoachingTimeoutError: If the engine does not respond in time.
@@ -670,15 +678,27 @@ class CoachingEngine(EngineProtocol):
             validate_position_report,
         )
 
-        cmd = format_coaching_command("eval", fen=fen, multipv=multipv)
+        cmd = format_coaching_command("eval", fen=fen, multipv=multipv, depth=depth, movetime=movetime)
         data = self._send_coaching_command(cmd)
         return validate_position_report(data)
 
-    def get_comparison_report(self, fen: str, user_move: str) -> "ComparisonReport":
+    def get_comparison_report(
+        self,
+        fen: str,
+        user_move: str,
+        depth: int | None = None,
+        movetime: int | None = None,
+    ) -> "ComparisonReport":
         """Request a move comparison report from the engine.
 
         Sends ``coach compare fen <FEN> move <MOVE>`` and parses the JSON
         response into a :class:`ComparisonReport`.
+
+        Args:
+            fen: FEN string of the position before the move.
+            user_move: The user's move in UCI notation.
+            depth: Search depth limit in plies. Mutually exclusive with movetime.
+            movetime: Search time limit in milliseconds. Mutually exclusive with depth.
 
         Raises:
             CoachingTimeoutError: If the engine does not respond in time.
@@ -691,7 +711,7 @@ class CoachingEngine(EngineProtocol):
             validate_comparison_report,
         )
 
-        cmd = format_coaching_command("compare", fen=fen, move=user_move)
+        cmd = format_coaching_command("compare", fen=fen, move=user_move, depth=depth, movetime=movetime)
         data = self._send_coaching_command(cmd)
         return validate_comparison_report(data)
 
@@ -739,8 +759,7 @@ class CoachingEngine(EngineProtocol):
 
             if compat == "incompatible":
                 logger.warning(
-                    "Coaching protocol version mismatch: engine=%s expected=%s"
-                    " — disabling coaching",
+                    "Coaching protocol version mismatch: engine=%s expected=%s — disabling coaching",
                     engine_version,
                     EXPECTED_VERSION,
                 )
@@ -811,8 +830,6 @@ class CoachingEngine(EngineProtocol):
                 break
 
         if not any("END_COACH_RESPONSE" in ln for ln in lines):
-            raise CoachingTimeoutError(
-                f"coaching command timed out after {self._coaching_timeout}s: {cmd}"
-            )
+            raise CoachingTimeoutError(f"coaching command timed out after {self._coaching_timeout}s: {cmd}")
 
         return parse_coaching_response(lines)

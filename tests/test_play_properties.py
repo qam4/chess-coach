@@ -42,17 +42,11 @@ def test_classification_matches_thresholds(
     classification = Coach.classify_move(eval_drop)
 
     if eval_drop <= 50:
-        assert classification == "good", (
-            f"drop={eval_drop} should be 'good', got '{classification}'"
-        )
+        assert classification == "good", f"drop={eval_drop} should be 'good', got '{classification}'"
     elif eval_drop <= 100:
-        assert classification == "inaccuracy", (
-            f"drop={eval_drop} should be 'inaccuracy', got '{classification}'"
-        )
+        assert classification == "inaccuracy", f"drop={eval_drop} should be 'inaccuracy', got '{classification}'"
     else:
-        assert classification == "blunder", (
-            f"drop={eval_drop} should be 'blunder', got '{classification}'"
-        )
+        assert classification == "blunder", f"drop={eval_drop} should be 'blunder', got '{classification}'"
 
 
 @settings(max_examples=200)
@@ -108,6 +102,4 @@ def test_classification_monotonic(eval_drop: int) -> None:
     c = Coach.classify_move(eval_drop)
     # A slightly larger drop should be at least as severe
     c_plus = Coach.classify_move(eval_drop + 1)
-    assert severity[c] <= severity[c_plus], (
-        f"classify({eval_drop})={c} but classify({eval_drop + 1})={c_plus}"
-    )
+    assert severity[c] <= severity[c_plus], f"classify({eval_drop})={c} but classify({eval_drop + 1})={c_plus}"

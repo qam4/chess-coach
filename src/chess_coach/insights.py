@@ -16,7 +16,6 @@ import chess
 
 from chess_coach.models import EvalBreakdown, PositionReport
 
-
 # ---------------------------------------------------------------------------
 # Data structures for move insights
 # ---------------------------------------------------------------------------
@@ -91,7 +90,7 @@ class MoveInsight:
     eval_before_cp: int = 0
     eval_after_cp: int = 0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "move_uci": self.move_uci,
             "move_san": self.move_san,
@@ -120,9 +119,7 @@ class MoveInsight:
 # ---------------------------------------------------------------------------
 
 
-def extract_factor_changes(
-    before: EvalBreakdown, after: EvalBreakdown, min_delta: int = 5
-) -> list[FactorChange]:
+def extract_factor_changes(before: EvalBreakdown, after: EvalBreakdown, min_delta: int = 5) -> list[FactorChange]:
     """Compare eval breakdowns and return significant changes.
 
     After a move, the eval perspective flips (opponent's turn), so
@@ -147,9 +144,7 @@ def extract_factor_changes(
     return changes
 
 
-def extract_threats(
-    report: PositionReport, side_to_move: bool
-) -> list[ThreatInfo]:
+def extract_threats(report: PositionReport, side_to_move: bool) -> list[ThreatInfo]:
     """Extract threats from a position report, tagged by whose threat it is."""
     threats: list[ThreatInfo] = []
     for side_key in ("white", "black"):
@@ -174,6 +169,7 @@ def diff_threats(
 
     Returns (created, resolved, remaining).
     """
+
     def _key(t: ThreatInfo) -> str:
         return f"{t.type}:{t.source_square}:{','.join(t.target_squares)}"
 
@@ -212,9 +208,7 @@ def extract_move_insight(
             move_san = move_uci
 
     # Factor changes
-    factor_changes = extract_factor_changes(
-        report_before.eval_breakdown, report_after.eval_breakdown
-    )
+    factor_changes = extract_factor_changes(report_before.eval_breakdown, report_after.eval_breakdown)
 
     # Threat analysis
     threats_before = extract_threats(report_before, side_to_move)
@@ -229,8 +223,11 @@ def extract_move_insight(
         captured_piece = board.piece_at(move.to_square)
         if captured_piece:
             names = {
-                chess.PAWN: "pawn", chess.KNIGHT: "knight", chess.BISHOP: "bishop",
-                chess.ROOK: "rook", chess.QUEEN: "queen",
+                chess.PAWN: "pawn",
+                chess.KNIGHT: "knight",
+                chess.BISHOP: "bishop",
+                chess.ROOK: "rook",
+                chess.QUEEN: "queen",
             }
             capture = names.get(captured_piece.piece_type, "piece")
     except (ValueError, chess.InvalidMoveError):
@@ -283,3 +280,54 @@ def extract_move_insight(
         eval_before_cp=report_before.eval_cp,
         eval_after_cp=report_after.eval_cp,
     )
+
+
+# ---------------------------------------------------------------------------
+# Rendering — turn MoveInsight into coaching text
+# ---------------------------------------------------------------------------
+
+
+def render_insight_text(insight: MoveInsight) -> str | None:
+    """Render a MoveInsight into concise coaching text.
+
+    This is a simple first pass — the presentation layer can be
+    improved independently from the extraction logic.
+    """
+    parts: list[str] = []
+
+    # What the move changed
+    if insight.factor_changes:
+        improved = [fc for fc in insight.factor_changes if fc.improved]
+        worsened = [fc for fc in insight.factor_changes if fc.worsened]
+        if improved:
+            labels = [f"{fc.label} (+{fc.delta_cp}cp)" for fc in improved]
+            parts.append("Your move improved: " + ", ".join(labels) + ".")
+        if worsened:
+            labels = [f"{fc.label} ({fc.delta_cp}cp)" for fc in worsened]
+            parts.append("But it weakened: " + ", ".join(labels) + ".")
+
+    # What the move captures
+    if insight.capture:
+        parts.append(f"Captured a {insight.capture}.")
+
+    # What the move attacks
+    if insight.pieces_attacked:
+        parts.append(f"Now attacking: {', '.join(insight.pieces_attacked)}.")
+
+    # Threats resolved
+    if insight.threats_resolved:
+        resolved = [t.description for t in insight.threats_resolved[:2]]
+        parts.append("Resolved: " + "; ".join(resolved) + ".")
+
+    # Remaining problems to address
+    if insight.threats_remaining:
+        remaining = [t.description for t in insight.threats_remaining[:2]]
+        parts.append("Still watch out for: " + "; ".join(remaining) + ".")
+
+    # Follow-up plan
+    if insight.plan:
+        parts.append(f"Plan: {' → '.join(insight.plan)}")
+
+    if not parts:
+        return None
+    return "\n".join(parts)

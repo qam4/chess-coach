@@ -9,6 +9,7 @@ used standalone or passed to an LLM for tone/personality rephrasing.
 
 from __future__ import annotations
 
+import typing
 from dataclasses import dataclass
 
 import chess
@@ -35,18 +36,15 @@ class CoachingSection:
     text: str  # the coaching text
     arrows: list[CoachingArrow] | None = None  # optional board arrows
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, typing.Any]:
         """Serialize for JSON API responses."""
-        d: dict = {
+        d: dict[str, typing.Any] = {
             "category": self.category,
             "label": self.label,
             "text": self.text,
         }
         if self.arrows:
-            d["arrows"] = [
-                {"from": a.from_sq, "to": a.to_sq, "color": a.color}
-                for a in self.arrows
-            ]
+            d["arrows"] = [{"from": a.from_sq, "to": a.to_sq, "color": a.color} for a in self.arrows]
         return d
 
 
@@ -80,9 +78,7 @@ _BREAKDOWN_LABELS = {
 }
 
 
-def diff_eval_breakdowns(
-    before: EvalBreakdown, after: EvalBreakdown
-) -> list[tuple[str, int]]:
+def diff_eval_breakdowns(before: EvalBreakdown, after: EvalBreakdown) -> list[tuple[str, int]]:
     """Return (label, delta_cp) pairs sorted by absolute delta, largest first.
 
     Positive delta = component improved for the side that moved.
@@ -150,9 +146,7 @@ def generate_priority_coaching(
     # 1. Hanging pieces — most urgent
     for side in ("white", "black"):
         for hp in report.hanging_pieces.get(side, []):
-            parts.append(
-                f"Your {hp.piece} on {hp.square} is undefended — protect it or move it."
-            )
+            parts.append(f"Your {hp.piece} on {hp.square} is undefended — protect it or move it.")
 
     # 2. Real threats — only those backed by engine PV (from tactics)
     for tactic in report.tactics:
@@ -212,9 +206,7 @@ def generate_position_coaching_structured(
         hanging_arrows = []
         for side in ("white", "black"):
             for hp in report.hanging_pieces.get(side, []):
-                hanging_arrows.append(
-                    CoachingArrow(hp.square, hp.square, "#e74c3c")
-                )
+                hanging_arrows.append(CoachingArrow(hp.square, hp.square, "#e74c3c"))
         sections.append(
             CoachingSection(
                 CAT_PIECE_SAFETY,
@@ -295,9 +287,7 @@ def _extract_arrows(report: PositionReport) -> list[CoachingArrow]:
         color = "#3b82f6" if side == "white" else "#e74c3c"
         for threat in report.threats.get(side, []):
             for tgt in threat.target_squares:
-                arrows.append(
-                    CoachingArrow(threat.source_square, tgt, color)
-                )
+                arrows.append(CoachingArrow(threat.source_square, tgt, color))
 
     return arrows
 
@@ -313,9 +303,7 @@ def generate_position_coaching(
     the structured engine data. For structured output (categories),
     use generate_position_coaching_structured() instead.
     """
-    sections = generate_position_coaching_structured(
-        report, level=level, opening=opening
-    )
+    sections = generate_position_coaching_structured(report, level=level, opening=opening)
     return "\n\n".join(s.text for s in sections)
 
 
@@ -367,19 +355,13 @@ def generate_move_coaching(
         eval_shift = f" (eval {before:+.1f} → {after:+.1f})"
         if cls == "inaccuracy":
             sections.append(
-                f"That's a small inaccuracy — you lost about "
-                f"{drop / 100:.1f} pawns of advantage{eval_shift}."
+                f"That's a small inaccuracy — you lost about {drop / 100:.1f} pawns of advantage{eval_shift}."
             )
         elif cls == "mistake":
-            sections.append(
-                f"That's a mistake — it costs about "
-                f"{drop / 100:.1f} pawns{eval_shift}."
-            )
+            sections.append(f"That's a mistake — it costs about {drop / 100:.1f} pawns{eval_shift}.")
         elif cls == "blunder":
             sections.append(
-                f"That's a blunder — it drops "
-                f"{drop / 100:.1f} pawns{eval_shift}. "
-                f"Let's look at what went wrong."
+                f"That's a blunder — it drops {drop / 100:.1f} pawns{eval_shift}. Let's look at what went wrong."
             )
 
     # What was stronger
@@ -395,10 +377,7 @@ def generate_move_coaching(
     # Missed tactics
     if report.missed_tactics:
         for tactic in report.missed_tactics:
-            sections.append(
-                f"You missed a {tactic.type.replace('_', ' ')}: "
-                f"{tactic.description}"
-            )
+            sections.append(f"You missed a {tactic.type.replace('_', ' ')}: {tactic.description}")
 
     # Refutation line
     if report.refutation_line and cls in ("mistake", "blunder"):
@@ -459,20 +438,14 @@ def _eval_summary(report: PositionReport) -> str:
             top_better = "White" if top_val > 0 else "Black"
             eval_side = "White" if cp > 0 else "Black"
             if top_better == eval_side:
-                assessment += (
-                    f" The main factor is {top_name}"
-                    f" ({top_better} is better)."
-                )
+                assessment += f" The main factor is {top_name} ({top_better} is better)."
             else:
                 # Dominant factor favours the other side — find what
                 # actually drives the advantage and present both.
                 for _, val, name in factors[1:]:
                     aligned = "White" if val > 0 else "Black"
                     if abs(val) > 20 and aligned == eval_side:
-                        assessment += (
-                            f" {eval_side}'s {name} outweighs"
-                            f" {top_better}'s {top_name} edge."
-                        )
+                        assessment += f" {eval_side}'s {name} outweighs {top_better}'s {top_name} edge."
                         break
 
     return assessment
@@ -515,10 +488,7 @@ def _threats_text(report: PositionReport) -> str | None:
                 # Fallback to engine description for types we don't handle yet
                 items.append(f"{source}: {t.description}")
             else:
-                items.append(
-                    f"{source} has a threat"
-                    f" ({t.type.replace('_', ' ')})."
-                )
+                items.append(f"{source} has a threat ({t.type.replace('_', ' ')}).")
 
     if not items:
         return None
@@ -562,10 +532,10 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
         # Remove label duplication: "Discovered attack: Discovered attack: ..."
         prefix = f"{label}: "
         if desc.startswith(prefix):
-            desc = desc[len(prefix):]
+            desc = desc[len(prefix) :]
         prefix_lower = f"{label.lower()}: "
         if desc.lower().startswith(prefix_lower):
-            desc = desc[len(prefix_lower):]
+            desc = desc[len(prefix_lower) :]
 
         # Determine whose tactic this is by checking the first piece
         is_own_tactic = True
@@ -613,11 +583,7 @@ def _threats_and_tactics_text(report: PositionReport) -> str | None:
                 piece_name = ""
                 if board:
                     piece_name = _piece_name_at(board, threat.source_square) or ""
-                source = (
-                    f"{side_name}'s {piece_name} on {threat.source_square}"
-                    if piece_name
-                    else side_name
-                )
+                source = f"{side_name}'s {piece_name} on {threat.source_square}" if piece_name else side_name
                 if threat.type == "check" and threat.target_squares:
                     via = ", ".join(threat.target_squares)
                     text = f"{source} can give check on {via}."
@@ -703,10 +669,7 @@ def _king_safety_text(report: PositionReport, level: str) -> str | None:
 
         # Build a context-aware description
         if not is_on_home_rank:
-            parts.append(
-                f"{side_name}'s king has been displaced to "
-                f"{chess.square_name(king_sq)} — be careful."
-            )
+            parts.append(f"{side_name}'s king has been displaced to {chess.square_name(king_sq)} — be careful.")
         elif has_castling:
             parts.append(f"{side_name}'s king is still in the center. Consider castling soon.")
         elif not has_castling and is_on_home_rank:

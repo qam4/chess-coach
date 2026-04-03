@@ -92,9 +92,7 @@ def create_app(coach: Coach) -> FastAPI:
                 multipv=coach.top_moves,
             )
             opening = lookup_fen(req.fen)
-            sections = generate_position_coaching_structured(
-                report, level=req.level, opening=opening
-            )
+            sections = generate_position_coaching_structured(report, level=req.level, opening=opening)
             coaching_text = "\n\n".join(s.text for s in sections)
             elapsed = time.perf_counter() - t0
 
@@ -259,9 +257,7 @@ def create_app(coach: Coach) -> FastAPI:
             raise HTTPException(status_code=400, detail="No moves to undo")
 
         if len(req.moves) < 2:
-            raise HTTPException(
-                status_code=400, detail="Need at least two moves to undo a move pair"
-            )
+            raise HTTPException(status_code=400, detail="Need at least two moves to undo a move pair")
 
         # Replay all but last two moves from starting position
         truncated_moves = req.moves[:-2]
@@ -397,14 +393,8 @@ def create_app(coach: Coach) -> FastAPI:
                 trace_events.append(event_data)
                 loop.call_soon_threadsafe(queue.put_nowait, _sse_event("progress", event_data))
 
-            def _emit(
-                step: str, message: str, tool: str = "", elapsed: float = 0.0, **detail: typing.Any
-            ) -> None:
-                _on_debug(
-                    TraceStep(
-                        step=step, message=message, tool=tool, elapsed_s=elapsed, detail=detail
-                    )
-                )
+            def _emit(step: str, message: str, tool: str = "", elapsed: float = 0.0, **detail: typing.Any) -> None:
+                _on_debug(TraceStep(step=step, message=message, tool=tool, elapsed_s=elapsed, detail=detail))
 
             async def _run_pipeline() -> dict[str, typing.Any] | Exception:
                 try:
@@ -615,25 +605,18 @@ def create_app(coach: Coach) -> FastAPI:
             # Config summary
             is_coaching = isinstance(engine, CoachingEngine) and engine.coaching_available
             protocol = "coaching" if is_coaching else "uci"
-            trace.append(
-                f"config: mode=template protocol={protocol} "
-                f"depth={coach.depth} play_elo={coach.play_elo}"
-            )
+            trace.append(f"config: mode=template protocol={protocol} depth={coach.depth} play_elo={coach.play_elo}")
 
             # 1. Evaluate user's move via comparison report
             user_feedback = ""
             if isinstance(engine, CoachingEngine) and engine.coaching_available:
                 trace.append(f">> coach compare fen {req.fen} move {req.user_move}")
                 t_eval = time.perf_counter()
-                report = await asyncio.to_thread(
-                    engine.get_comparison_report, req.fen, req.user_move
-                )
+                report = await asyncio.to_thread(engine.get_comparison_report, req.fen, req.user_move)
                 t1 = time.perf_counter()
                 import json as _json_cmp
 
-                trace.append(
-                    "<< comparison_report:\n" + _json_cmp.dumps(report.to_dict(), indent=2)
-                )
+                trace.append("<< comparison_report:\n" + _json_cmp.dumps(report.to_dict(), indent=2))
 
                 # Classify using our threshold
                 board_tmp = chess.Board(req.fen)
@@ -668,9 +651,7 @@ def create_app(coach: Coach) -> FastAPI:
                 evaluation = await asyncio.to_thread(coach.evaluate_move, req.fen, req.user_move)
                 t1 = time.perf_counter()
                 trace.append(
-                    f"<< classification={evaluation.classification} "
-                    f"drop={evaluation.eval_drop_cp}cp "
-                    f"[{t1 - t0:.1f}s]"
+                    f"<< classification={evaluation.classification} drop={evaluation.eval_drop_cp}cp [{t1 - t0:.1f}s]"
                 )
 
             # 2. Engine plays its response
@@ -681,9 +662,7 @@ def create_app(coach: Coach) -> FastAPI:
             trace.append(f">> setoption UCI_LimitStrength true / UCI_Elo {coach.play_elo}")
             trace.append(f">> position fen {fen_after_user}\\n>> go depth {coach.depth}")
             t2 = time.perf_counter()
-            engine_move_uci = await asyncio.to_thread(
-                engine.play, fen_after_user, depth=coach.depth
-            )
+            engine_move_uci = await asyncio.to_thread(engine.play, fen_after_user, depth=coach.depth)
             t3 = time.perf_counter()
             # Don't call _set_full_strength() here — it sends setoption
             # commands that corrupt the stdout stream for the next coaching
@@ -694,6 +673,39 @@ def create_app(coach: Coach) -> FastAPI:
             engine_move_san = board.san(engine_move_obj)
             board.push(engine_move_obj)
             trace.append(f"engine played: {engine_move_san} ({engine_move_uci}) [{t3 - t2:.1f}s]")
+
+            # 2b. Insight extraction: eval position after user's move, diff with previous
+            insight_text = ""
+            if isinstance(engine, CoachingEngine) and engine.coaching_available:
+                try:
+                    trace.append(f">> coach eval fen {fen_after_user} multipv 3 (user move insight)")
+                    t_insight_start = time.perf_counter()
+                    user_pos_report = await asyncio.to_thread(engine.get_position_report, fen_after_user, multipv=3)
+                    t_insight_end = time.perf_counter()
+                    trace.append(
+                        f"<< user position eval: {user_pos_report.eval_cp}cp [{t_insight_end - t_insight_start:.1f}s]"
+                    )
+
+                    if coach._last_position_report is not None:
+                        from chess_coach.insights import extract_move_insight, render_insight_text
+
+                        user_san = chess.Board(req.fen).san(chess.Move.from_uci(req.user_move))
+                        insight = extract_move_insight(
+                            coach._last_position_report,
+                            user_pos_report,
+                            req.user_move,
+                            user_san,
+                        )
+                        import json as _json_insight
+
+                        trace.append("<< move_insight:\n" + _json_insight.dumps(insight.to_dict(), indent=2))
+                        insight_text = render_insight_text(insight) or ""
+                        if insight_text:
+                            trace.append(f"<< insight_text: {insight_text}")
+                    else:
+                        trace.append("(no previous position report — first move, skipping insight)")
+                except Exception as exc:
+                    trace.append(f"<< insight extraction FAILED: {exc}")
 
             # 3. Template coaching for the position after engine's move
             pos_report = None
@@ -717,9 +729,7 @@ def create_app(coach: Coach) -> FastAPI:
                     # Full position report in debug trace
                     import json as _json
 
-                    trace.append(
-                        "<< position_report:\n" + _json.dumps(pos_report.to_dict(), indent=2)
-                    )
+                    trace.append("<< position_report:\n" + _json.dumps(pos_report.to_dict(), indent=2))
                 except Exception as exc:
                     trace.append(f"<< coach eval FAILED: {exc}")
                     # Fall back to basic eval from comparison report
@@ -738,8 +748,17 @@ def create_app(coach: Coach) -> FastAPI:
             # 4. Eval and game state — use pos_report eval (current board)
             if pos_report:
                 eval_cp = pos_report.eval_cp
+                # Save for next turn's insight diff
+                coach._last_position_report = pos_report
             else:
                 eval_cp = evaluation.eval_after_cp
+
+            # Prepend insight text to coaching
+            if insight_text and coaching_text:
+                coaching_text = insight_text + "\n\n" + coaching_text
+            elif insight_text:
+                coaching_text = insight_text
+
             eval_score = f"{eval_cp / 100:+.2f}"
             game_over = board.is_game_over()
             result = board.result() if game_over else None
@@ -757,9 +776,7 @@ def create_app(coach: Coach) -> FastAPI:
                 if hint_uci is None:
                     try:
                         coach._set_play_skill()
-                        hint_uci = await asyncio.to_thread(
-                            engine.play, board.fen(), depth=coach.depth
-                        )
+                        hint_uci = await asyncio.to_thread(engine.play, board.fen(), depth=coach.depth)
                         coach._set_full_strength()
                     except Exception:
                         pass

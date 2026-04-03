@@ -256,13 +256,8 @@ class PositionReport:
             "fen": self.fen,
             "eval_cp": self.eval_cp,
             "eval_breakdown": self.eval_breakdown.to_dict(),
-            "hanging_pieces": {
-                side: [hp.to_dict() for hp in pieces]
-                for side, pieces in self.hanging_pieces.items()
-            },
-            "threats": {
-                side: [t.to_dict() for t in threats] for side, threats in self.threats.items()
-            },
+            "hanging_pieces": {side: [hp.to_dict() for hp in pieces] for side, pieces in self.hanging_pieces.items()},
+            "threats": {side: [t.to_dict() for t in threats] for side, threats in self.threats.items()},
             "pawn_structure": {side: pf.to_dict() for side, pf in self.pawn_structure.items()},
             "king_safety": {side: ks.to_dict() for side, ks in self.king_safety.items()},
             "top_lines": [line.to_dict() for line in self.top_lines],
@@ -280,16 +275,10 @@ class PositionReport:
             eval_cp=d["eval_cp"],
             eval_breakdown=EvalBreakdown.from_dict(d["eval_breakdown"]),
             hanging_pieces={
-                side: [HangingPiece.from_dict(hp) for hp in pieces]
-                for side, pieces in d["hanging_pieces"].items()
+                side: [HangingPiece.from_dict(hp) for hp in pieces] for side, pieces in d["hanging_pieces"].items()
             },
-            threats={
-                side: [Threat.from_dict(t) for t in threats]
-                for side, threats in d["threats"].items()
-            },
-            pawn_structure={
-                side: PawnFeatures.from_dict(pf) for side, pf in d["pawn_structure"].items()
-            },
+            threats={side: [Threat.from_dict(t) for t in threats] for side, threats in d["threats"].items()},
+            pawn_structure={side: PawnFeatures.from_dict(pf) for side, pf in d["pawn_structure"].items()},
             king_safety={side: KingSafety.from_dict(ks) for side, ks in d["king_safety"].items()},
             top_lines=[PVLine.from_dict(line) for line in d["top_lines"]],
             tactics=[TacticalMotif.from_dict(t) for t in d["tactics"]],
@@ -328,9 +317,7 @@ class ComparisonReport:
             "classification": self.classification,
             "nag": self.nag,
             "best_move_idea": self.best_move_idea,
-            "refutation_line": (
-                list(self.refutation_line) if self.refutation_line is not None else None
-            ),
+            "refutation_line": (list(self.refutation_line) if self.refutation_line is not None else None),
             "missed_tactics": [t.to_dict() for t in self.missed_tactics],
             "top_lines": [line.to_dict() for line in self.top_lines],
             "critical_moment": self.critical_moment,
@@ -370,15 +357,11 @@ def _require_key(data: dict[str, Any], key: str, expected_type: type, context: s
         raise CoachingValidationError(f"missing required field: {prefix}")
     value = data[key]
     if not isinstance(value, expected_type):
-        raise CoachingValidationError(
-            f"field {prefix}: expected {expected_type.__name__}, got {type(value).__name__}"
-        )
+        raise CoachingValidationError(f"field {prefix}: expected {expected_type.__name__}, got {type(value).__name__}")
     return value
 
 
-def _require_key_nullable(
-    data: dict[str, Any], key: str, expected_type: type, context: str = ""
-) -> Any:
+def _require_key_nullable(data: dict[str, Any], key: str, expected_type: type, context: str = "") -> Any:
     """Like _require_key but allows None."""
     prefix = f"{context}.{key}" if context else key
     if key not in data:
@@ -394,9 +377,7 @@ def _require_key_nullable(
 def _require_dict(data: Any, context: str) -> None:
     """Raise if *data* is not a dict."""
     if not isinstance(data, dict):
-        raise CoachingValidationError(
-            f"field {context}: expected object, got {type(data).__name__}"
-        )
+        raise CoachingValidationError(f"field {context}: expected object, got {type(data).__name__}")
 
 
 def _validate_eval_breakdown(data: Any, ctx: str = "eval_breakdown") -> None:
@@ -742,21 +723,15 @@ def parse_coaching_response(lines: list[str]) -> dict[str, Any]:
         envelope = json.loads(raw_text)
     except (json.JSONDecodeError, ValueError) as exc:
         preview = raw_text[:_RAW_TEXT_LIMIT]
-        raise CoachingParseError(
-            f"malformed JSON in coaching response: {exc}\n---\n{preview}"
-        ) from exc
+        raise CoachingParseError(f"malformed JSON in coaching response: {exc}\n---\n{preview}") from exc
 
     # --- validate envelope ------------------------------------------------
     if not isinstance(envelope, dict):
-        raise CoachingParseError(
-            f"expected JSON object in coaching response, got {type(envelope).__name__}"
-        )
+        raise CoachingParseError(f"expected JSON object in coaching response, got {type(envelope).__name__}")
 
     protocol = envelope.get("protocol")
     if protocol != "coaching":
-        raise CoachingParseError(
-            f"unexpected protocol field: expected 'coaching', got {protocol!r}"
-        )
+        raise CoachingParseError(f"unexpected protocol field: expected 'coaching', got {protocol!r}")
 
     if "data" not in envelope:
         raise CoachingParseError("coaching response envelope missing 'data' field")
@@ -806,20 +781,14 @@ def parse_coaching_envelope(lines: list[str]) -> dict[str, Any]:
         envelope = json.loads(raw_text)
     except (json.JSONDecodeError, ValueError) as exc:
         preview = raw_text[:_RAW_TEXT_LIMIT]
-        raise CoachingParseError(
-            f"malformed JSON in coaching response: {exc}\n---\n{preview}"
-        ) from exc
+        raise CoachingParseError(f"malformed JSON in coaching response: {exc}\n---\n{preview}") from exc
 
     if not isinstance(envelope, dict):
-        raise CoachingParseError(
-            f"expected JSON object in coaching response, got {type(envelope).__name__}"
-        )
+        raise CoachingParseError(f"expected JSON object in coaching response, got {type(envelope).__name__}")
 
     protocol = envelope.get("protocol")
     if protocol != "coaching":
-        raise CoachingParseError(
-            f"unexpected protocol field: expected 'coaching', got {protocol!r}"
-        )
+        raise CoachingParseError(f"unexpected protocol field: expected 'coaching', got {protocol!r}")
 
     return envelope
 
