@@ -300,9 +300,7 @@ def score_move(r: MoveResult, test: dict) -> float:
 # ---------------------------------------------------------------------------
 
 
-def run_position_tests_template(
-    engine: CoachingEngine, tests: list[dict]
-) -> list[PositionResult]:
+def run_position_tests_template(engine: CoachingEngine, tests: list[dict]) -> list[PositionResult]:
     results = []
     for test in tests:
         fen = test["fen"]
@@ -314,9 +312,7 @@ def run_position_tests_template(
         try:
             report = engine.get_position_report(fen, multipv=3)
             opening = lookup_fen(fen)
-            response = generate_position_coaching(
-                report, level=level, opening=opening
-            )
+            response = generate_position_coaching(report, level=level, opening=opening)
         except Exception as e:
             print(f"ERROR: {e}")
             results.append(
@@ -372,9 +368,7 @@ def run_position_tests_template(
     return results
 
 
-def run_move_tests_template(
-    engine: CoachingEngine, tests: list[dict]
-) -> list[MoveResult]:
+def run_move_tests_template(engine: CoachingEngine, tests: list[dict]) -> list[MoveResult]:
     results = []
     for test in tests:
         fen = test["fen"]
@@ -483,8 +477,7 @@ def run_move_tests_template(
         status = "✓" if r.score >= 0.8 else "△" if r.score >= 0.5 else "✗"
         cls_mark = "✓" if class_correct else "✗"
         print(
-            f"{status} {r.score:.0%} | class={classification}({cls_mark}) "
-            f"drop={eval_drop}cp | {latency:.2f}s",
+            f"{status} {r.score:.0%} | class={classification}({cls_mark}) drop={eval_drop}cp | {latency:.2f}s",
             end="",
         )
         if bad_found:
@@ -499,9 +492,7 @@ def run_move_tests_template(
 # ---------------------------------------------------------------------------
 
 
-def run_position_tests_llm(
-    engine: CoachingEngine, model_name: str, tests: list[dict]
-) -> list[PositionResult]:
+def run_position_tests_llm(engine: CoachingEngine, model_name: str, tests: list[dict]) -> list[PositionResult]:
     """Run position tests through the LLM coaching path."""
     from chess_coach.llm.ollama import OllamaProvider
     from chess_coach.prompts import build_rich_coaching_prompt
@@ -520,9 +511,7 @@ def run_position_tests_llm(
             report = engine.get_position_report(fen, multipv=3)
             opening = lookup_fen(fen)
             opening_label = f"{opening.eco} {opening.name}" if opening else None
-            prompt = build_rich_coaching_prompt(
-                report, level=level, opening_name=opening_label
-            )
+            prompt = build_rich_coaching_prompt(report, level=level, opening_name=opening_label)
             response = llm.generate(prompt, max_tokens=512, temperature=0.7)
         except Exception as e:
             print(f"ERROR: {e}")
@@ -602,7 +591,11 @@ def build_summary(summaries: list[EvalSummary]) -> str:
                 lines.append(f"    ✗ POS  {r.test_name}: {r.score:.0%} — {r.bad_keywords_found or r.keywords_missing}")
         for r in s.move_results:
             if r.score < 0.5:
-                reason = f"class={r.classification} (expected {r.expected_classes})" if not r.class_correct else str(r.bad_keywords_found)
+                reason = (
+                    f"class={r.classification} (expected {r.expected_classes})"
+                    if not r.class_correct
+                    else str(r.bad_keywords_found)
+                )
                 lines.append(f"    ✗ MOVE {r.test_name}: {r.score:.0%} — {reason}")
 
     lines.append("")
@@ -653,18 +646,13 @@ def main() -> None:
                 sum(r.score for r in summary.position_results) / len(summary.position_results), 3
             )
         if summary.move_results:
-            summary.move_score = round(
-                sum(r.score for r in summary.move_results) / len(summary.move_results), 3
-            )
+            summary.move_score = round(sum(r.score for r in summary.move_results) / len(summary.move_results), 3)
         n = len(summary.position_results) + len(summary.move_results)
         if n:
-            total = sum(r.score for r in summary.position_results) + sum(
-                r.score for r in summary.move_results
-            )
+            total = sum(r.score for r in summary.position_results) + sum(r.score for r in summary.move_results)
             summary.overall_score = round(total / n, 3)
         summary.total_latency_s = round(
-            sum(r.latency_s for r in summary.position_results)
-            + sum(r.latency_s for r in summary.move_results),
+            sum(r.latency_s for r in summary.position_results) + sum(r.latency_s for r in summary.move_results),
             1,
         )
         all_summaries.append(summary)
@@ -679,21 +667,16 @@ def main() -> None:
 
             if not args.moves_only:
                 print("\n  Position tests:")
-                llm_summary.position_results = run_position_tests_llm(
-                    engine, model, POSITION_TESTS
-                )
+                llm_summary.position_results = run_position_tests_llm(engine, model, POSITION_TESTS)
 
             # Compute scores
             if llm_summary.position_results:
                 llm_summary.position_score = round(
-                    sum(r.score for r in llm_summary.position_results)
-                    / len(llm_summary.position_results),
+                    sum(r.score for r in llm_summary.position_results) / len(llm_summary.position_results),
                     3,
                 )
             llm_summary.overall_score = llm_summary.position_score
-            llm_summary.total_latency_s = round(
-                sum(r.latency_s for r in llm_summary.position_results), 1
-            )
+            llm_summary.total_latency_s = round(sum(r.latency_s for r in llm_summary.position_results), 1)
             all_summaries.append(llm_summary)
 
     finally:

@@ -47,9 +47,11 @@ def main() -> None:
 
         print(f"Position: {fen}")
         print(f"Eval: {report_before.eval_cp}cp")
-        print(f"  material={bd.material} mobility={bd.mobility} "
-              f"king_safety={bd.king_safety} pawn_structure={bd.pawn_structure} "
-              f"tempo={bd.tempo} piece_bonuses={bd.piece_bonuses}")
+        print(
+            f"  material={bd.material} mobility={bd.mobility} "
+            f"king_safety={bd.king_safety} pawn_structure={bd.pawn_structure} "
+            f"tempo={bd.tempo} piece_bonuses={bd.piece_bonuses}"
+        )
         print()
 
         # Determine move to analyze
@@ -78,9 +80,11 @@ def main() -> None:
 
         print(f"After {move_san}: {fen_after}")
         print(f"Eval: {report_after.eval_cp}cp")
-        print(f"  material={bd2.material} mobility={bd2.mobility} "
-              f"king_safety={bd2.king_safety} pawn_structure={bd2.pawn_structure} "
-              f"tempo={bd2.tempo} piece_bonuses={bd2.piece_bonuses}")
+        print(
+            f"  material={bd2.material} mobility={bd2.mobility} "
+            f"king_safety={bd2.king_safety} pawn_structure={bd2.pawn_structure} "
+            f"tempo={bd2.tempo} piece_bonuses={bd2.piece_bonuses}"
+        )
         print()
 
         # Extract insight
@@ -95,8 +99,7 @@ def main() -> None:
             print("What this move changes:")
             for fc in insight.factor_changes:
                 arrow = "↑" if fc.improved else "↓"
-                print(f"  {arrow} {fc.label}: {fc.delta_cp:+d}cp "
-                      f"({fc.before_cp} → {fc.after_cp})")
+                print(f"  {arrow} {fc.label}: {fc.delta_cp:+d}cp ({fc.before_cp} → {fc.after_cp})")
             print()
 
         if insight.capture:
@@ -130,8 +133,10 @@ def main() -> None:
             print(f"Follow-up plan: {' → '.join(insight.plan)}")
             print()
 
-        print(f"Eval change: {insight.eval_before_cp}cp → {insight.eval_after_cp}cp "
-              f"({insight.eval_after_cp - insight.eval_before_cp:+d}cp)")
+        print(
+            f"Eval change: {insight.eval_before_cp}cp → {insight.eval_after_cp}cp "
+            f"({insight.eval_after_cp - insight.eval_before_cp:+d}cp)"
+        )
 
     finally:
         engine.stop()

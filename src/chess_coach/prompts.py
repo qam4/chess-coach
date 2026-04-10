@@ -144,6 +144,49 @@ def build_engine_move_explanation_prompt(
 
 
 # ---------------------------------------------------------------------------
+# V2 system prompt — grounding, pedagogy, and tone for rich coaching
+# ---------------------------------------------------------------------------
+
+SYSTEM_PROMPT_V2 = """\
+You are a warm, encouraging chess coach who teaches students how to think \
+about positions — not a computer that reports data. Your goal is to help \
+the student improve by building their understanding and pattern recognition.
+
+GROUNDING RULES (strict):
+- Only use information from the engine data sections provided below.
+- Never invent analysis, piece placements, or tactical ideas not in the data.
+- Never describe a piece as being on a square unless the data confirms it.
+- If the engine data is empty or incomplete, say so honestly.
+
+CHESS PRINCIPLES (use these to frame your advice):
+- Before you move, ask: "What does my opponent want?" Look for their threats.
+- Fight for the center — pieces in the center control more squares.
+- Develop pieces before attacking. Knights and bishops off the back rank first.
+- Develop with threats when possible — make your opponent react to you.
+- Castle early to protect your king and connect your rooks.
+- Don't move the same piece twice in the opening without good reason.
+- Every piece needs a defender. Before moving, check: is anything hanging?
+- Trade pieces when you're ahead in material. Simplify to win.
+- In the endgame, activate your king — it becomes a fighting piece.
+- Passed pawns must be pushed. They're your ticket to a new queen.
+
+PEDAGOGY:
+- Teach the student how to think about the position (e.g., "ask yourself: \
+is my king safe?" or "before moving, check if any of your pieces are \
+undefended").
+- Connect advice to the chess principles above — help the student build \
+habits they can apply in every game.
+- Acknowledge good aspects of the student's position before pointing out \
+problems, when applicable.
+
+TONE:
+- Be warm, supportive, and encouraging — like a real coach, not a machine.
+- Use positive framing: focus on what the student can do, not just what's wrong.
+- Give concrete advice referencing specific squares and pieces rather than \
+generic platitudes.
+"""
+
+# ---------------------------------------------------------------------------
 # Rich prompt templates for coaching protocol data
 # ---------------------------------------------------------------------------
 
@@ -164,6 +207,37 @@ Overall evaluation: {eval_cp} centipawns
 {critical_section}\
 Based on the data above, explain the position to the student. Cover the most \
 important features first. Keep your response concise (under 200 words).\
+"""
+
+RICH_COACHING_PROMPT_V2 = """\
+{system}
+
+Student level: {level}
+
+You are given a structured engine analysis of a chess position. Use ONLY the \
+data below — do not add your own analysis or invent ideas not present here.
+
+Position (FEN): {fen}
+Overall evaluation: {eval_cp} centipawns
+
+{sections}
+
+COACHING INSTRUCTIONS:
+- Prioritize: Focus on the 1-2 most important features of this position. \
+Do not try to cover everything.
+- Explain why: For each feature you highlight, explain why it matters — \
+what are the consequences? What could happen if the student ignores it?
+- Actionable advice: Suggest a concrete plan or idea the student can act on \
+(e.g., "consider castling to get your king safe" rather than "king safety is low").
+- Teach thinking patterns: Help the student learn how to evaluate positions \
+themselves (e.g., "ask yourself: are all my pieces defended?").
+- Connect to principles: Tie your advice to general chess principles the \
+student can reuse in future games.
+- Acknowledge strengths: If the student's position has good aspects, mention \
+them before discussing problems.
+{level_instructions}\
+{critical_section}\
+Keep your response concise (under 200 words).\
 """
 
 RICH_MOVE_EVALUATION_PROMPT = """\
@@ -192,6 +266,43 @@ What the best move achieves: {best_move_idea}
 {critical_section}\
 Based on the data above, explain what the student missed and why the best \
 move is stronger. Keep your response concise (under 100 words).\
+"""
+
+RICH_MOVE_EVALUATION_PROMPT_V2 = """\
+{system}
+
+Student level: {level}
+
+You are given a structured comparison of the student's move against the \
+engine's best move. Use ONLY the data below — do not re-analyze the position \
+or add ideas not present here.
+
+Position (FEN): {fen}
+
+Student's move: {user_move}
+Student's move evaluation: {user_eval_cp} centipawns
+Best move: {best_move}
+Best move evaluation: {best_eval_cp} centipawns
+Evaluation drop: {eval_drop_cp} centipawns
+Classification: {classification}
+Annotation: {nag}
+
+What the best move achieves: {best_move_idea}
+
+{sections}
+
+COACHING INSTRUCTIONS:
+- Constructive framing: Acknowledge what the student may have been trying to \
+do before explaining what was missed.
+- Explain what the move failed to address: What did the student's move allow \
+the opponent to do, or what problem did it leave unsolved?
+- Explain why the best move is stronger: What does it achieve or prevent, in \
+concrete terms (specific squares, pieces, threats)?
+- Stay grounded: Only reference facts present in the data above. Do not \
+invent analysis, piece placements, or tactical ideas not in the data.
+{level_instructions}\
+{critical_section}\
+Keep your response concise (under 100 words).\
 """
 
 
@@ -316,12 +427,53 @@ def _format_top_lines(report: PositionReport) -> str:
     return "\n".join(lines)
 
 
+def _build_level_instructions(level: str) -> str:
+    """Build level-adaptive coaching instructions.
+
+    Returns a string of additional instructions tailored to the student's
+    skill level, to be inserted into the prompt template.
+
+    Args:
+        level: Student level (``"beginner"``, ``"intermediate"``, or
+            ``"advanced"``).
+
+    Returns:
+        A string with level-specific instructions (may be empty for advanced).
+    """
+    parts: list[str] = []
+
+    # Beginner-specific: simple language, one idea, avoid notation
+    if level == "beginner":
+        parts.append(
+            "- Beginner student: Use simple, everyday language. Focus on ONE "
+            "main idea at a time. Avoid chess notation beyond basic piece "
+            "names (king, queen, rook, bishop, knight, pawn) and simple "
+            "square references."
+        )
+
+    # Beginner + intermediate: avoid engine jargon
+    if level in ("beginner", "intermediate"):
+        parts.append(
+            "- Avoid engine jargon: Do not mention centipawns, PV lines, "
+            "depth numbers, or other engine-specific terminology. Translate "
+            "engine concepts into plain language the student can understand."
+        )
+
+    if not parts:
+        return ""
+    return "\n".join(parts) + "\n"
+
+
 def build_rich_coaching_prompt(
     report: PositionReport,
     level: str = "intermediate",
     opening_name: str | None = None,
 ) -> str:
     """Build a rich coaching prompt from a PositionReport.
+
+    Uses ``SYSTEM_PROMPT_V2`` with grounding, pedagogy, and tone instructions,
+    and ``RICH_COACHING_PROMPT_V2`` with prioritization, causal explanation,
+    actionable advice, and level-adaptive instructions.
 
     Formats each section of the report conditionally — sections with no data
     (empty threats, no hanging pieces, no tactics, empty threat map) are
@@ -334,6 +486,7 @@ def build_rich_coaching_prompt(
         report: The structured position report from the engine.
         level: Student level (``"beginner"``, ``"intermediate"``, or
             ``"advanced"``).
+        opening_name: Optional opening name to include in the prompt.
 
     Returns:
         The complete prompt string ready to send to the LLM.
@@ -380,12 +533,16 @@ def build_rich_coaching_prompt(
     else:
         critical_section = ""
 
-    return RICH_COACHING_PROMPT.format(
-        system=SYSTEM_PROMPT,
+    # Level-adaptive instructions
+    level_instructions = _build_level_instructions(level)
+
+    return RICH_COACHING_PROMPT_V2.format(
+        system=SYSTEM_PROMPT_V2,
         level=level,
         fen=report.fen,
         eval_cp=report.eval_cp,
         sections="\n\n".join(sections),
+        level_instructions=level_instructions,
         critical_section=critical_section,
     )
 
@@ -421,6 +578,11 @@ def _format_comparison_top_lines(report: ComparisonReport) -> str:
 
 def build_rich_move_evaluation_prompt(report: ComparisonReport, level: str = "intermediate") -> str:
     """Build a rich move evaluation prompt from a ComparisonReport.
+
+    Uses ``SYSTEM_PROMPT_V2`` with grounding, pedagogy, and tone instructions,
+    and ``RICH_MOVE_EVALUATION_PROMPT_V2`` with constructive framing, concrete
+    explanation of what the move failed to address, and why the best move is
+    stronger.
 
     Formats each section of the comparison report conditionally — missed
     tactics are omitted when empty, and the refutation line is omitted when
@@ -462,8 +624,11 @@ def build_rich_move_evaluation_prompt(report: ComparisonReport, level: str = "in
     else:
         critical_section = ""
 
-    return RICH_MOVE_EVALUATION_PROMPT.format(
-        system=SYSTEM_PROMPT,
+    # Level-adaptive instructions
+    level_instructions = _build_level_instructions(level)
+
+    return RICH_MOVE_EVALUATION_PROMPT_V2.format(
+        system=SYSTEM_PROMPT_V2,
         level=level,
         fen=report.fen,
         user_move=report.user_move,
@@ -475,5 +640,6 @@ def build_rich_move_evaluation_prompt(report: ComparisonReport, level: str = "in
         nag=report.nag,
         best_move_idea=report.best_move_idea,
         sections="\n\n".join(sections),
+        level_instructions=level_instructions,
         critical_section=critical_section,
     )

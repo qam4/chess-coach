@@ -496,110 +496,30 @@ def _threats_text(report: PositionReport) -> str | None:
 
 
 def _threats_and_tactics_text(report: PositionReport) -> str | None:
-    """Merge threats and tactics into one section, deduplicating.
+    """Present tactics and threats directly from engine data.
 
-    Side-aware: distinguishes between "your opportunity" and "opponent's
-    threat" based on which side's piece executes the tactic.
-    Deduplicates: if the same piece appears in multiple tactics (e.g.,
-    Ne2 fork + Ne2 back rank), only show the most important one.
+    Simple data formatter — no deduplication, no side-awareness logic.
+    The LLM handles nuance; this is just the fallback.
     """
-    try:
-        board = chess.Board(report.fen)
-        side_to_move = board.turn  # chess.WHITE or chess.BLACK
-    except ValueError:
-        board = None
-        side_to_move = chess.WHITE
+    items: list[str] = []
 
-    opportunities: list[str] = []  # tactics for the side to move
-    warnings: list[str] = []  # threats from the opponent
-    seen_squares: set[str] = set()  # dedup by source square
-    seen_types: set[str] = set()
-
-    # Sort tactics: PV first (most important), then non-PV
-    pv_tactics = [t for t in report.tactics if t.in_pv]
-    non_pv_tactics = [t for t in report.tactics if not t.in_pv]
-
-    for t in pv_tactics + non_pv_tactics:
-        seen_types.add(t.type.lower())
-        if "check" in (t.description or "").lower():
-            seen_types.add("check")
-
-        # Strip engine jargon and label duplication from description
-        desc = t.description or ""
-        desc = desc.replace("in PV: ", "").replace("In PV: ", "")
-        desc = desc.replace(" in PV", "").replace(" In PV", "")
+    # Tactics
+    for t in report.tactics:
         label = t.type.replace("_", " ").capitalize()
-        # Remove label duplication: "Discovered attack: Discovered attack: ..."
-        prefix = f"{label}: "
-        if desc.startswith(prefix):
-            desc = desc[len(prefix) :]
-        prefix_lower = f"{label.lower()}: "
-        if desc.lower().startswith(prefix_lower):
-            desc = desc[len(prefix_lower) :]
-
-        # Determine whose tactic this is by checking the first piece
-        is_own_tactic = True
-        if board and t.squares:
-            try:
-                sq = chess.parse_square(t.squares[0])
-                piece = board.piece_at(sq)
-                if piece is not None:
-                    is_own_tactic = piece.color == side_to_move
-                elif t.in_pv:
-                    is_own_tactic = True
-            except ValueError:
-                pass
-
-        # Dedup by source square — keep only the first (most important) tactic
-        # per piece. E.g., Ne2 fork + Ne2 back rank → just show the fork.
-        source_sq = t.squares[0] if t.squares else ""
-        if source_sq in seen_squares:
-            continue
-        seen_squares.add(source_sq)
-
-        # If we already have PV tactics, skip non-PV ones (noise reduction)
-        if not t.in_pv and (opportunities or warnings):
-            continue
-
-        if is_own_tactic:
-            if t.in_pv:
-                opportunities.append(f"{label} available: {desc}")
-            else:
-                opportunities.append(f"{label}: {desc}")
+        desc = t.description or ""
+        if desc:
+            items.append(f"{label}: {desc}")
         else:
-            if t.in_pv:
-                warnings.append(f"Watch out — {label.lower()}: {desc}")
-            else:
-                warnings.append(f"Be careful: {label.lower()}: {desc}")
-    # Already handled above — PV and non-PV are both in report.tactics
+            items.append(f"{label} detected.")
 
-    # Add threats from the threats dict (only if no PV tactics exist)
-    if not opportunities and not warnings:
-        for side_key, side_name in [("white", "White"), ("black", "Black")]:
-            is_opponent = (side_key == "white") != (side_to_move == chess.WHITE)
-            for threat in report.threats.get(side_key, []):
-                if threat.type.lower() in seen_types:
-                    continue
-                piece_name = ""
-                if board:
-                    piece_name = _piece_name_at(board, threat.source_square) or ""
-                source = f"{side_name}'s {piece_name} on {threat.source_square}" if piece_name else side_name
-                if threat.type == "check" and threat.target_squares:
-                    via = ", ".join(threat.target_squares)
-                    text = f"{source} can give check on {via}."
-                elif threat.type == "capture" and threat.target_squares:
-                    targets = ", ".join(threat.target_squares)
-                    text = f"{source} threatens to capture on {targets}."
-                elif threat.description:
-                    text = f"{source}: {threat.description}"
-                else:
-                    continue
-                if is_opponent:
-                    warnings.append(text)
-                else:
-                    opportunities.append(text)
-
-    items = opportunities + warnings
+    # Threats
+    for side_key, side_name in [("white", "White"), ("black", "Black")]:
+        for threat in report.threats.get(side_key, []):
+            if threat.description:
+                items.append(f"{side_name}: {threat.description}")
+            elif threat.target_squares:
+                targets = ", ".join(threat.target_squares)
+                items.append(f"{side_name} threatens {targets} ({threat.type.replace('_', ' ')}).")
 
     if not items:
         return None
@@ -627,57 +547,23 @@ def _piece_name_at(board: chess.Board, square_name: str) -> str | None:
 
 
 def _king_safety_text(report: PositionReport, level: str) -> str | None:
-    """Describe king safety concerns using board state, not engine descriptions.
+    """Present engine king safety scores directly.
 
-    Suppresses warnings in the early opening (first ~8 moves) when not
-    castling is normal. Also suppresses castling advice in endgames where
-    it's irrelevant.
+    Simple data formatter — no move-number suppression, no board-state
+    inference. Only reports sides with significant scores (< -10).
     """
-    try:
-        board = chess.Board(report.fen)
-    except ValueError:
-        return None
+    parts: list[str] = []
 
-    # Suppress king safety advice in endgames (few pieces left).
-    # Castling and king exposure are irrelevant when there's no attack.
-    total_pieces = len(board.piece_map())
-    if total_pieces <= 6:
-        return None
-
-    move_number = board.fullmove_number
-    parts = []
-
-    for color, side_name in [(chess.WHITE, "White"), (chess.BLACK, "Black")]:
-        ks = report.king_safety.get(side_name.lower())
-        if not ks or ks.score >= -10:
+    for side_name in ("white", "black"):
+        ks = report.king_safety.get(side_name)
+        if not ks:
             continue
-
-        king_sq = board.king(color)
-        if king_sq is None:
-            continue
-
-        has_castling = board.has_castling_rights(color)
-        king_rank = chess.square_rank(king_sq)
-        home_rank = 0 if color == chess.WHITE else 7
-        is_on_home_rank = king_rank == home_rank
-
-        # Very early opening (moves 1-3): don't nag about not castling yet.
-        # By move 4+, castling advice becomes relevant — the engine's top
-        # lines often include O-O by this point.
-        if move_number <= 3 and is_on_home_rank and has_castling:
-            continue
-
-        # Build a context-aware description
-        if not is_on_home_rank:
-            parts.append(f"{side_name}'s king has been displaced to {chess.square_name(king_sq)} — be careful.")
-        elif has_castling:
-            parts.append(f"{side_name}'s king is still in the center. Consider castling soon.")
-        elif not has_castling and is_on_home_rank:
-            # Lost castling rights but king is still on home rank
-            parts.append(f"{side_name}'s king can no longer castle — keep it protected.")
-        elif ks.score < -30:
-            # Significant danger — use a stronger warning
-            parts.append(f"{side_name}'s king is exposed and vulnerable.")
+        if ks.score < -10:
+            display = side_name.capitalize()
+            if ks.description:
+                parts.append(f"{display}'s king safety: {ks.description} (score: {ks.score}).")
+            else:
+                parts.append(f"{display}'s king safety is concerning (score: {ks.score}).")
 
     if not parts:
         return None
@@ -721,50 +607,19 @@ def _tactics_text(report: PositionReport) -> str | None:
 
 
 def _best_move_text(report: PositionReport) -> str | None:
-    """Position-aware advice without revealing the specific best move.
+    """Present the top line theme if available.
 
-    The hint button is for concrete move suggestions. The coaching text
-    should focus on what to think about, not what to play.
+    Simple data formatter — no position-aware plan inference.
+    If the engine provided a theme for the top line, present it.
+    Otherwise return None.
     """
-    if not report.top_lines or not report.top_lines[0].moves:
+    if not report.top_lines:
         return None
 
-    try:
-        board = chess.Board(report.fen)
-        move = chess.Move.from_uci(report.top_lines[0].moves[0])
-        piece = board.piece_at(move.from_square)
-
-        # Give positional guidance based on what the best move does
-        if board.san(move) in ("O-O", "O-O-O"):
-            return "Consider castling to get your king to safety."
-
-        # King moves in endgames — king activity is key
-        total_pieces = len(board.piece_map())
-        if piece and piece.piece_type == chess.KING and total_pieces <= 10:
-            return "Activate your king — in the endgame, the king is a strong piece."
-
-        if piece and piece.piece_type in (chess.KNIGHT, chess.BISHOP):
-            back_rank = 0 if board.turn == chess.WHITE else 7
-            if chess.square_rank(move.from_square) == back_rank:
-                return "Develop your pieces and fight for the center."
-
-        # Pawn moves toward the center in the opening
-        if piece and piece.piece_type == chess.PAWN:
-            target_file = chess.square_file(move.to_square)
-            if target_file in (2, 3, 4, 5) and board.fullmove_number <= 6:
-                return "Control the center with your pawns and develop your pieces."
-
-        if board.is_capture(move):
-            return "There's a tactical opportunity — look for captures."
-
-        # Check if there are hanging pieces to address
-        side = "white" if board.turn == chess.WHITE else "black"
-        if report.hanging_pieces.get(side):
-            return "You have an undefended piece — address that first."
-
-        return None
-    except (ValueError, chess.InvalidMoveError):
-        return None
+    theme = report.top_lines[0].theme
+    if theme:
+        return f"The engine suggests: {theme}."
+    return None
 
 
 def _alternative_moves_text(report: PositionReport) -> str | None:

@@ -27,7 +27,7 @@ llm:
   # Provider: "ollama" or "openai_compat"
   provider: "ollama"
   # Model name (as known by the provider)
-  model: "qwen3:1.7b"
+  model: "llama3.2:3b"
   # Base URL for the LLM API
   base_url: "http://localhost:11434"
   # Max tokens for the coaching response

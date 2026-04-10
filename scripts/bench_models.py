@@ -1,4 +1,5 @@
 """Benchmark LLM models on the same coaching prompt."""
+
 from chess_coach.engine import CoachingEngine
 from chess_coach.prompts import build_rich_coaching_prompt
 from chess_coach.llm.ollama import OllamaProvider
@@ -27,7 +28,7 @@ for model in models:
     t0 = time.perf_counter()
     result = llm.generate(prompt, max_tokens=512, temperature=0.7)
     t1 = time.perf_counter()
-    print(f"  Time: {t1-t0:.1f}s | Output: {len(result)} chars")
+    print(f"  Time: {t1 - t0:.1f}s | Output: {len(result)} chars")
     print(f"  Response:\n{result}\n")
 
 engine.stop()

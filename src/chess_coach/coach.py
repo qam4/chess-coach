@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 import chess
 
 from chess_coach.analyzer import analyze_position, format_analysis_for_llm
+from chess_coach.coaching_templates import generate_move_coaching, generate_position_coaching
 from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol, UciEngine
 from chess_coach.llm.base import LLMProvider
 from chess_coach.models import PositionReport
@@ -252,11 +253,17 @@ class Coach:
             )
             t2 = time.perf_counter()
             _progress(f"LLM generating (prompt {len(prompt)} chars)...")
-            coaching_text = self.llm.generate(
-                prompt,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-            )
+            try:
+                coaching_text = self.llm.generate(
+                    prompt,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                )
+                if not coaching_text.strip():
+                    raise ValueError("Empty LLM response")
+            except Exception as e:
+                logger.warning("LLM failed for position coaching: %s — falling back to templates", e)
+                coaching_text = generate_position_coaching(report, level=use_level)
             t3 = time.perf_counter()
             logger.info("LLM generation took %.1fs", t3 - t2)
             logger.info("Total explain took %.1fs", t3 - t0)
@@ -331,11 +338,18 @@ class Coach:
         )
         t2 = time.perf_counter()
         _progress(f"LLM generating (prompt {len(prompt)} chars)...")
-        coaching_text = self.llm.generate(
-            prompt,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-        )
+        try:
+            coaching_text = self.llm.generate(
+                prompt,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            if not coaching_text.strip():
+                raise ValueError("Empty LLM response")
+        except Exception as e:
+            logger.warning("LLM failed for position coaching (UCI path): %s — falling back to templates", e)
+            # UCI path doesn't have a PositionReport, so use the analysis_text as-is
+            coaching_text = analysis_text
         t3 = time.perf_counter()
         logger.info("LLM generation took %.1fs", t3 - t2)
         logger.info("Total explain took %.1fs", t3 - t0)
@@ -460,9 +474,9 @@ class Coach:
             prompt = build_rich_move_evaluation_prompt(report, level=self.level)
 
             if self.template_only:
-                from chess_coach.coaching_templates import generate_move_coaching
+                from chess_coach.coaching_templates import generate_move_coaching as _gen_move_coaching_tmpl
 
-                feedback = generate_move_coaching(report, level=self.level)
+                feedback = _gen_move_coaching_tmpl(report, level=self.level)
                 _trace(
                     "eval_template",
                     f"Template feedback: {report.classification}",
@@ -478,11 +492,17 @@ class Coach:
                     llm_prompt=prompt,
                 )
                 t2 = time.perf_counter()
-                feedback = self.llm.generate(
-                    prompt,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                )
+                try:
+                    feedback = self.llm.generate(
+                        prompt,
+                        max_tokens=self.max_tokens,
+                        temperature=self.temperature,
+                    )
+                    if not feedback.strip():
+                        raise ValueError("Empty LLM response")
+                except Exception as e:
+                    logger.warning("LLM failed for move evaluation (coaching path): %s — falling back to templates", e)
+                    feedback = generate_move_coaching(report, level=self.level)
                 t3 = time.perf_counter()
                 logger.info("evaluate_move: LLM feedback took %.1fs", t3 - t2)
                 logger.info("evaluate_move: total %.1fs", t3 - t0)
@@ -642,11 +662,17 @@ class Coach:
                 llm_prompt=prompt,
             )
             t4 = time.perf_counter()
-            feedback = self.llm.generate(
-                prompt,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-            )
+            try:
+                feedback = self.llm.generate(
+                    prompt,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                )
+                if not feedback.strip():
+                    raise ValueError("Empty LLM response")
+            except Exception as e:
+                logger.warning("LLM failed for move evaluation (UCI path): %s — falling back to empty", e)
+                feedback = ""
             t5 = time.perf_counter()
             logger.info("evaluate_move: LLM feedback took %.1fs", t5 - t4)
             logger.info("evaluate_move: total %.1fs", t5 - t0)
@@ -785,16 +811,22 @@ class Coach:
 
             # Build user feedback from comparison report
             if self.template_only:
-                from chess_coach.coaching_templates import generate_move_coaching
+                from chess_coach.coaching_templates import generate_move_coaching as _gen_move_coaching
 
-                user_feedback = generate_move_coaching(comparison, level=self.level)
+                user_feedback = _gen_move_coaching(comparison, level=self.level)
             else:
                 user_prompt = build_rich_move_evaluation_prompt(comparison, level=self.level)
-                user_feedback = self.llm.generate(
-                    user_prompt,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                )
+                try:
+                    user_feedback = self.llm.generate(
+                        user_prompt,
+                        max_tokens=self.max_tokens,
+                        temperature=self.temperature,
+                    )
+                    if not user_feedback.strip():
+                        raise ValueError("Empty LLM response")
+                except Exception as e:
+                    logger.warning("LLM failed for user feedback in play_move: %s — falling back to templates", e)
+                    user_feedback = generate_move_coaching(comparison, level=self.level)
             t_user_llm = time.perf_counter()
 
             # 2. Push user's move to get new FEN
@@ -863,15 +895,21 @@ class Coach:
                 opening_name=opening_label,
             )
             if self.template_only:
-                from chess_coach.coaching_templates import generate_position_coaching
+                from chess_coach.coaching_templates import generate_position_coaching as _gen_pos_coaching
 
-                coaching_text = generate_position_coaching(pos_report, level=self.level, opening=opening)
+                coaching_text = _gen_pos_coaching(pos_report, level=self.level, opening=opening)
             else:
-                coaching_text = self.llm.generate(
-                    coaching_prompt,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                )
+                try:
+                    coaching_text = self.llm.generate(
+                        coaching_prompt,
+                        max_tokens=self.max_tokens,
+                        temperature=self.temperature,
+                    )
+                    if not coaching_text.strip():
+                        raise ValueError("Empty LLM response")
+                except Exception as e:
+                    logger.warning("LLM failed for position coaching in play_move: %s — falling back to templates", e)
+                    coaching_text = generate_position_coaching(pos_report, level=self.level, opening=opening)
             t_explain = time.perf_counter()
 
             # Save position report for next turn's breakdown diff
