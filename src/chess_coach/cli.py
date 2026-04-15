@@ -342,16 +342,57 @@ def check(ctx: click.Context) -> None:
         base_url=llm_cfg.get("base_url", "http://localhost:11434"),
         timeout=float(llm_cfg.get("timeout", 300)),
     )
-    if llm.is_available():
+    server_ok, model_ok = llm.check_status()
+    if not server_ok:
+        click.echo("  ✗ Not reachable (is Ollama running?)")
+    elif not model_ok:
+        click.echo("  ✓ Server reachable")
+        click.echo(f"  ✗ Model '{llm_cfg['model']}' not found locally")
+        click.echo(f"  Pulling {llm_cfg['model']}...")
+
+        def _progress(status: str, completed: int, total: int) -> None:
+            if total > 0:
+                pct = completed * 100 // total
+                click.echo(f"\r  {status}: {pct}%", nl=False)
+            elif status:
+                click.echo(f"\r  {status}", nl=False)
+
+        from chess_coach.llm.ollama import OllamaProvider
+
+        assert isinstance(llm, OllamaProvider)
+        pulled = llm.pull_model(progress_callback=_progress)
+        click.echo()  # newline after progress
+        if pulled:
+            click.echo("  ✓ Model pulled successfully")
+            model_ok = True
+        else:
+            click.echo(f"  ✗ Failed to pull model '{llm_cfg['model']}'")
+            # Show available local models so the user can fix config.yaml
+            try:
+                from chess_coach.llm.ollama import OllamaProvider
+
+                resp = llm._client.get("/api/tags")  # type: ignore[union-attr]
+                if resp.status_code == 200:
+                    models = [m["name"] for m in resp.json().get("models", [])]
+                    if models:
+                        click.echo("  Available local models:")
+                        for m in models:
+                            click.echo(f"    - {m}")
+                        click.echo("  Update 'model' in config.yaml to one of these, or fix the model name and retry.")
+                    else:
+                        click.echo("  No models found locally. Run: ollama pull <model-name>")
+            except Exception:
+                pass
+    else:
         click.echo("  ✓ Model available")
+
+    if model_ok:
         click.echo("  Running smoke test (short generation)...")
         ok, msg = llm.smoke_test()
         if ok:
             click.echo(f"  ✓ Generation works: {msg}")
         else:
             click.echo(f"  ✗ Generation failed: {msg}")
-    else:
-        click.echo("  ✗ Not reachable (is Ollama running?)")
 
 
 @cli.command()

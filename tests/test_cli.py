@@ -89,7 +89,7 @@ class TestCheckCommand:
         config_file: Path,
     ) -> None:
         mock_llm = MagicMock()
-        mock_llm.is_available.return_value = True
+        mock_llm.check_status.return_value = (True, True)
         mock_llm.smoke_test.return_value = (True, "Hello!")
         mock_create.return_value = mock_llm
 
@@ -114,7 +114,7 @@ class TestCheckCommand:
         config_file: Path,
     ) -> None:
         mock_llm = MagicMock()
-        mock_llm.is_available.return_value = True
+        mock_llm.check_status.return_value = (True, True)
         mock_llm.smoke_test.return_value = (True, "Hello!")
         mock_create.return_value = mock_llm
 
@@ -130,7 +130,7 @@ class TestCheckCommand:
         config_file: Path,
     ) -> None:
         mock_llm = MagicMock()
-        mock_llm.is_available.return_value = False
+        mock_llm.check_status.return_value = (False, False)
         mock_create.return_value = mock_llm
 
         result = runner.invoke(cli, ["--config", str(config_file), "check"])

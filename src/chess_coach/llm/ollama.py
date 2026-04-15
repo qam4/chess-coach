@@ -97,3 +97,54 @@ class OllamaProvider(LLMProvider):
             return any(self.model in m for m in models)
         except (httpx.HTTPError, KeyError):
             return False
+
+    def check_status(self) -> tuple[bool, bool]:
+        """Check server reachability and model availability separately."""
+        try:
+            resp = self._client.get("/api/tags")
+            if resp.status_code != 200:
+                return False, False
+            models = [m["name"] for m in resp.json().get("models", [])]
+            model_found = any(self.model in m for m in models)
+            return True, model_found
+        except (httpx.HTTPError, KeyError):
+            return False, False
+
+    def pull_model(self, progress_callback: object = None) -> bool:
+        """Pull the configured model from Ollama.
+
+        Args:
+            progress_callback: Optional callable(status: str, completed: int, total: int)
+                for reporting download progress.
+
+        Returns:
+            True if the model was pulled successfully.
+        """
+        try:
+            with self._client.stream(
+                "POST",
+                "/api/pull",
+                json={"model": self.model, "stream": True},
+                timeout=None,
+            ) as resp:
+                resp.raise_for_status()
+                import json as _json
+
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    data = _json.loads(line)
+                    status = data.get("status", "")
+                    if progress_callback is not None and callable(progress_callback):
+                        progress_callback(
+                            status,
+                            data.get("completed", 0),
+                            data.get("total", 0),
+                        )
+                    if "error" in data:
+                        logger.error("Ollama pull error: %s", data["error"])
+                        return False
+            return True
+        except (httpx.HTTPError, Exception) as exc:
+            logger.error("Ollama pull failed: %s", exc)
+            return False

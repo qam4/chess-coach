@@ -32,6 +32,16 @@ class LLMProvider(ABC):
         """Check if the provider is reachable and the model is loaded."""
         ...
 
+    def check_status(self) -> tuple[bool, bool]:
+        """Check server reachability and model availability separately.
+
+        Returns:
+            (server_reachable, model_available) — both booleans.
+        """
+        # Default implementation: can only report combined status.
+        available = self.is_available()
+        return available, available
+
     def smoke_test(self) -> tuple[bool, str]:
         """Quick generation test to verify the model can actually respond.
 
