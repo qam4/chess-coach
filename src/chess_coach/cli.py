@@ -371,7 +371,7 @@ def check(ctx: click.Context) -> None:
             try:
                 from chess_coach.llm.ollama import OllamaProvider
 
-                resp = llm._client.get("/api/tags")  # type: ignore[union-attr]
+                resp = llm._client.get("/api/tags")
                 if resp.status_code == 200:
                     models = [m["name"] for m in resp.json().get("models", [])]
                     if models:

@@ -76,15 +76,7 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
 ## Environment / tooling
 
-- **Broken repo `.venv`.** The checked-out `.venv/` has no pip and no
-  test deps; work is happening in the tox `py3` env (with an editable
-  install added for the new `eval` package). Clean up or document the
-  intended dev-env setup.
-
-- **`typecheck` tox env is missing `rich`.** Running `mypy src` in the
-  tox typecheck env reports `import-not-found` for `rich.console` /
-  `rich.panel` in `cli.py`, which cascades into a spurious "unused
-  type: ignore" at `cli.py:374`. Pre-existing, not a code defect —
-  add `rich` to the typecheck env's deps (or mypy overrides) so the
-  whole-package `mypy src` is clean. The eval package itself is
-  rich-free and type-checks clean.
+_(Cleared — the repo migrated from tox to [uv](https://docs.astral.sh/uv/).
+`uv sync` builds one `.venv` with runtime + dev deps, so the previously
+broken `.venv` and the `rich`-less typecheck env are both resolved;
+`uv run mypy src` is clean. CI now runs on uv too.)_

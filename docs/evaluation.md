@@ -158,7 +158,7 @@ disagrees with the engine. Exits non-zero on any mismatch.
 ## Running the tests
 
 ```bash
-tox -e py3        # or: .tox/py3/Scripts/python -m pytest tests/test_eval_*.py
+uv run pytest tests/test_eval_*.py    # or just: uv run pytest
 ```
 
 The harness is covered by property-based and unit tests plus

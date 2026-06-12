@@ -108,14 +108,17 @@ it falls back to standard UCI analysis.
 
 ## Development
 
+This project uses [uv](https://docs.astral.sh/uv/) for environment and
+dependency management.
+
 ```bash
-pip install -e ".[dev]"
+uv sync                              # create .venv with runtime + dev deps
 
 # Run checks
-pytest
-mypy src/
-ruff check src/ tests/
-ruff format --check src/ tests/
+uv run pytest
+uv run mypy src/
+uv run ruff check src/ tests/
+uv run ruff format --check src/ tests/
 ```
 
 CI runs on GitHub Actions (Python 3.11 + 3.12) on every push to main.
