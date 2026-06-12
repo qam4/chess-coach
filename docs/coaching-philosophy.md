@@ -1,5 +1,12 @@
 # Coaching Philosophy
 
+> **Scope note.** This doc is the *tactical* philosophy for
+> position-level advice — the "concrete way to do it here" end of the
+> teaching bridge. It predates and sits *under* the project north star
+> in [`../VISION.md`](../VISION.md), which frames chess-coach as a
+> teacher (principle → concrete sound action → progress → level-adaptive),
+> not a position analyst. Read VISION.md first for the why.
+
 Design principles for chess-coach's advice quality, derived from
 real-world testing on mobile (March 2026).
 

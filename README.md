@@ -5,6 +5,11 @@ language explanations. Instead of just showing you the best move, it explains
 *why* — what's happening in the position, what the plan is, and what to look
 for.
 
+> **North star:** chess-coach aims to be a *teacher* for a player who
+> wants to improve — not a position analyst. When you're stuck, it
+> names what to focus on and gives a concrete, sound way to do it at
+> your level. See [`VISION.md`](VISION.md).
+
 ## How it works
 
 ```

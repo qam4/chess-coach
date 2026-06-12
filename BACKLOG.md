@@ -12,6 +12,33 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
 ## Coaching-eval harness
 
+- **Teaching-oriented `rubric.v2` (north-star alignment).** `rubric.v1`
+  is analyst-era: it rewards position triage, and its "use only engine
+  data" grounding can *penalize* correct teaching (opening plans, named
+  principles, transferable ideas) because that knowledge isn't in the
+  engine report. Per `VISION.md`, good coaching is a *bridge*: name the
+  principle/theme + a concrete sound action. A v2 rubric should reward
+  that bridge — but only once we have a way to keep the "what to focus
+  on" half grounded (see pedagogy layer below), so the judge isn't just
+  trusting the model's chess.
+
+- **Pedagogy / curriculum layer (the other scaffold).** The engine
+  grounds *what's true about the position*; nothing yet grounds *what's
+  worth teaching and how* (the five principles, named patterns, opening
+  plans). This is the missing scaffold for end 1 of the teaching bridge
+  AND the standard a teaching-eval would grade against. Likely shape: a
+  curated knowledge resource (principles keyed to position features,
+  plans keyed to ECO codes) injected into both the coach prompt and the
+  judge prompt. Connects to IDEAS.md "Structured Learning Path".
+
+- **Who calibrates teaching quality?** Layer 3 assumes a human who can
+  rate coaching. The product owner is the *student*, not a chess expert,
+  so they can't be that human for the teaching axis. Calibration needs
+  chess authority (strong player / instructional canon / frontier model
+  as proxy). True-north validation is **student outcomes** (does the
+  player improve), not expert prose-rating — a much bigger build, ties
+  to progress tracking.
+
 - **Pairwise `--pairwise` CLI flag.** The pairwise judging library
   (`pairwise_compare`, randomized+recorded order, Property 6) is built
   and tested, but not exposed as an `eval_run.py` CLI mode. Optional
