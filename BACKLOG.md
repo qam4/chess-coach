@@ -22,6 +22,30 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   on" half grounded (see pedagogy layer below), so the judge isn't just
   trusting the model's chess.
 
+  **Empirical findings (in-session frontier-judge validation,
+  hermes3:8b, 3 positions, Kiro/Claude as judge):** the L1↔L2 gap was
+  stark — factual mean 0.17 vs quality 0.54 — confirming v1 is lenient
+  toward fluent but position-blind text. Three concrete v1 defects to
+  fix in v2:
+  - **The `grounded` loophole.** A position-blind, generic response
+    (`after_1f6`: "castle / king safety") scored 0.62 because saying
+    nothing specific means nothing contradicts the engine, so it banks
+    `grounded`(+2) + `actionable` + `level_fit` + `constructive`. Safe
+    boilerplate is rewarded. Fix: gate quality on Layer-1 factual /
+    coverage, or make `grounded` require a *substantive grounded claim*,
+    not merely the absence of a false one.
+  - **Hallucination tolerance.** A response with two clear board
+    falsehoods (`italian_four_knights`: king "on g1, in the center";
+    invented "two pawns on e5 doubled") still scored 0.75, because
+    failing `grounded` costs only 2/8 while the other five criteria
+    passed. Fix: a hard contradiction should cap/curve the whole score
+    (multiplicative, like Layer 1's `factual_score`), not cost a flat
+    fraction.
+  - **`actionable` rewards any concrete move.** The same response
+    passed `actionable` for "castle" even though it ignores the hanging
+    e4 it just identified. Fix: tie `actionable` to acting on the
+    *key idea*, not to mentioning any move.
+
 - **Pedagogy / curriculum layer (the other scaffold).** The engine
   grounds *what's true about the position*; nothing yet grounds *what's
   worth teaching and how* (the five principles, named patterns, opening
@@ -69,6 +93,26 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   which isn't a frontier model and risks self-preference when judging
   qwen-family output. Revisit with a real frontier endpoint (FITT
   gateway `fitt-smart`, or a direct Anthropic/Bedrock key).
+
+- **How is the automated Layer-2 judge actually served?** The judge
+  needs a *callable* frontier endpoint; the in-session "Kiro is the
+  judge" mode is session-bound and can't be automated (a human rater
+  has the same limitation — neither is an unattended endpoint). So
+  "Kiro/human as judge" is really a **Layer-3 calibration / validation**
+  role (the trusted gold rater that `calibrate.py` measures the cheap
+  automated judge against), not the Layer-2 automation engine. Options
+  for the automated endpoint, none wired yet:
+  - **FITT gateway `fitt-smart`** — but FITT currently has no Claude /
+    frontier-cloud binding on that alias, so today it'd resolve to a
+    local model, not a true frontier judge.
+  - **`kiro-cli`** — drive a frontier model non-interactively from a
+    script as the judge backend. Most promising path to automation
+    without a paid API key; needs a thin adapter that shapes its I/O to
+    the `LLMProvider.generate` contract (prompt in, text out).
+  - **Direct frontier API key** (Anthropic / Bedrock / OpenAI) behind
+    the existing `OpenAICompatProvider` — simplest if a key is
+    available.
+  Decide the endpoint before investing in `rubric.v2` / scaled judging.
 
 - **Benchmark size.** Only 10 seed positions today. Grow toward
   20-40 across phases/levels once the annotation guard (Task 9) makes
