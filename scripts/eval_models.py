@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Evaluate LLM coaching quality across models and positions.
 
+SUPERSEDED (see docs/evaluation.md): keyword-matching evaluator kept
+for reference; replaced by the coaching-eval harness
+(scripts/eval_run.py + src/chess_coach/eval/), which scores
+correctness against the engine oracle and an LLM judge.
+
 Usage:
     python scripts/eval_models.py [model1 model2 ...]
 

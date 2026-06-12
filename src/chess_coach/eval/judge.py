@@ -1,0 +1,404 @@
+"""Layer 2 — frontier LLM-as-judge.
+
+Scores coaching quality against a fixed rubric, *grounded in the
+engine report*. The judge is handed the engine's analysis as ground
+truth and told not to use its own chess vision for factual claims —
+that's what keeps even a strong model honest about a board it might
+otherwise misread. See `.kiro/specs/coaching-eval/design.md` (Layer 2).
+
+The judge reaches the model through the existing `LLMProvider`
+abstraction, so the endpoint is pluggable: a direct frontier API, the
+FITT gateway's `fitt-smart` alias, or any OpenAI-compatible shim.
+"""
+
+from __future__ import annotations
+
+import json
+import random
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+import chess
+import yaml
+
+from ..models import PositionReport
+from .benchmark import BenchmarkPosition
+
+
+class RubricError(Exception):
+    """Malformed rubric file."""
+
+
+class VerdictParseError(Exception):
+    """The judge's reply could not be parsed into a complete verdict."""
+
+
+# --------------------------------------------------------------- rubric
+
+
+@dataclass(frozen=True)
+class Criterion:
+    key: str
+    description: str
+    weight: float
+
+
+@dataclass(frozen=True)
+class JudgeRubric:
+    version: str
+    criteria: tuple[Criterion, ...]
+
+    def keys(self) -> list[str]:
+        return [c.key for c in self.criteria]
+
+    def total_weight(self) -> float:
+        return sum(c.weight for c in self.criteria)
+
+    def weight_of(self, key: str) -> float:
+        for c in self.criteria:
+            if c.key == key:
+                return c.weight
+        return 0.0
+
+
+def load_rubric(path: str | Path) -> JudgeRubric:
+    path = Path(path)
+    if not path.exists():
+        raise RubricError(f"rubric file not found: {path}")
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        raise RubricError(f"{path}: invalid YAML: {e}") from e
+    if not isinstance(data, dict):
+        raise RubricError(f"{path}: top level must be a mapping")
+    version = str(data.get("version") or "")
+    if not version:
+        raise RubricError(f"{path}: missing 'version'")
+    raw = data.get("criteria")
+    if not isinstance(raw, list) or not raw:
+        raise RubricError(f"{path}: 'criteria' must be a non-empty list")
+    criteria: list[Criterion] = []
+    seen: set[str] = set()
+    for i, c in enumerate(raw):
+        if not isinstance(c, dict) or "key" not in c or "description" not in c:
+            raise RubricError(f"{path}: criteria[{i}] needs 'key' and 'description'")
+        key = str(c["key"])
+        if key in seen:
+            raise RubricError(f"{path}: duplicate criterion key {key!r}")
+        seen.add(key)
+        criteria.append(
+            Criterion(
+                key=key,
+                description=" ".join(str(c["description"]).split()),
+                weight=float(c.get("weight", 1.0)),
+            )
+        )
+    return JudgeRubric(version=version, criteria=tuple(criteria))
+
+
+def default_rubric_path() -> Path:
+    return Path(__file__).resolve().parents[3] / "data" / "eval" / "rubric.v1.yaml"
+
+
+# --------------------------------------------------------------- verdict
+
+
+@dataclass
+class JudgeVerdict:
+    criteria: dict[str, tuple[bool, str]]  # key -> (pass, reason)
+    contradictions: list[str]
+    quality_score: float
+    judge_model: str
+    rubric_version: str
+
+    def passed_keys(self) -> list[str]:
+        return [k for k, (ok, _) in self.criteria.items() if ok]
+
+
+# --------------------------------------------------------------- prompt
+
+
+def _fmt_eval(cp: int) -> str:
+    side = "White" if cp > 0 else "Black" if cp < 0 else "neither side"
+    return f"{cp}cp ({'+' if cp > 0 else ''}{cp / 100:.2f} pawns, favouring {side})"
+
+
+def format_engine_report(report: PositionReport) -> str:
+    """Compact, labelled rendering of the engine report. Empty
+    sections are omitted to keep the judge prompt focused."""
+    sections: list[str] = []
+    eb = report.eval_breakdown
+    sections.append(
+        "--- Evaluation (ground truth) ---\n"
+        f"Overall: {_fmt_eval(report.eval_cp)}\n"
+        f"Material {eb.material}cp, mobility {eb.mobility}cp, "
+        f"king safety {eb.king_safety}cp, pawn structure {eb.pawn_structure}cp"
+    )
+
+    hanging = [
+        f"{side.title()}'s {hp.piece} on {hp.square}"
+        for side in ("white", "black")
+        for hp in report.hanging_pieces.get(side, [])
+    ]
+    if hanging:
+        sections.append("--- Hanging pieces ---\n" + "\n".join(hanging))
+
+    threats = [f"{side.title()}: {t.description}" for side in ("white", "black") for t in report.threats.get(side, [])]
+    if threats:
+        sections.append("--- Threats ---\n" + "\n".join(threats))
+
+    if report.tactics:
+        sections.append("--- Tactics ---\n" + "\n".join(f"{t.type}: {t.description}" for t in report.tactics))
+
+    if report.top_lines:
+        lines = []
+        for i, ln in enumerate(report.top_lines[:3], 1):
+            moves = " ".join(ln.moves[:5])
+            lines.append(f"Line {i} ({ln.eval_cp}cp): {moves}")
+        sections.append("--- Top engine lines ---\n" + "\n".join(lines))
+
+    return "\n\n".join(sections)
+
+
+_JSON_CONTRACT = (
+    "Respond with ONLY a JSON object of this exact shape:\n"
+    "{\n"
+    '  "criteria": {\n'
+    '    "<key>": {"pass": true|false, "reason": "<one clause>"},\n'
+    "    ...one entry per rubric key...\n"
+    "  },\n"
+    '  "contradictions": ["<any response claim that contradicts the engine data>"],\n'
+    '  "notes": "<optional overall note>"\n'
+    "}"
+)
+
+
+def build_judge_prompt(
+    response: str,
+    report: PositionReport,
+    position: BenchmarkPosition,
+    rubric: JudgeRubric,
+) -> str:
+    """Build the grounded judge prompt: engine ground truth + the
+    coaching text + the rubric + a strict JSON output contract."""
+    board = chess.Board(report.fen)
+    side = "White" if board.turn == chess.WHITE else "Black"
+
+    rubric_lines = "\n".join(f"- {c.key}: {c.description}" for c in rubric.criteria)
+
+    return (
+        "You are evaluating a chess coaching response for quality.\n"
+        "You are given the chess engine's authoritative analysis of the "
+        "position. TREAT THE ENGINE ANALYSIS AS GROUND TRUTH. Do NOT use "
+        "your own chess calculation to judge factual claims — rely only "
+        "on the engine data provided. Your job is to score the coaching "
+        "text against the rubric and to flag any claim in it that "
+        "contradicts the engine data.\n\n"
+        f"Position FEN: {report.fen}\n"
+        f"Side to move: {side}\n"
+        f"Coaching target level: {position.level}\n\n"
+        f"{format_engine_report(report)}\n\n"
+        "--- Coaching response to grade ---\n"
+        f"{response}\n\n"
+        "--- Rubric (score each criterion pass/fail) ---\n"
+        f"{rubric_lines}\n\n"
+        f"{_JSON_CONTRACT}"
+    )
+
+
+# --------------------------------------------------------------- parsing
+
+
+def _extract_json_object(text: str) -> str:
+    """Pull the outermost {...} object out of a reply that may carry
+    markdown fences or trailing prose (a common frontier quirk)."""
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if fenced:
+        return fenced.group(1)
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise VerdictParseError("no JSON object found in judge reply")
+    return text[start : end + 1]
+
+
+def _quality_score(criteria: dict[str, tuple[bool, str]], rubric: JudgeRubric) -> float:
+    total = rubric.total_weight()
+    if total <= 0:
+        return 0.0
+    earned = sum(rubric.weight_of(k) for k, (ok, _) in criteria.items() if ok)
+    return round(earned / total, 4)
+
+
+def parse_verdict(text: str, rubric: JudgeRubric, *, judge_model: str) -> JudgeVerdict:
+    """Parse the judge's reply into a complete verdict, or raise.
+
+    Enforces two invariants:
+    * Every rubric criterion must be present (else VerdictParseError).
+    * ``grounded`` passes iff there are no contradictions — we derive
+      it from the contradictions list rather than trusting the model's
+      self-reported grounded flag (Property 5).
+    """
+    raw = _extract_json_object(text)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise VerdictParseError(f"judge reply is not valid JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise VerdictParseError("judge reply JSON is not an object")
+
+    raw_criteria = data.get("criteria")
+    if not isinstance(raw_criteria, dict):
+        raise VerdictParseError("judge reply missing 'criteria' object")
+
+    contradictions = data.get("contradictions") or []
+    if not isinstance(contradictions, list):
+        raise VerdictParseError("'contradictions' must be a list")
+    contradictions = [str(c) for c in contradictions]
+
+    criteria: dict[str, tuple[bool, str]] = {}
+    for key in rubric.keys():
+        entry = raw_criteria.get(key)
+        if not isinstance(entry, dict) or "pass" not in entry:
+            raise VerdictParseError(f"judge reply missing criterion {key!r}")
+        passed = bool(entry["pass"])
+        reason = str(entry.get("reason", ""))
+        criteria[key] = (passed, reason)
+
+    # Property 5: grounded is derived from contradictions, not trusted.
+    if "grounded" in criteria:
+        has_contradiction = len(contradictions) > 0
+        prev_reason = criteria["grounded"][1]
+        criteria["grounded"] = (
+            not has_contradiction,
+            prev_reason or ("contradictions found" if has_contradiction else "no contradictions"),
+        )
+
+    return JudgeVerdict(
+        criteria=criteria,
+        contradictions=contradictions,
+        quality_score=_quality_score(criteria, rubric),
+        judge_model=judge_model,
+        rubric_version=rubric.version,
+    )
+
+
+# --------------------------------------------------------------- judging
+
+
+def judge_response(
+    provider: object,
+    response: str,
+    report: PositionReport,
+    position: BenchmarkPosition,
+    rubric: JudgeRubric,
+    *,
+    max_tokens: int = 900,
+) -> JudgeVerdict:
+    """Run the judge for one coaching response. Temperature 0 for
+    reproducibility; one retry on a parse failure, then raise."""
+    prompt = build_judge_prompt(response, report, position, rubric)
+    model = getattr(provider, "model", "unknown")
+    last_err: Exception | None = None
+    for _attempt in range(2):
+        raw = provider.generate(prompt, max_tokens=max_tokens, temperature=0.0)  # type: ignore[attr-defined]
+        try:
+            return parse_verdict(raw, rubric, judge_model=model)
+        except VerdictParseError as e:
+            last_err = e
+    raise VerdictParseError(f"judge verdict unparseable after retry: {last_err}")
+
+
+# --------------------------------------------------------------- pairwise
+
+
+@dataclass
+class PairwiseResult:
+    position_id: str
+    model_a: str
+    model_b: str
+    winner: str  # "model_a" | "model_b" | "tie"
+    first_shown: str  # which model occupied slot 1 (randomized) — auditable
+    reason: str
+
+
+def build_pairwise_prompt(
+    response_1: str,
+    response_2: str,
+    report: PositionReport,
+    position: BenchmarkPosition,
+) -> str:
+    """Pairwise judge prompt: two coaching responses, same grounding,
+    pick the better one. Slot order is randomized by the caller."""
+    board = chess.Board(report.fen)
+    side = "White" if board.turn == chess.WHITE else "Black"
+    return (
+        "You are comparing two chess coaching responses for the same "
+        "position. TREAT THE ENGINE ANALYSIS AS GROUND TRUTH; do not use "
+        "your own chess calculation. Pick the response that is the better "
+        "coaching: grounded in the engine data (no contradictions), finds "
+        "the key idea, explains why, is actionable, and fits the target "
+        "level.\n\n"
+        f"Position FEN: {report.fen}\nSide to move: {side}\n"
+        f"Target level: {position.level}\n\n"
+        f"{format_engine_report(report)}\n\n"
+        f"--- Response 1 ---\n{response_1}\n\n"
+        f"--- Response 2 ---\n{response_2}\n\n"
+        'Respond with ONLY JSON: {"winner": "1"|"2"|"tie", "reason": "<one clause>"}'
+    )
+
+
+def parse_pairwise(text: str) -> tuple[str, str]:
+    """Return (winner, reason) where winner is '1', '2', or 'tie'."""
+    raw = _extract_json_object(text)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise VerdictParseError(f"pairwise reply not valid JSON: {e}") from e
+    winner = str(data.get("winner", "")).strip().lower()
+    if winner not in ("1", "2", "tie"):
+        raise VerdictParseError(f"pairwise winner must be 1/2/tie, got {winner!r}")
+    return winner, str(data.get("reason", ""))
+
+
+def pairwise_compare(
+    provider: object,
+    model_a: str,
+    response_a: str,
+    model_b: str,
+    response_b: str,
+    report: PositionReport,
+    position: BenchmarkPosition,
+    *,
+    rng: random.Random,
+    max_tokens: int = 400,
+) -> PairwiseResult:
+    """Compare two models' responses, randomizing which is shown first
+    to cancel position bias, and recording the assignment (Property 6)."""
+    a_first = rng.random() < 0.5
+    if a_first:
+        resp1, resp2, first_model = response_a, response_b, model_a
+    else:
+        resp1, resp2, first_model = response_b, response_a, model_b
+
+    prompt = build_pairwise_prompt(resp1, resp2, report, position)
+    raw = provider.generate(prompt, max_tokens=max_tokens, temperature=0.0)  # type: ignore[attr-defined]
+    winner_slot, reason = parse_pairwise(raw)
+
+    if winner_slot == "tie":
+        winner = "tie"
+    else:
+        # Map the chosen slot back to the model that occupied it.
+        slot1_model = model_a if a_first else model_b
+        slot2_model = model_b if a_first else model_a
+        winner = slot1_model if winner_slot == "1" else slot2_model
+
+    return PairwiseResult(
+        position_id=position.id,
+        model_a=model_a,
+        model_b=model_b,
+        winner=winner,
+        first_shown=first_model,
+        reason=reason,
+    )

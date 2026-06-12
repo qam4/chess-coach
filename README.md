@@ -115,6 +115,26 @@ ruff format --check src/ tests/
 
 CI runs on GitHub Actions (Python 3.11 + 3.12) on every push to main.
 
+## Evaluating coaching quality
+
+How good is the coaching, and which model should produce it? The eval
+harness scores models on two axes — **factual accuracy** (objective,
+engine-grounded) and **coaching quality** (a frontier LLM judge against
+a rubric). Quick start:
+
+```bash
+# Free, engine-grounded factual scoreboard:
+python scripts/eval_run.py --models qwen3:8b
+
+# Add the coaching-quality judge:
+python scripts/eval_run.py --models qwen3:8b --judge-model fitt-smart \
+    --judge-base-url http://<gateway>/v1 --judge-api-key "$TOKEN"
+```
+
+See [`docs/evaluation.md`](docs/evaluation.md) for the full three-layer
+guide (objective checks, LLM-as-judge, human calibration) and how to
+add benchmark positions.
+
 ## Swapping the LLM
 
 The LLM provider is pluggable:

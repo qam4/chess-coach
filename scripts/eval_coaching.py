@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Evaluate coaching quality across all coaching modes.
 
+SUPERSEDED (see docs/evaluation.md): this keyword-matching evaluator
+is kept for reference but replaced by the coaching-eval harness
+(scripts/eval_run.py + src/chess_coach/eval/), which checks coaching
+*correctness* against the engine oracle and an LLM judge instead of
+grepping responses for expected vocabulary.
+
 Tests both template-based coaching (no LLM) and LLM-based coaching
 against a shared test suite of positions and moves. Scores each
 response using keyword checks and structural expectations.

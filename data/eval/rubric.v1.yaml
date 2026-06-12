@@ -1,0 +1,53 @@
+# Coaching-quality rubric for the Layer 2 judge.
+#
+# Binary criteria (pass/fail), not a vibe score. Weights bias the
+# aggregate toward the two that matter most: did the coach find the
+# key idea, and is it grounded (no contradictions with the engine).
+# A fluent answer that's off-topic or wrong should still score low.
+#
+# Versioned: changing a criterion bumps the version (rubric.v2.yaml),
+# and the version is stamped on every result so scores across rubric
+# changes are never silently compared.
+
+version: v1
+
+criteria:
+  - key: key_idea
+    weight: 2.0
+    description: >
+      Identifies at least one genuinely important feature of the
+      position, matching what the engine data emphasizes (the hanging
+      piece, the decisive eval factor, the threat). Not a generic
+      observation that would apply to any position.
+
+  - key: explains_why
+    weight: 1.0
+    description: >
+      Explains WHY the highlighted feature matters — cause and
+      consequence — rather than only stating that it exists.
+
+  - key: actionable
+    weight: 1.0
+    description: >
+      Gives a concrete plan or move idea the student can act on, not
+      just a description of the position.
+
+  - key: level_fit
+    weight: 1.0
+    description: >
+      Matches the target skill level. For beginners, avoids engine
+      jargon (centipawns, PV lines, depth numbers) and notation
+      beyond basic piece and square names.
+
+  - key: grounded
+    weight: 2.0
+    description: >
+      Makes no claim that contradicts the engine data (piece
+      locations, who is better, what is hanging, the tactics present).
+      Fails if any contradiction is found.
+
+  - key: constructive
+    weight: 1.0
+    description: >
+      Uses a supportive, teaching tone; acknowledges good aspects
+      before problems when applicable. Not a cold verdict.

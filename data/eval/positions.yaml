@@ -1,0 +1,176 @@
+# Coaching evaluation benchmark — annotated positions.
+#
+# Each position lists the ground-truth coaching points a correct
+# response should cover. Points are structured/checkable where
+# possible (see src/chess_coach/eval/benchmark.py KNOWN_KINDS):
+#
+#   hanging_piece  -> square ("e4")              checked vs engine report
+#   eval_direction -> white_better|black_better|equal
+#   tactic         -> motif type ("fork")        checked vs engine report
+#   phase          -> opening|middlegame|endgame phase-appropriateness
+#   free           -> text                       soft coverage hint
+#
+# `required: false` marks a point as nice-to-have (counts toward
+# coverage but not penalized if missed).
+#
+# Seeded from scripts/eval_coaching.py POSITION_TESTS and
+# scripts/probe_llm_chess.py PROBE_POSITIONS. Grow freely — the loader
+# reads this file, no code change needed.
+
+version: 1
+
+positions:
+  # ---- Openings -------------------------------------------------------
+  - id: starting_position
+    fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    level: beginner
+    phase: opening
+    notes: >
+      Dead-equal start. Coaching should talk development / center, must
+      not invent an advantage or suggest castling this early.
+    points:
+      - kind: eval_direction
+        value: equal
+      - kind: free
+        value: development
+      - kind: free
+        value: center
+
+  - id: after_1e4
+    fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+    level: beginner
+    phase: opening
+    notes: >
+      After 1.e4. Roughly equal at low depth; talk center control and a
+      sound reply (e5, c5, e6, d5).
+    points:
+      - kind: eval_direction
+        value: equal
+      - kind: free
+        value: center
+
+  - id: italian_four_knights
+    fen: "r1bqkb1r/pppppppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+    level: intermediate
+    phase: opening
+    notes: >
+      Four-knights Italian setup. At depth 8 the engine judges Black
+      better (-158cp): White's e4 pawn is undefended and ...Nxe4 wins
+      it. Ground truth is the engine oracle here, even though opening
+      theory would call this roughly equal — deepen the engine to
+      change the oracle.
+    points:
+      - kind: eval_direction
+        value: black_better
+      - kind: hanging_piece
+        value: e4
+      - kind: free
+        value: f7
+        required: false
+
+  # ---- Tactics / hanging material ------------------------------------
+  - id: hanging_knight_e5
+    fen: "r1bqkb1r/pppppppp/2n5/4N3/4n3/8/PPPP1PPP/RNBQKB1R w KQkq - 0 4"
+    level: intermediate
+    phase: opening
+    notes: >
+      White's knight on e5 is loose — Black's pieces bear on it. Engine:
+      Black better (-244cp), White's e5 knight hanging. A coach should
+      spot the e5 knight specifically, not just note central tension.
+    points:
+      - kind: eval_direction
+        value: black_better
+      - kind: hanging_piece
+        value: e5
+      - kind: free
+        value: undefended
+        required: false
+
+  - id: queen_hangs_h5
+    fen: "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4"
+    level: beginner
+    phase: opening
+    notes: >
+      White tried a Scholar's-mate-style Qh5, but Black's f6 knight
+      already defends — so Qh5 simply hangs to ...Nxh5. Engine: Black
+      better (-121cp), White's queen on h5 hanging. Good coaching spots
+      that the queen is attacked, not a mate threat.
+    points:
+      - kind: eval_direction
+        value: black_better
+      - kind: hanging_piece
+        value: h5
+      - kind: free
+        value: queen
+        required: false
+
+  # ---- After a mistake ------------------------------------------------
+  - id: after_1f6
+    fen: "rnbqkbnr/ppppp1pp/5p2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+    level: beginner
+    phase: opening
+    notes: >
+      Black just played 1...f6 — weakens the e8-h5 diagonal and blocks
+      the knight's natural f6 square. Good coaching explains the WHY,
+      not just "bad move". Engine: White +55cp (Bc4 hits f7).
+    points:
+      - kind: eval_direction
+        value: white_better
+      - kind: free
+        value: diagonal
+        required: false
+
+  # ---- Middlegame -----------------------------------------------------
+  - id: middlegame_tension
+    fen: "r1b2rk1/pp1nqppp/2pbpn2/3p4/2PP4/2NBPN2/PP2QPPP/R1B2RK1 w - - 0 10"
+    level: advanced
+    phase: middlegame
+    notes: >
+      Closed-ish center with d4/d5 tension. Good coaching prioritizes a
+      plan (central break, minority attack) over listing everything.
+      Engine: White +56cp.
+    points:
+      - kind: eval_direction
+        value: white_better
+      - kind: phase
+        value: middlegame
+      - kind: free
+        value: plan
+        required: false
+
+  # ---- Endgames -------------------------------------------------------
+  - id: kr_vs_k
+    fen: "8/8/8/4k3/8/8/8/4K2R w - - 0 1"
+    level: beginner
+    phase: endgame
+    notes: >
+      Basic winning K+R vs K. Coaching should be endgame-appropriate
+      (drive the king to the edge) and must NOT mention development,
+      castling, or openings.
+    points:
+      - kind: eval_direction
+        value: white_better
+      - kind: phase
+        value: endgame
+      - kind: free
+        value: edge
+        required: false
+
+  - id: rook_pawn_endgame
+    fen: "8/8/4k3/8/4Pp2/8/5K2/4R3 w - - 0 1"
+    level: beginner
+    phase: endgame
+    notes: >
+      R+P vs R-ish endgame. Focus on king activity and pawn promotion,
+      not opening principles. Engine: White winning (+1352cp).
+    points:
+      - kind: eval_direction
+        value: white_better
+      - kind: phase
+        value: endgame
+      - kind: free
+        value: king
+        required: false
+      - kind: free
+        value: pawn
+        required: false

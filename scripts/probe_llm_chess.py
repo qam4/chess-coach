@@ -36,6 +36,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import chess
 
+from chess_coach.eval.objective import (
+    check_move_validity,
+    check_piece_hallucinations,
+)
 from chess_coach.llm.ollama import OllamaProvider
 
 # ---------------------------------------------------------------------------
@@ -205,99 +209,6 @@ PROMPT_STYLES = {
 # ---------------------------------------------------------------------------
 # Factual checks — automated sanity checks on the output
 # ---------------------------------------------------------------------------
-
-
-def check_piece_hallucinations(fen: str, response: str) -> list[str]:
-    """Check if the LLM mentions pieces on squares where they don't exist.
-
-    This is a basic hallucination detector — not exhaustive, but catches
-    the most common errors like "the bishop on e4" when there's no bishop there.
-
-    Only flags placement claims ("piece on square"). Skips:
-    - Influence verbs: "controlling", "targeting", "attacking", "defending"
-    - Square assessments: "weak square X", "strong square X"
-    """
-    import re
-
-    board = chess.Board(fen)
-    issues: list[str] = []
-    response_lower = response.lower()
-
-    piece_names = {
-        "pawn": chess.PAWN,
-        "knight": chess.KNIGHT,
-        "bishop": chess.BISHOP,
-        "rook": chess.ROOK,
-        "queen": chess.QUEEN,
-        "king": chess.KING,
-    }
-
-    # Pre-filter: collect squares mentioned in "weak square X" / "strong square X"
-    # patterns — these are square assessments, not placement claims.
-    square_assessment_pattern = r"(?:weak|strong)\s+square\s+([a-h][1-8])"
-    assessment_squares: set[tuple[int, int]] = set()
-    for m in re.finditer(square_assessment_pattern, response_lower):
-        # Store (start, end) of the full match so we can skip overlapping placement matches
-        assessment_squares.add((m.start(), m.end()))
-
-    # Influence verbs — if these appear in the ~30 chars before a "piece on square"
-    # match, the sentence is about square control, not piece placement.
-    influence_verbs = ("controlling", "targeting", "attacking", "defending")
-
-    # Look for placement claims: "knight on e4", "bishop on c4", etc.
-    for piece_name, piece_type in piece_names.items():
-        pattern = rf"{piece_name}\s+on\s+([a-h][1-8])"
-        for match in re.finditer(pattern, response_lower):
-            square_name = match.group(1)
-
-            # Skip if this match overlaps with a square assessment phrase
-            match_overlaps_assessment = any(
-                a_start <= match.start() <= a_end or a_start <= match.end() <= a_end
-                for a_start, a_end in assessment_squares
-            )
-            if match_overlaps_assessment:
-                continue
-
-            # Skip if an influence verb appears in the ~30 chars before the match
-            context_start = max(0, match.start() - 30)
-            preceding_text = response_lower[context_start : match.start()]
-            if any(verb in preceding_text for verb in influence_verbs):
-                continue
-
-            try:
-                sq = chess.parse_square(square_name)
-                actual = board.piece_at(sq)
-                if actual is None:
-                    issues.append(f"HALLUCINATION: claims {piece_name} on {square_name} — square is empty")
-                elif actual.piece_type != piece_type:
-                    actual_name = chess.piece_name(actual.piece_type)
-                    issues.append(f"HALLUCINATION: claims {piece_name} on {square_name} — actually a {actual_name}")
-            except ValueError:
-                pass
-
-    return issues
-
-
-def check_move_validity(fen: str, response: str) -> list[str]:
-    """Check if any moves mentioned in the response are actually legal."""
-    board = chess.Board(fen)
-    issues: list[str] = []
-
-    import re
-
-    # Look for SAN-like moves (e.g., Nf3, Bxf7, O-O, e4)
-    san_pattern = r"\b([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?)\b"
-    for match in re.finditer(san_pattern, response):
-        move_str = match.group(1)
-        try:
-            move = board.parse_san(move_str)
-            if move not in board.legal_moves:
-                issues.append(f"ILLEGAL MOVE: {move_str} is not legal in this position")
-        except (ValueError, chess.InvalidMoveError, chess.AmbiguousMoveError):
-            # Could be a reference to a future move or notation we can't parse
-            pass
-
-    return issues
 
 
 # ---------------------------------------------------------------------------
@@ -635,7 +546,7 @@ def generate_report(
                 for m in r.move_issues:
                     lines.append(f"- {m}")
 
-            lines.append(f"\n**Response:**\n")
+            lines.append("\n**Response:**\n")
             lines.append(f"> {r.response.strip()}")
 
             lines.append("")  # blank line
@@ -779,11 +690,11 @@ def main() -> None:
     models = args.model
     multi_model = len(models) > 1
 
-    print(f"LLM Chess Knowledge Probe")
+    print("LLM Chess Knowledge Probe")
     print(f"Models: {', '.join(models)}")
     print(f"Positions: {len(positions)}")
     if args.engine_only:
-        print(f"Prompt styles: E + F (engine-only mode)")
+        print("Prompt styles: E + F (engine-only mode)")
     else:
         print(f"Prompt styles: {len(PROMPT_STYLES)}" + (" + 2 engine" if args.with_engine or args.engine_only else ""))
     print()
@@ -805,7 +716,7 @@ def main() -> None:
 
         # Run basic probes (no engine needed) — skip if engine-only
         if not args.engine_only:
-            print(f"  Running basic probes (styles A-D)...")
+            print("  Running basic probes (styles A-D)...")
             results = run_probe(
                 llm,
                 positions,
@@ -816,7 +727,7 @@ def main() -> None:
 
         # Run engine-assisted probes if requested
         if args.with_engine or args.engine_only:
-            print(f"\n  Running engine-assisted probes (styles E-F)...")
+            print("\n  Running engine-assisted probes (styles E-F)...")
             engine_results = run_engine_probes(
                 llm,
                 positions,
@@ -875,7 +786,7 @@ def main() -> None:
     print(f"\n{'=' * 60}")
     print(f"Done! Raw data: {raw_file}")
     if multi_model:
-        print(f"Open output/llm_probe/probe_comparison.md for the side-by-side comparison.")
+        print("Open output/llm_probe/probe_comparison.md for the side-by-side comparison.")
 
 
 if __name__ == "__main__":

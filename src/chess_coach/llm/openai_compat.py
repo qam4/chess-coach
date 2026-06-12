@@ -22,10 +22,17 @@ class OpenAICompatProvider(LLMProvider):
         model: str = "local-model",
         base_url: str = "http://localhost:8080",
         timeout: float = 300.0,
+        api_key: str = "",
         **kwargs: object,
     ):
         super().__init__(model=model, base_url=base_url, timeout=timeout, **kwargs)
-        self._client = httpx.Client(base_url=base_url, timeout=self.timeout)
+        headers = {}
+        if api_key:
+            # Bearer auth for endpoints that need it (frontier APIs,
+            # the FITT gateway). Omitted entirely when no key is given,
+            # so unauthenticated servers (llama.cpp, vLLM) still work.
+            headers["Authorization"] = f"Bearer {api_key}"
+        self._client = httpx.Client(base_url=base_url, timeout=self.timeout, headers=headers)
 
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
         resp = self._client.post(

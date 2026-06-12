@@ -239,8 +239,10 @@ needs to practice against. Create positions that test their weak spots.
 
 ## Coaching Quality — Eval-Driven Improvements
 
-*Tracked via eval runs (scripts/eval_coaching_quick.py). Each item links
-to the eval observation that motivated it.*
+*Now measured by the coaching-eval harness — see `docs/evaluation.md`
+(`scripts/eval_run.py` for the factual + judge scoreboard). The older
+`scripts/eval_coaching_quick.py` keyword runs that motivated the items
+below are superseded by it.*
 
 ### Template coaching is too thin in quiet positions
 - **Observed**: Starting position and post-1.e4 both produce only
