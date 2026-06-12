@@ -23,9 +23,10 @@ class OpenAICompatProvider(LLMProvider):
         base_url: str = "http://localhost:8080",
         timeout: float = 300.0,
         api_key: str = "",
+        probe_timeout: float = 5.0,
         **kwargs: object,
     ):
-        super().__init__(model=model, base_url=base_url, timeout=timeout, **kwargs)
+        super().__init__(model=model, base_url=base_url, timeout=timeout, probe_timeout=probe_timeout, **kwargs)
         headers = {}
         if api_key:
             # Bearer auth for endpoints that need it (frontier APIs,
@@ -49,7 +50,7 @@ class OpenAICompatProvider(LLMProvider):
 
     def is_available(self) -> bool:
         try:
-            resp = self._client.get("/v1/models")
+            resp = self._client.get("/v1/models", timeout=self.probe_timeout)
             return resp.status_code == 200
         except httpx.HTTPError:
             return False

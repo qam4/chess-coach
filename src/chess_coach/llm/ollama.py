@@ -25,9 +25,10 @@ class OllamaProvider(LLMProvider):
         model: str = "qwen3:8b",
         base_url: str = "http://localhost:11434",
         timeout: float = 300.0,
+        probe_timeout: float = 5.0,
         **kwargs: object,
     ):
-        super().__init__(model=model, base_url=base_url, timeout=timeout, **kwargs)
+        super().__init__(model=model, base_url=base_url, timeout=timeout, probe_timeout=probe_timeout, **kwargs)
         self._client = httpx.Client(base_url=base_url, timeout=self.timeout)
 
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
@@ -89,7 +90,7 @@ class OllamaProvider(LLMProvider):
 
     def is_available(self) -> bool:
         try:
-            resp = self._client.get("/api/tags")
+            resp = self._client.get("/api/tags", timeout=self.probe_timeout)
             if resp.status_code != 200:
                 return False
             models = [m["name"] for m in resp.json().get("models", [])]
@@ -101,7 +102,7 @@ class OllamaProvider(LLMProvider):
     def check_status(self) -> tuple[bool, bool]:
         """Check server reachability and model availability separately."""
         try:
-            resp = self._client.get("/api/tags")
+            resp = self._client.get("/api/tags", timeout=self.probe_timeout)
             if resp.status_code != 200:
                 return False, False
             models = [m["name"] for m in resp.json().get("models", [])]

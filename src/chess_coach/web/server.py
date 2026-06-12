@@ -17,6 +17,7 @@ from starlette.responses import StreamingResponse
 
 from chess_coach.analyzer import analyze_position
 from chess_coach.coach import Coach, CoachingResponse, MoveEvaluation, TraceStep
+from chess_coach.llm import classify_exception, describe
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -342,7 +343,7 @@ def create_app(coach: Coach) -> FastAPI:
 
             response = await task
             if isinstance(response, Exception):
-                yield _sse_event("error", {"message": str(response)})
+                yield _error_event(response)
                 return
 
             yield _sse_event(
@@ -565,7 +566,7 @@ def create_app(coach: Coach) -> FastAPI:
 
             result_data = await task
             if isinstance(result_data, Exception):
-                yield _sse_event("error", {"message": str(result_data)})
+                yield _error_event(result_data)
                 return
 
             result_data["debug"] = {"trace": trace_events}
@@ -831,6 +832,24 @@ def create_app(coach: Coach) -> FastAPI:
 def _sse_event(event: str, data: dict[str, typing.Any]) -> str:
     """Format a Server-Sent Event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _error_event(exc: BaseException) -> str:
+    """Build a classified SSE 'error' event from an exception.
+
+    Surfaces a stable ``type`` (the DispatchOutcome) and a friendly,
+    actionable ``message`` instead of a raw exception string, while keeping
+    the raw text in ``detail`` for debugging.
+    """
+    outcome = classify_exception(exc)
+    return _sse_event(
+        "error",
+        {
+            "type": outcome.value,
+            "message": describe(outcome),
+            "detail": str(exc),
+        },
+    )
 
 
 class AnalyzeRequest(BaseModel):

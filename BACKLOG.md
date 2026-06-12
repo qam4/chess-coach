@@ -74,6 +74,37 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   20-40 across phases/levels once the annotation guard (Task 9) makes
   authoring safe.
 
+## Shared "reliable LLM access" library (cross-project)
+
+- **Extract a neutral `llm-access` library shared by chess-coach and
+  FITT.** Both projects independently grew the same problem: talking to
+  local/remote LLMs *reliably* — split timeouts (liveness ping vs
+  inference read), a dispatch-outcome taxonomy, retry-once + fallback,
+  reachability probing, reasoning/`<think>` handling. FITT solved it
+  inside its gateway; chess-coach is growing the same logic in
+  `src/chess_coach/llm/`. Rather than chess-coach depending on FITT
+  (wrong direction — FITT is a heavyweight always-on service, chess-coach
+  is a single-user/offline app), extract the common core into a third,
+  neutral package both depend on.
+
+  - **Shape:** a *library* (in-process), not a service. chess-coach uses
+    it directly; FITT's gateway is built *on top of* it (gateway keeps
+    its server, alias routing, auth, memory, tools, dashboard, cost).
+  - **In scope:** provider protocol (generate/stream/reachability) with
+    thin Ollama + OpenAI-compatible backends; split connect/probe vs
+    read/inference timeouts; `DispatchOutcome` taxonomy + classifier
+    (already drafted dependency-free in `llm/outcome.py`); retry-once +
+    fallback endpoint/model; optional reasoning stripping.
+  - **Out of scope (stays per-app):** FITT's routing/aliases, Bearer
+    auth, memory, tools/MCP, approvals, dashboard, cost, and the HTTP
+    server; chess-coach's chess prompts, coaching templates, eval rubric.
+  - **Timing:** extract on the *second* real implementation, not the
+    first. FITT is impl #1; chess-coach's cheap-fixes work is impl #2.
+    Build the pieces here extraction-ready (no chess/FITT specifics),
+    prove the shape against both, then lift into a standalone repo
+    (e.g. `qam4/llm-access`) and have both consume it. FITT may keep
+    LiteLLM as one backend behind the same protocol.
+
 ## Environment / tooling
 
 _(Cleared — the repo migrated from tox to [uv](https://docs.astral.sh/uv/).

@@ -268,3 +268,31 @@ class TestCreateProvider:
         """ValueError message should list available providers."""
         with pytest.raises(ValueError, match="ollama"):
             create_provider("bad", model="test")
+
+
+# ---------------------------------------------------------------------------
+# Split timeout (liveness probe vs inference)
+# ---------------------------------------------------------------------------
+
+
+class TestProbeTimeout:
+    def test_ollama_has_separate_probe_timeout(self):
+        """A short probe_timeout is kept distinct from the long generate timeout."""
+        provider = OllamaProvider(timeout=300.0, probe_timeout=3.0)
+        assert provider.timeout == 300.0
+        assert provider.probe_timeout == 3.0
+
+    def test_ollama_probe_timeout_defaults_short(self):
+        """Default probe_timeout is short so reachability checks fail fast."""
+        provider = OllamaProvider()
+        assert provider.probe_timeout <= 10.0
+        assert provider.probe_timeout < provider.timeout
+
+    def test_openai_compat_has_separate_probe_timeout(self):
+        provider = OpenAICompatProvider(timeout=120.0, probe_timeout=2.5)
+        assert provider.timeout == 120.0
+        assert provider.probe_timeout == 2.5
+
+    def test_create_provider_forwards_probe_timeout(self):
+        provider = create_provider("ollama", model="qwen3:8b", probe_timeout=4.0)
+        assert provider.probe_timeout == 4.0

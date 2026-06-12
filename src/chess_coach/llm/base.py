@@ -8,10 +8,22 @@ from abc import ABC, abstractmethod
 class LLMProvider(ABC):
     """Base class for LLM providers. Implement this to add a new backend."""
 
-    def __init__(self, model: str, base_url: str = "", timeout: float = 300.0, **kwargs: object):
+    def __init__(
+        self,
+        model: str,
+        base_url: str = "",
+        timeout: float = 300.0,
+        probe_timeout: float = 5.0,
+        **kwargs: object,
+    ):
         self.model = model
         self.base_url = base_url
         self.timeout = timeout
+        # Short timeout for liveness/availability checks. Kept separate from
+        # `timeout` (used for generation) so we can tell "host unreachable"
+        # from "model is just slow / cold-loading": a reachability ping must
+        # fail fast, while a real generation may legitimately take minutes.
+        self.probe_timeout = probe_timeout
 
     @abstractmethod
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
