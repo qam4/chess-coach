@@ -90,14 +90,21 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   - **FITT gateway `fitt-smart`** — but FITT currently has no Claude /
     frontier-cloud binding on that alias, so today it'd resolve to a
     local model, not a true frontier judge.
-  - **`kiro-cli`** — drive a frontier model non-interactively from a
-    script as the judge backend. **Adapter shipped:** `CliProvider`
-    (`--judge-provider cli --judge-command "..."`) runs any "text in,
-    text out" command (prompt piped on stdin), tool-agnostic and tested
-    against a stub. Kiro CLI 2.0 has a headless mode (`--no-interactive`
-    + `KIRO_API_KEY`) that fits. Remaining: install `kiro-cli`, confirm
-    the exact non-interactive invocation, and run a full judged
-    benchmark — then this becomes the real automated Layer-2 judge.
+  - **`kiro-cli`** — drive a frontier model non-interactively as the
+    judge backend. **Shipped and validated:** `CliProvider`
+    (`--judge-provider cli`) with
+    `--judge-command "kiro-cli chat --no-interactive --model claude-sonnet-4.6 {prompt}"`.
+    Note kiro-cli takes the prompt as the positional arg (the `{prompt}`
+    token), not stdin; output lands on stdout, the credits/time footer
+    on stderr (discarded). Validated against the 3 saved hermes3:8b
+    responses under rubric.v2: it agreed with the in-session Opus judge
+    on all three verdicts (all poor, grounded fails everywhere; kr_vs_k
+    identical at 0.03) and was *stricter and better-grounded* on
+    `after_1f6` (0.03 vs 0.20 — it flagged the "implies White is in
+    danger when engine says +55" contradiction). Remaining: run the full
+    10-position benchmark once the model-under-test endpoint (EC2
+    tunnel) is back up, and seed Layer-3 calibration from the
+    agreement/divergence.
   - **Direct frontier API key** (Anthropic / Bedrock / OpenAI) behind
     the existing `OpenAICompatProvider` — simplest if a key is
     available.
