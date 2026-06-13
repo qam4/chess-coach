@@ -101,10 +101,13 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
     on all three verdicts (all poor, grounded fails everywhere; kr_vs_k
     identical at 0.03) and was *stricter and better-grounded* on
     `after_1f6` (0.03 vs 0.20 — it flagged the "implies White is in
-    danger when engine says +55" contradiction). Remaining: run the full
-    10-position benchmark once the model-under-test endpoint (EC2
-    tunnel) is back up, and seed Layer-3 calibration from the
-    agreement/divergence.
+    danger when engine says +55" contradiction). **Full run done:** the
+    automated judge ran the whole 9-position benchmark unattended
+    (hermes3:8b, sonnet-4.6, rubric.v2) — factual mean 0.17, quality
+    mean 0.08, 0% pass; Layer 2 tracks Layer 1, gates held. The
+    automated Layer-2 judge is now operational end-to-end. Next: seed
+    Layer-3 calibration from agreement/divergence, and judge stronger
+    models under test.
   - **Direct frontier API key** (Anthropic / Bedrock / OpenAI) behind
     the existing `OpenAICompatProvider` — simplest if a key is
     available.
