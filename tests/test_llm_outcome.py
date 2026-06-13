@@ -68,6 +68,15 @@ class TestClassifyException:
     def test_unknown_exception_is_server_error(self) -> None:
         assert classify_exception(RuntimeError("???")) is DispatchOutcome.UPSTREAM_SERVER_ERROR
 
+    def test_subprocess_timeout_is_silent(self) -> None:
+        import subprocess
+
+        exc = subprocess.TimeoutExpired(cmd="judge", timeout=5.0)
+        assert classify_exception(exc) is DispatchOutcome.UPSTREAM_SILENT
+
+    def test_missing_executable_is_unreachable(self) -> None:
+        assert classify_exception(FileNotFoundError("no such file")) is DispatchOutcome.UNREACHABLE
+
 
 class TestDescribe:
     @pytest.mark.parametrize("outcome", list(DispatchOutcome))

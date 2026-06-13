@@ -13,6 +13,7 @@ queued for VRAM, not that anything is broken.
 
 from __future__ import annotations
 
+import subprocess
 from enum import Enum
 
 import httpx
@@ -67,6 +68,13 @@ def classify_exception(exc: BaseException) -> DispatchOutcome:
         return DispatchOutcome.UNREACHABLE
     if isinstance(exc, httpx.TimeoutException):
         return DispatchOutcome.UPSTREAM_SILENT
+    # CLI/subprocess backends (e.g. a headless agent CLI used as the judge):
+    # a timeout is the same "accepted but never answered in time" signal,
+    # and a missing executable is the unreachable case.
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return DispatchOutcome.UPSTREAM_SILENT
+    if isinstance(exc, FileNotFoundError):
+        return DispatchOutcome.UNREACHABLE
     return DispatchOutcome.UPSTREAM_SERVER_ERROR
 
 

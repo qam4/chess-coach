@@ -1,6 +1,7 @@
 """LLM provider abstraction layer."""
 
 from chess_coach.llm.base import LLMProvider
+from chess_coach.llm.cli_provider import CliProvider
 from chess_coach.llm.null import NullProvider
 from chess_coach.llm.ollama import OllamaProvider
 from chess_coach.llm.openai_compat import OpenAICompatProvider
@@ -19,6 +20,7 @@ def create_provider(
     providers: dict[str, type[LLMProvider]] = {
         "ollama": OllamaProvider,
         "openai_compat": OpenAICompatProvider,
+        "cli": CliProvider,
         "none": NullProvider,
     }
     cls = providers.get(provider)
@@ -30,6 +32,7 @@ def create_provider(
 
 
 __all__ = [
+    "CliProvider",
     "DispatchOutcome",
     "LLMProvider",
     "NullProvider",

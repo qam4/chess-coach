@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -241,6 +242,13 @@ def main() -> None:
         help="Judge endpoint base URL (e.g. the FITT gateway).",
     )
     parser.add_argument(
+        "--judge-command",
+        default=None,
+        help="For --judge-provider cli: the command to run as the judge "
+        "(prompt piped on stdin, or substituted for a {prompt} token). "
+        'Example: --judge-command "kiro-cli chat --no-interactive".',
+    )
+    parser.add_argument(
         "--judge-api-key",
         default=os.environ.get("CHESS_COACH_JUDGE_KEY", ""),
         help="Bearer key for the judge endpoint (or set CHESS_COACH_JUDGE_KEY).",
@@ -299,12 +307,17 @@ def main() -> None:
         rubric: JudgeRubric | None = None
         if args.judge_model:
             rubric = load_rubric(Path(args.rubric) if args.rubric else default_rubric_path())
-            judge_provider = create_provider(
-                args.judge_provider,
-                model=args.judge_model,
-                base_url=args.judge_base_url,
-                api_key=args.judge_api_key,
-            )
+            judge_kwargs: dict[str, object] = {
+                "model": args.judge_model,
+                "base_url": args.judge_base_url,
+                "api_key": args.judge_api_key,
+            }
+            if args.judge_provider == "cli":
+                if not args.judge_command:
+                    print("FATAL: --judge-provider cli requires --judge-command")
+                    sys.exit(1)
+                judge_kwargs["command"] = shlex.split(args.judge_command)
+            judge_provider = create_provider(args.judge_provider, **judge_kwargs)
             positions_by_id = {p.id: p for p in positions}
             print(f"\n--- judging with {args.judge_model} (rubric {rubric.version}) ---")
             _judge_evals(all_evals, positions_by_id, reports, rubric, judge_provider)

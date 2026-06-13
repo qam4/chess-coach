@@ -72,6 +72,11 @@ python scripts/eval_run.py --models hermes3:8b \
 # Via a local/remote Ollama judge (no auth):
 python scripts/eval_run.py --models hermes3:8b --base-url http://localhost:11435 \
     --judge-provider ollama --judge-model qwen3:14b --judge-base-url http://localhost:11435
+
+# Via a headless agent CLI (no hosted API needed) — prompt piped on stdin:
+python scripts/eval_run.py --models hermes3:8b --base-url http://localhost:11435 \
+    --judge-provider cli --judge-model kiro-cli \
+    --judge-command "kiro-cli chat --no-interactive"
 ```
 
 The judge is **grounded**: it receives the engine report as ground

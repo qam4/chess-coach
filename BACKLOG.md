@@ -91,9 +91,13 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
     frontier-cloud binding on that alias, so today it'd resolve to a
     local model, not a true frontier judge.
   - **`kiro-cli`** — drive a frontier model non-interactively from a
-    script as the judge backend. Most promising path to automation
-    without a paid API key; needs a thin adapter that shapes its I/O to
-    the `LLMProvider.generate` contract (prompt in, text out).
+    script as the judge backend. **Adapter shipped:** `CliProvider`
+    (`--judge-provider cli --judge-command "..."`) runs any "text in,
+    text out" command (prompt piped on stdin), tool-agnostic and tested
+    against a stub. Kiro CLI 2.0 has a headless mode (`--no-interactive`
+    + `KIRO_API_KEY`) that fits. Remaining: install `kiro-cli`, confirm
+    the exact non-interactive invocation, and run a full judged
+    benchmark — then this becomes the real automated Layer-2 judge.
   - **Direct frontier API key** (Anthropic / Bedrock / OpenAI) behind
     the existing `OpenAICompatProvider` — simplest if a key is
     available.
