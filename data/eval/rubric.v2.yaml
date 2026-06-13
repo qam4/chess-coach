@@ -1,0 +1,80 @@
+# Coaching-quality rubric v2 — teaching-oriented, with gated scoring.
+#
+# v1 was analyst-era and too lenient: an in-session frontier-judge
+# validation (see BACKLOG.md) scored position-blind boilerplate 0.62 and
+# a response with two board falsehoods 0.75. v2 fixes that two ways:
+#
+#   1. Criteria: adds `teaches_principle` (the VISION "bridge" — name a
+#      transferable idea AND apply it soundly here) and ties `actionable`
+#      to the key idea rather than to any move.
+#   2. Scoring: a `scoring.gates` block applies MULTIPLICATIVE penalties
+#      after the weighted base, so a contradiction or a missed key idea
+#      can't be offset by fluent, well-toned filler. v1 has no such block,
+#      so its scores are unchanged.
+#
+# Versioned: the version is stamped on every result, so scores across
+# rubric changes are never silently compared.
+
+version: v2
+
+criteria:
+  - key: key_idea
+    weight: 2.0
+    description: >
+      Identifies the position's genuinely important feature, matching
+      what the engine data emphasizes (the decisive eval factor, the
+      hanging piece, the concrete threat). Not a generic observation
+      that would apply to almost any position.
+
+  - key: teaches_principle
+    weight: 2.0
+    description: >
+      The teaching bridge: names a transferable chess principle, theme,
+      or pattern (center control, development, king safety, a weak
+      square, defending an attacked piece, driving the king to the edge,
+      etc.) AND connects it to a concrete, engine-sound way to apply it
+      in THIS position. Fails if it only names a principle in the
+      abstract, or only gives a bare move with no transferable idea.
+
+  - key: explains_why
+    weight: 1.0
+    description: >
+      Explains WHY the highlighted feature matters — cause and
+      consequence — rather than only stating that it exists.
+
+  - key: actionable
+    weight: 1.0
+    description: >
+      Gives a concrete move or plan that addresses the key idea the
+      coach identified — not merely any legal move, and not a move that
+      ignores the position's actual problem.
+
+  - key: level_fit
+    weight: 1.0
+    description: >
+      Matches the target skill level. For beginners, avoids engine
+      jargon (centipawns, PV lines, depth numbers) and notation beyond
+      basic piece and square names.
+
+  - key: grounded
+    weight: 2.0
+    description: >
+      Makes no claim that contradicts the engine data (piece locations,
+      who is better, what is hanging, the tactics present). Fails if any
+      contradiction is found.
+
+  - key: constructive
+    weight: 1.0
+    description: >
+      Uses a supportive, teaching tone; acknowledges good aspects before
+      problems when applicable. Not a cold verdict.
+
+# Multiplicative penalties applied to the weighted base score. Each gate
+# names a criterion; when that criterion FAILS, the score is multiplied
+# by `on_fail`. Gates compound (a response that fails both is hit twice).
+scoring:
+  gates:
+    - criterion: grounded
+      on_fail: 0.3
+    - criterion: key_idea
+      on_fail: 0.5

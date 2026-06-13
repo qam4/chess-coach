@@ -231,3 +231,72 @@ def test_judge_response_raises_after_double_failure() -> None:
     with pytest.raises(VerdictParseError, match="after retry"):
         judge_response(provider, "coaching", _report(), _pos(), r)
     assert provider.calls == 2
+
+
+# --------------------------------------------------------------- v2 gated scoring
+
+
+def _v2_rubric() -> JudgeRubric:
+    return load_rubric(default_rubric_path().parent / "rubric.v2.yaml")
+
+
+def test_v2_rubric_loads_with_gates() -> None:
+    r = _v2_rubric()
+    assert r.version == "v2"
+    assert "teaches_principle" in r.keys()
+    gate_keys = {k for k, _ in r.gates}
+    assert gate_keys == {"grounded", "key_idea"}
+
+
+def test_v1_has_no_gates() -> None:
+    assert _rubric().gates == ()
+
+
+def test_v2_grounded_gate_multiplies_score() -> None:
+    r = _v2_rubric()
+    passes = {k: True for k in r.keys()}
+    # A contradiction forces grounded False (Property 5) and trips its gate.
+    raw = _verdict_json(passes, contradictions=["claims a knight that isn't there"])
+    v = parse_verdict(raw, r, judge_model="m")
+    base = (r.total_weight() - r.weight_of("grounded")) / r.total_weight()
+    assert v.quality_score == round(base * 0.3, 4)
+
+
+def test_v2_key_idea_gate_multiplies_score() -> None:
+    r = _v2_rubric()
+    passes = {k: True for k in r.keys()}
+    passes["key_idea"] = False
+    raw = _verdict_json(passes, contradictions=[])  # grounded stays True
+    v = parse_verdict(raw, r, judge_model="m")
+    base = (r.total_weight() - r.weight_of("key_idea")) / r.total_weight()
+    assert v.quality_score == round(base * 0.5, 4)
+
+
+def test_v2_gates_compound() -> None:
+    r = _v2_rubric()
+    passes = {k: True for k in r.keys()}
+    passes["key_idea"] = False
+    raw = _verdict_json(passes, contradictions=["fabricated piece"])  # grounded -> False too
+    v = parse_verdict(raw, r, judge_model="m")
+    base = (r.total_weight() - r.weight_of("key_idea") - r.weight_of("grounded")) / r.total_weight()
+    assert v.quality_score == round(base * 0.3 * 0.5, 4)
+
+
+def test_v2_all_pass_is_one() -> None:
+    r = _v2_rubric()
+    v = parse_verdict(_verdict_json({k: True for k in r.keys()}), r, judge_model="m")
+    assert v.quality_score == 1.0
+
+
+def test_gate_rejects_unknown_criterion(tmp_path) -> None:
+    from chess_coach.eval.judge import RubricError
+
+    p = tmp_path / "r.yaml"
+    p.write_text(
+        "version: v9\n"
+        "criteria:\n  - {key: a, description: x}\n"
+        "scoring:\n  gates:\n    - {criterion: nope, on_fail: 0.5}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RubricError, match="unknown criterion"):
+        load_rubric(p)

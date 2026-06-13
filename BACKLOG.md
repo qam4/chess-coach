@@ -12,39 +12,24 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
 ## Coaching-eval harness
 
-- **Teaching-oriented `rubric.v2` (north-star alignment).** `rubric.v1`
-  is analyst-era: it rewards position triage, and its "use only engine
-  data" grounding can *penalize* correct teaching (opening plans, named
-  principles, transferable ideas) because that knowledge isn't in the
-  engine report. Per `VISION.md`, good coaching is a *bridge*: name the
-  principle/theme + a concrete sound action. A v2 rubric should reward
-  that bridge — but only once we have a way to keep the "what to focus
-  on" half grounded (see pedagogy layer below), so the judge isn't just
-  trusting the model's chess.
+- **`rubric.v2` — shipped (leniency defects fixed); teaching-bridge
+  grounding still open.** `data/eval/rubric.v2.yaml` now exists: it adds
+  the `teaches_principle` bridge criterion, ties `actionable` to the key
+  idea, and adds **gated scoring** (`grounded` ×0.3, `key_idea` ×0.5) so
+  fluent-but-ungrounded or position-blind filler can't score well. The
+  in-session validation that motivated it (hermes3:8b, 3 positions) was
+  re-scored under v2 and the three defects are fixed: `italian`
+  0.75→0.15, `after_1f6` 0.62→0.20, `kr_vs_k` 0.25→0.03; Layer-2 mean
+  0.54→0.13, now tracking the Layer-1 factual mean (0.17).
 
-  **Empirical findings (in-session frontier-judge validation,
-  hermes3:8b, 3 positions, Kiro/Claude as judge):** the L1↔L2 gap was
-  stark — factual mean 0.17 vs quality 0.54 — confirming v1 is lenient
-  toward fluent but position-blind text. Three concrete v1 defects to
-  fix in v2:
-  - **The `grounded` loophole.** A position-blind, generic response
-    (`after_1f6`: "castle / king safety") scored 0.62 because saying
-    nothing specific means nothing contradicts the engine, so it banks
-    `grounded`(+2) + `actionable` + `level_fit` + `constructive`. Safe
-    boilerplate is rewarded. Fix: gate quality on Layer-1 factual /
-    coverage, or make `grounded` require a *substantive grounded claim*,
-    not merely the absence of a false one.
-  - **Hallucination tolerance.** A response with two clear board
-    falsehoods (`italian_four_knights`: king "on g1, in the center";
-    invented "two pawns on e5 doubled") still scored 0.75, because
-    failing `grounded` costs only 2/8 while the other five criteria
-    passed. Fix: a hard contradiction should cap/curve the whole score
-    (multiplicative, like Layer 1's `factual_score`), not cost a flat
-    fraction.
-  - **`actionable` rewards any concrete move.** The same response
-    passed `actionable` for "castle" even though it ignores the hanging
-    e4 it just identified. Fix: tie `actionable` to acting on the
-    *key idea*, not to mentioning any move.
+  **Still open:** the `teaches_principle` criterion is currently judged
+  on the frontier model's own chess sense. To keep the "what to teach"
+  half *grounded* (not just trusting the judge's chess), it needs the
+  pedagogy/curriculum layer below feeding the judge a standard. Also
+  pending: a true frontier judge endpoint (the validation used Kiro
+  in-session, which is Layer-3 calibration, not automatable Layer 2 —
+  see judging-endpoint item) and a wider re-validation once v2 is
+  judged at scale.
 
 - **Pedagogy / curriculum layer (the other scaffold).** The engine
   grounds *what's true about the position*; nothing yet grounds *what's

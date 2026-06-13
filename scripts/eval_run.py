@@ -226,6 +226,11 @@ def main() -> None:
         help="Enable Layer 2 judging with this model id (e.g. fitt-smart, claude-...). Omit to run Layer 1 only.",
     )
     parser.add_argument(
+        "--rubric",
+        default=None,
+        help="Path to the judge rubric YAML (default: data/eval/rubric.v1.yaml).",
+    )
+    parser.add_argument(
         "--judge-provider",
         default="openai_compat",
         help="Provider for the judge endpoint (openai_compat | ollama).",
@@ -293,7 +298,7 @@ def main() -> None:
         # Layer 2: judge (optional).
         rubric: JudgeRubric | None = None
         if args.judge_model:
-            rubric = load_rubric(default_rubric_path())
+            rubric = load_rubric(Path(args.rubric) if args.rubric else default_rubric_path())
             judge_provider = create_provider(
                 args.judge_provider,
                 model=args.judge_model,

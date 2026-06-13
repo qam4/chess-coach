@@ -48,6 +48,10 @@ class Criterion:
 class JudgeRubric:
     version: str
     criteria: tuple[Criterion, ...]
+    # Optional multiplicative score gates: (criterion_key, on_fail_multiplier).
+    # When the named criterion fails, the weighted base score is multiplied
+    # by the factor. Empty for rubrics with no `scoring.gates` block (v1).
+    gates: tuple[tuple[str, float], ...] = ()
 
     def keys(self) -> list[str]:
         return [c.key for c in self.criteria]
@@ -94,7 +98,33 @@ def load_rubric(path: str | Path) -> JudgeRubric:
                 weight=float(c.get("weight", 1.0)),
             )
         )
-    return JudgeRubric(version=version, criteria=tuple(criteria))
+    gates = _parse_gates(data.get("scoring"), {c.key for c in criteria}, path)
+    return JudgeRubric(version=version, criteria=tuple(criteria), gates=gates)
+
+
+def _parse_gates(
+    scoring: object,
+    valid_keys: set[str],
+    path: Path,
+) -> tuple[tuple[str, float], ...]:
+    """Parse the optional ``scoring.gates`` block. Absent block -> no
+    gates (v1 behaviour). Validates each gate names a real criterion."""
+    if scoring is None:
+        return ()
+    if not isinstance(scoring, dict):
+        raise RubricError(f"{path}: 'scoring' must be a mapping")
+    raw = scoring.get("gates", [])
+    if not isinstance(raw, list):
+        raise RubricError(f"{path}: 'scoring.gates' must be a list")
+    gates: list[tuple[str, float]] = []
+    for i, g in enumerate(raw):
+        if not isinstance(g, dict) or "criterion" not in g or "on_fail" not in g:
+            raise RubricError(f"{path}: scoring.gates[{i}] needs 'criterion' and 'on_fail'")
+        crit = str(g["criterion"])
+        if crit not in valid_keys:
+            raise RubricError(f"{path}: scoring.gates[{i}] references unknown criterion {crit!r}")
+        gates.append((crit, float(g["on_fail"])))
+    return tuple(gates)
 
 
 def default_rubric_path() -> Path:
@@ -228,7 +258,15 @@ def _quality_score(criteria: dict[str, tuple[bool, str]], rubric: JudgeRubric) -
     if total <= 0:
         return 0.0
     earned = sum(rubric.weight_of(k) for k, (ok, _) in criteria.items() if ok)
-    return round(earned / total, 4)
+    score = earned / total
+    # Apply multiplicative gates: a failed gated criterion (e.g. grounded,
+    # key_idea) curves the whole score down so fluent filler can't offset
+    # a contradiction or a missed point. Gates compound.
+    for crit_key, multiplier in rubric.gates:
+        entry = criteria.get(crit_key)
+        if entry is not None and not entry[0]:
+            score *= multiplier
+    return round(score, 4)
 
 
 def parse_verdict(text: str, rubric: JudgeRubric, *, judge_model: str) -> JudgeVerdict:

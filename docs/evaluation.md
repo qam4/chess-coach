@@ -76,9 +76,29 @@ python scripts/eval_run.py --models hermes3:8b --base-url http://localhost:11435
 
 The judge is **grounded**: it receives the engine report as ground
 truth and is told not to use its own chess vision for factual claims.
-It scores six binary rubric criteria (`data/eval/rubric.v1.yaml`):
-`key_idea`, `explains_why`, `actionable`, `level_fit`, `grounded`,
-`constructive`. `grounded` fails iff the judge flags a contradiction.
+
+Two rubrics ship, selected with `--rubric` (default: v1):
+
+- **`data/eval/rubric.v1.yaml`** — six binary criteria (`key_idea`,
+  `explains_why`, `actionable`, `level_fit`, `grounded`,
+  `constructive`), scored as a plain weighted fraction.
+- **`data/eval/rubric.v2.yaml`** — teaching-oriented. Adds
+  `teaches_principle` (the VISION "bridge": name a transferable idea
+  *and* apply it soundly here), ties `actionable` to the key idea, and
+  adds **gated scoring**: a `scoring.gates` block multiplies the score
+  down when a gate criterion fails (`grounded` ×0.3, `key_idea` ×0.5),
+  so fluent but ungrounded or position-blind filler can't score well.
+  v1 has no gates, so its scores are unchanged.
+
+`grounded` fails iff the judge flags a contradiction (derived from the
+contradictions list, not self-reported).
+
+```bash
+# Judge with the teaching-oriented rubric:
+python scripts/eval_run.py --models hermes3:8b --judge-model fitt-smart \
+    --judge-base-url http://<gateway>:8421/v1 --judge-api-key "$FITT_TOKEN" \
+    --rubric data/eval/rubric.v2.yaml
+```
 
 A judge failure never invalidates Layer 1 — the factual scoreboard
 always stands.
