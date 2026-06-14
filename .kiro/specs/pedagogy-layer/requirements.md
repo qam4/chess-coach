@@ -104,9 +104,11 @@ authority rather than from the LLM's own chess sense.
    Knowledge_Resource, exactly one type from {Principle, Pattern, Plan}, a
    named theme, a student-facing statement of what to focus on, and a
    student-facing statement of how to apply it.
-3. THE Knowledge_Resource SHALL include exactly the five foundational
-   Principles: center control, development, king safety, piece protection, and
-   piece coordination.
+3. THE Knowledge_Resource SHALL include, at minimum, the five foundational
+   opening Principles (center control, development, king safety, piece
+   protection, and piece coordination) as a labeled starting anchor, AND SHALL
+   be extensible with additional Principle, Pattern, and Plan entries across
+   themes and game phases without code change (per Requirement 1.1).
 4. EACH Guidance_Entry SHALL record one or more Levels drawn from the set
    {beginner, intermediate, advanced} for which the guidance is appropriate.
 5. WHERE a Guidance_Entry is a Plan, THE entry SHALL record one or more

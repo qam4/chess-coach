@@ -31,16 +31,20 @@ offline/local, no new runtime dependencies. Property tests are tagged
         advanced}; principle/pattern require `features`; plan requires
         `eco_codes`; reject duplicate ids — error names the offending
         entry and field.
-  - [ ] 1.3 Author `data/pedagogy/knowledge.yaml` seed including exactly
-        the five foundational Principles (center control, development,
-        king safety, piece protection, piece coordination) plus a few
-        patterns/plans with citations; add `data/pedagogy/schema.md`
-        documenting the defined feature/ECO/level sets for authors.
+  - [ ] 1.3 Author `data/pedagogy/knowledge.yaml` seed including the five
+        foundational opening principles (center control, development,
+        king safety, piece protection, piece coordination) as the
+        labeled anchor, **plus** patterns/plans drawn from the canon's
+        broader theme families (see design "Source literature" /
+        schema.md), each with a citation; add `data/pedagogy/schema.md`
+        documenting the defined feature/ECO/level sets and the theme
+        families for authors.
   - [ ] 1.4 Property test (Property 6): generated entries with each
         required field dropped / out-of-set type or level / missing
         features-or-eco / duplicate id are rejected with a clear reason;
         unit test: happy-path round-trip of the seed; unit test: the
-        five foundational principles exist exactly.
+        five foundational principles are present (as the labeled anchor;
+        the resource may and should contain more entries).
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9_
 
 - [ ] 2. Position-feature extraction and ECO context

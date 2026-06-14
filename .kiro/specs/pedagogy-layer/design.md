@@ -296,10 +296,12 @@ class GuardResult:
     reasons: tuple[str, ...]         # empty iff admitted
 ```
 
-The five foundational principles (Requirement 1.3) are authored entries in
-`knowledge.yaml` with `type: principle` and themes `center control`,
-`development`, `king safety`, `piece protection`, `piece coordination`; a unit
-test asserts exactly these five exist.
+The five foundational opening principles (Requirement 1.3) are authored
+entries in `knowledge.yaml` with `type: principle` and themes `center
+control`, `development`, `king safety`, `piece protection`, `piece
+coordination`; a unit test asserts these five are present as the labeled
+foundational anchor — the resource is expected to contain *more* entries
+across other themes and phases, not exactly these five.
 
 Example `knowledge.yaml` shape (mirrors `positions.yaml` conventions):
 
@@ -380,6 +382,30 @@ basis that together justify this design's shape:
 specifics. The `citation` field on each Guidance_Entry should name the
 specific source and locus, e.g. "Silman, How to Reassess Your Chess, ch.
 on the center".)*
+
+### Theme families (authoring taxonomy)
+
+The five foundational opening principles are one slice of a broader,
+canon-derived set. Authoring (Task 1.3) and `schema.md` should span these
+theme families so the resource is not over-anchored on the opening five —
+the literature (and the eval data) shows beginners improve most from
+safety and tactics, not opening principles:
+
+| Theme family | Example entries | Primary source |
+|---|---|---|
+| Safety / board vision | don't hang pieces, count attackers vs defenders, "is my move safe?" | Heisman |
+| Tactics / motifs | fork, pin, skewer, discovered attack, back-rank, double attack | Steps Method, Heisman |
+| Opening principles | the five (center, development, king safety, protection, coordination) | classical canon |
+| Pawn structure | passed/isolated/doubled pawns, pawn chains, weak squares | Silman, Nimzowitsch |
+| Piece activity | outposts, open files, the bad bishop, improving the worst piece | Nimzowitsch, Silman |
+| King safety (mid-game) | castle early, don't open lines to your own king, attacking the castled king | classical canon |
+| Planning / imbalances | play to your imbalance, prophylaxis | Silman, Nimzowitsch |
+| Endgame technique | K+R vs K, opposition, the square of the pawn, king activity | Steps Method, endgame canon |
+
+These are *theme families*, not the closed `FEATURE_VOCAB` (which keys
+selection). A theme family is realized as one or more `Guidance_Entry`
+records at the appropriate `levels`, keyed to the relevant
+`Position_Features`.
 
 ## Design Decisions and Rationale
 
