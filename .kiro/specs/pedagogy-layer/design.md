@@ -337,6 +337,50 @@ Existing models (`PositionReport`, `JudgeRubric`, `JudgeVerdict`,
 `BenchmarkPosition`) are reused unchanged; `JudgeVerdict` gains the ability to
 mark a criterion *not graded* (Requirement 4.6).
 
+## Source literature (instructional canon)
+
+The knowledge resource is only as good as the authority behind it
+(Requirement 1.7 makes a citation mandatory per entry). Rather than
+invent guidance, entries should draw on established chess pedagogy. The
+field has both a structured-curriculum tradition and a cognitive-science
+basis that together justify this design's shape:
+
+- **Structured curriculum — the Steps Method (Stappenmethode)**, Cor
+  van Wijgerden & Rob Brunia
+  ([chess-steps.com](https://www.chess-steps.com/chess-steps-explained.php)).
+  A six-step, *concentric* school curriculum: each topic is revisited at
+  increasing difficulty, lessons have explicit goals, and some material
+  (e.g. forcing mate) is deliberately postponed. This is the model for
+  how Guidance_Entries are *leveled* (the `levels` field) and sequenced —
+  a beginner entry and an advanced entry can share a theme but differ in
+  depth.
+- **Novice thinking process — Dan Heisman**
+  ([danheisman.com](https://www.danheisman.com/recommended-book-lists.html)):
+  board vision, "is my move safe?", and counting attackers/defenders.
+  Directly grounds the *piece protection* / don't-hang-material principle
+  and the actionable "check every piece is defended" habit.
+- **Move-by-move explanation — Chernev, *Logical Chess: Move by Move***:
+  the gold standard for explaining *why* each move is played in plain
+  language. This is the model for the coaching *voice*, i.e. the
+  how-to-apply half of each entry.
+- **Positional vocabulary — Silman, *How to Reassess Your Chess* / *The
+  Amateur's Mind*** (imbalances) and **Nimzowitsch, *My System*** (center,
+  open files, outposts, prophylaxis): the named themes/patterns for the
+  *what to focus on* half, especially at intermediate/advanced levels.
+- **Beginner-friendly canon — Seirawan's *Winning Chess* series,
+  Pandolfini**: level-appropriate phrasing for beginner entries.
+- **Cognitive-science basis — de Groot, *Thought and Choice in Chess*;
+  Chase & Simon (chunking)**: expertise is largely the recognition of a
+  large library of position *patterns*. This is the empirical reason a
+  curated, feature-keyed Pattern library (not just abstract principles)
+  is the right scaffold — we are externalizing the chunks a strong player
+  has internalized.
+
+*(Bibliographic summaries above are paraphrased; consult the sources for
+specifics. The `citation` field on each Guidance_Entry should name the
+specific source and locus, e.g. "Silman, How to Reassess Your Chess, ch.
+on the center".)*
+
 ## Design Decisions and Rationale
 
 - **Selector is a pure function, engine/network-free.** Selection keys off
