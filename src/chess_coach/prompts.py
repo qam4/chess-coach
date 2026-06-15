@@ -6,6 +6,8 @@ from chess_coach.models import (
     ComparisonReport,
     PositionReport,
 )
+from chess_coach.pedagogy.inject import format_guidance_block
+from chess_coach.pedagogy.resource import GuidanceEntry
 
 SYSTEM_PROMPT = """\
 You are an experienced chess coach. You explain positions clearly and help \
@@ -468,6 +470,7 @@ def build_rich_coaching_prompt(
     report: PositionReport,
     level: str = "intermediate",
     opening_name: str | None = None,
+    guidance: list[GuidanceEntry] | None = None,
 ) -> str:
     """Build a rich coaching prompt from a PositionReport.
 
@@ -482,16 +485,36 @@ def build_rich_coaching_prompt(
     When ``critical_moment`` is True, the prompt includes language requesting
     a more detailed explanation from the LLM.
 
+    When ``guidance`` is supplied and non-empty, the selector-chosen guidance
+    entries are rendered into a leading "What to focus on" block carrying both
+    ends of the teaching bridge — each entry's named theme and its
+    how-to-apply statement (Req 3.1, 3.2). The block is inserted *alongside*
+    the existing engine-grounding instructions, which are never removed or
+    weakened (Req 3.4). Entries whose recorded levels exclude ``level`` are
+    dropped (Req 3.3); when ``guidance`` is ``None``/empty, or becomes empty
+    after that filter, the prompt is built exactly as today with grounding
+    intact and no guidance block (Req 3.6, 3.7).
+
     Args:
         report: The structured position report from the engine.
         level: Student level (``"beginner"``, ``"intermediate"``, or
             ``"advanced"``).
         opening_name: Optional opening name to include in the prompt.
+        guidance: Optional selector-chosen guidance entries to inject as a
+            leading focus block.
 
     Returns:
         The complete prompt string ready to send to the LLM.
     """
     sections: list[str] = []
+
+    # Curated guidance (the "what to focus on" half of the teaching bridge),
+    # level-filtered (Req 3.3). Inserted first so the coach leads with the
+    # selected themes; the engine-grounding instructions below are untouched
+    # (Req 3.4). An empty selection adds nothing (Req 3.6, 3.7).
+    guidance_block = format_guidance_block(guidance or [], level=level)
+    if guidance_block:
+        sections.append(guidance_block)
 
     # Opening identification (if known)
     if opening_name:

@@ -16,6 +16,8 @@ import chess
 
 from chess_coach.models import ComparisonReport, EvalBreakdown, PositionReport
 from chess_coach.openings import OpeningInfo
+from chess_coach.pedagogy.inject import render_guidance_entries
+from chess_coach.pedagogy.resource import GuidanceEntry
 
 
 @dataclass
@@ -49,6 +51,7 @@ class CoachingSection:
 
 
 # Category constants
+CAT_FOCUS = "focus"
 CAT_ASSESSMENT = "assessment"
 CAT_PIECE_SAFETY = "piece_safety"
 CAT_TACTICS = "tactics"
@@ -57,6 +60,7 @@ CAT_TENSIONS = "tensions"
 CAT_SUGGESTION = "suggestion"
 
 _CATEGORY_LABELS = {
+    CAT_FOCUS: "What to focus on",
     CAT_ASSESSMENT: "Assessment",
     CAT_PIECE_SAFETY: "Piece safety",
     CAT_TACTICS: "Tactics",
@@ -181,14 +185,35 @@ def generate_position_coaching_structured(
     report: PositionReport,
     level: str = "intermediate",
     opening: OpeningInfo | None = None,
+    guidance: list[GuidanceEntry] | None = None,
 ) -> list[CoachingSection]:
     """Generate structured coaching sections from a PositionReport.
 
     Returns a list of CoachingSection objects, each with a category,
     label, and text. The UI can render these as tabs, collapsible
     sections, or a flat list.
+
+    When ``guidance`` is supplied and non-empty, the selector-chosen
+    guidance entries are surfaced as a leading "What to focus on" focus
+    section (Req 3.5), carrying each entry's named theme and its
+    how-to-apply statement. Entries whose recorded levels exclude
+    ``level`` are dropped (Req 3.3); an empty selection (or one empty
+    after that filter) adds no focus section, leaving the template output
+    exactly as it is today (Req 3.6, 3.7).
     """
     sections: list[CoachingSection] = []
+
+    # Leading focus section — the curated "what to focus on" half of the
+    # teaching bridge (Req 3.5), level-filtered (Req 3.3).
+    focus_lines = render_guidance_entries(guidance or [], level)
+    if focus_lines:
+        sections.append(
+            CoachingSection(
+                CAT_FOCUS,
+                _CATEGORY_LABELS[CAT_FOCUS],
+                "\n".join(focus_lines),
+            )
+        )
 
     # Assessment
     sections.append(
@@ -296,14 +321,19 @@ def generate_position_coaching(
     report: PositionReport,
     level: str = "intermediate",
     opening: OpeningInfo | None = None,
+    guidance: list[GuidanceEntry] | None = None,
 ) -> str:
     """Generate coaching text from a PositionReport without an LLM.
 
     Returns a multi-paragraph coaching explanation built entirely from
     the structured engine data. For structured output (categories),
     use generate_position_coaching_structured() instead.
+
+    When ``guidance`` is supplied and non-empty, the selector-chosen
+    guidance is surfaced as a leading focus section (Req 3.5); an empty
+    selection leaves the output exactly as today (Req 3.6, 3.7).
     """
-    sections = generate_position_coaching_structured(report, level=level, opening=opening)
+    sections = generate_position_coaching_structured(report, level=level, opening=opening, guidance=guidance)
     return "\n\n".join(s.text for s in sections)
 
 
