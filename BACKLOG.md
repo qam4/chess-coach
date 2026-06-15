@@ -46,6 +46,25 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   tracking + level-adaptive teaching that build on it. Connects to
   IDEAS.md "Structured Learning Path".
 
+  **First live A/B (baseline to beat) — 2026-06-15, hermes3:8b, 9
+  positions, claude-sonnet-4.6 judge, rubric.v2:**
+  | metric | off | on |
+  |---|---|---|
+  | factual (L1) | 0.17 | 0.22 |
+  | coverage | 0.26 | 0.35 |
+  | illegal moves | 4 | 6 |
+  | teaching quality (L2) | 0.09 | 0.07 |
+
+  Read: non-regression holds (L1 factual + coverage *rose* with guidance,
+  so Req 5.2 is satisfied), but teaching quality was flat/slightly down
+  (−0.02, within noise) — on the 13-entry seed the injected guidance
+  doesn't yet improve judged teaching. Notable side effect: illegal-move
+  suggestions rose 4→6, i.e. prompting a weak 8B model to *apply* a
+  principle makes it propose more concrete-but-unsound moves (the
+  engine/illegal-move check is what catches this). Conclusion: the A/B
+  instrument works end-to-end; the **content (seed), not the plumbing,
+  is the lever** — growing the resource must beat the −0.02 baseline.
+
 - **Who calibrates teaching quality?** Layer 3 assumes a human who can
   rate coaching. The product owner is the *student*, not a chess expert,
   so they can't be that human for the teaching axis. Calibration needs
