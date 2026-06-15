@@ -1,0 +1,223 @@
+# Curated knowledge resource for the pedagogy layer.
+#
+# This file is data, not code: adding, removing, or editing an entry
+# requires no code change (Req 1.1). Each entry is one Guidance_Entry —
+# a Principle, Pattern, or Plan — carrying both ends of the teaching
+# bridge: `focus` (what to focus on) and `how_to_apply` (how to apply it
+# here). See data/pedagogy/schema.md for the field reference, the closed
+# Position_Feature names, the levels, ECO usage, and theme families.
+#
+# Required per entry: id, type, theme, focus, how_to_apply, levels,
+# citation. principle/pattern entries require `features`; plan entries
+# require `eco_codes`. `example` (fen + UCI move) is optional and, when
+# present, must be a legal, engine-sound position+move (Req 6.3/6.4).
+
+version: 1
+entries:
+  # ---------------------------------------------------------------
+  # Foundational opening principles (Req 1.3) — the labeled anchor.
+  # The five transferable ideas every student should apply in the
+  # opening. Keyed to `phase:opening`, appropriate at every level.
+  # ---------------------------------------------------------------
+  - id: principle.center_control
+    type: principle
+    theme: center control
+    focus: >
+      Control the central squares (e4, d4, e5, d5). A piece in the
+      center reaches more of the board than one on the edge.
+    how_to_apply: >
+      Put a pawn or piece that fights for a central square, or trade
+      off an enemy piece that defends one. Prefer moves that increase
+      your influence over the four center squares.
+    levels: [beginner, intermediate, advanced]
+    features: [phase:opening]
+    citation: "Silman, How to Reassess Your Chess (4th ed.), ch. on the center"
+
+  - id: principle.development
+    type: principle
+    theme: development
+    focus: >
+      Get your knights and bishops off the back rank early so every
+      piece is doing work before the middlegame begins.
+    how_to_apply: >
+      Each opening move, prefer bringing a new minor piece into play
+      toward the center over moving the same piece twice or making a
+      slow pawn move. Develop, then castle.
+    levels: [beginner, intermediate, advanced]
+    features: [phase:opening]
+    citation: "Chernev, Logical Chess: Move by Move, opening chapters"
+
+  - id: principle.king_safety
+    type: principle
+    theme: king safety
+    focus: >
+      Tuck your king into safety before opening the position, so the
+      center cannot be pried open against an exposed king.
+    how_to_apply: >
+      Castle early (usually within the first ten moves), keep the pawns
+      in front of the castled king intact, and avoid opening files or
+      diagonals toward your own king.
+    levels: [beginner, intermediate, advanced]
+    features: [phase:opening]
+    citation: "Seirawan, Winning Chess Openings, ch. on castling and safety"
+
+  - id: principle.piece_protection
+    type: principle
+    theme: piece protection
+    focus: >
+      Keep your pieces defended. Every undefended piece is a target an
+      opponent can win with a fork, a pin, or a simple attack.
+    how_to_apply: >
+      Before you commit to a move, check that each of your pieces is
+      either defended or not attacked. Ask "is my move safe?" every
+      single move.
+    levels: [beginner, intermediate, advanced]
+    features: [phase:opening]
+    citation: "Heisman, The Improving Chess Thinker, 'is my move safe?'"
+
+  - id: principle.piece_coordination
+    type: principle
+    theme: piece coordination
+    focus: >
+      Make your pieces work together toward the same target instead of
+      acting alone. Coordinated pieces are worth more than their count.
+    how_to_apply: >
+      Aim two or more pieces at the same square, file, or weakness;
+      improve your worst-placed piece so it joins the others rather than
+      sitting idle.
+    levels: [beginner, intermediate, advanced]
+    features: [phase:opening]
+    citation: "Nimzowitsch, My System, ch. on the cooperation of pieces"
+
+  # ---------------------------------------------------------------
+  # Safety / board vision (theme family: Safety) — Heisman.
+  # Keyed to `undefended_piece`: surfaces whenever the side to move
+  # has a hanging or undefended piece.
+  # ---------------------------------------------------------------
+  - id: safety.dont_hang_pieces
+    type: principle
+    theme: don't hang pieces
+    focus: >
+      The single biggest source of lost games at the club level is
+      leaving a piece undefended where it can simply be taken.
+    how_to_apply: >
+      Count the attackers and defenders on every piece you own. If a
+      piece is attacked more times than it is defended, move it, defend
+      it, or capture the attacker before doing anything else.
+    levels: [beginner, intermediate]
+    features: [undefended_piece]
+    citation: "Heisman, A Guide to Chess Improvement, 'counting' and board vision"
+
+  # ---------------------------------------------------------------
+  # Tactics / motifs (theme family: Tactics) — Chernev, Heisman.
+  # ---------------------------------------------------------------
+  - id: pattern.back_rank
+    type: pattern
+    theme: back-rank weakness
+    focus: >
+      A king hemmed in by its own three pawns on the back rank can be
+      checkmated by a rook or queen that reaches that rank.
+    how_to_apply: >
+      Look for a rook or queen that can land on the opponent's back rank
+      with no defender there; defensively, give your king luft by
+      advancing a pawn in front of it before the danger arrives.
+    levels: [intermediate, advanced]
+    features: [tactic:back_rank]
+    citation: "Chernev, Logical Chess: Move by Move, back-rank mate examples"
+    example:
+      fen: "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"
+      move: a1a8
+
+  - id: pattern.fork
+    type: pattern
+    theme: fork
+    focus: >
+      One piece attacking two enemy pieces at once wins material,
+      because the opponent can only save one of them.
+    how_to_apply: >
+      Hunt for a square where a single piece — especially a knight —
+      hits two targets at once, prizing forks that also give check so
+      the opponent must respond to the check first.
+    levels: [beginner, intermediate, advanced]
+    features: [tactic:fork]
+    citation: "Heisman, Back to Basics: Tactics, ch. on the double attack"
+
+  - id: pattern.pin_to_king
+    type: pattern
+    theme: pin
+    focus: >
+      A pinned piece cannot move without exposing a more valuable piece
+      behind it, so it is effectively frozen and can be piled on.
+    how_to_apply: >
+      When an enemy piece is pinned against its king or queen, attack it
+      again with a pawn or another piece — it cannot run away.
+    levels: [intermediate, advanced]
+    features: [tactic:pin]
+    citation: "Nimzowitsch, My System, ch. on the pin"
+
+  # ---------------------------------------------------------------
+  # Pawn structure (theme family: Pawn structure) — Silman.
+  # ---------------------------------------------------------------
+  - id: pattern.isolated_pawn
+    type: pattern
+    theme: isolated pawn
+    focus: >
+      An isolated pawn has no friendly pawn on either neighboring file,
+      so it cannot be defended by a pawn and the square in front of it
+      is a permanent outpost for the enemy.
+    how_to_apply: >
+      If the isolated pawn is yours, use the open files and active
+      pieces it gives you to attack before the endgame; if it is the
+      opponent's, blockade the square in front of it and trade pieces.
+    levels: [intermediate, advanced]
+    features: [isolated_pawn]
+    citation: "Silman, How to Reassess Your Chess (4th ed.), ch. on the isolated d-pawn"
+
+  # ---------------------------------------------------------------
+  # Endgame technique (theme family: Endgame) — endgame canon.
+  # Keyed to `passed_pawn` in the endgame phase.
+  # ---------------------------------------------------------------
+  - id: pattern.passed_pawn_endgame
+    type: pattern
+    theme: passed pawn
+    focus: >
+      A passed pawn has no enemy pawn ahead of it on its file or the
+      adjacent files, so it has a clear run toward promotion.
+    how_to_apply: >
+      Push the passed pawn with the support of your king, and remember
+      the rule of the square to judge whether a lone enemy king can
+      catch it. Passed pawns must be pushed.
+    levels: [beginner, intermediate, advanced]
+    features: [passed_pawn, phase:endgame]
+    citation: "Silman, Silman's Complete Endgame Course, the square of the pawn"
+
+  # ---------------------------------------------------------------
+  # Planning (theme family: Planning) — ECO-keyed standard plans.
+  # ---------------------------------------------------------------
+  - id: plan.italian_slow
+    type: plan
+    theme: Italian Game — slow center build-up
+    focus: >
+      In the Italian Game (Giuoco Pianissimo), neither side rushes; the
+      plan is a patient build-up behind a c3/d3 pawn center.
+    how_to_apply: >
+      Play c3 and d3, tuck the king away with a quick castle, reroute
+      the queen's knight via b1-d2-f1-g3, and only then expand in the
+      center or on the kingside once your pieces are ready.
+    levels: [intermediate, advanced]
+    eco_codes: [C50]
+    citation: "Seirawan, Winning Chess Openings, Italian Game chapter"
+
+  - id: plan.sicilian_counterplay
+    type: plan
+    theme: Sicilian Defence — queenside counterplay
+    focus: >
+      The Sicilian unbalances the position: Black trades a flank pawn
+      for a center pawn and seeks active counterplay rather than equality.
+    how_to_apply: >
+      As Black, use the half-open c-file for your rooks and aim a
+      minority of pieces at White's queenside while White attacks on the
+      kingside — play to your imbalance, do not just defend.
+    levels: [advanced]
+    eco_codes: [B20]
+    citation: "Silman, How to Reassess Your Chess (4th ed.), ch. on imbalances"
