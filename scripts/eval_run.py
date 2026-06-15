@@ -58,6 +58,15 @@ from chess_coach.llm import create_provider  # noqa: E402
 from chess_coach.llm.ollama import OllamaProvider  # noqa: E402
 from chess_coach.models import PositionReport  # noqa: E402
 from chess_coach.openings import lookup_fen  # noqa: E402
+from chess_coach.pedagogy.guard import guard_entries  # noqa: E402
+from chess_coach.pedagogy.resource import (  # noqa: E402
+    GuidanceEntry,
+    KnowledgeResource,
+    PedagogyError,
+    default_resource_path,
+    load_resource,
+)
+from chess_coach.pedagogy.selector import guidance_for_position  # noqa: E402
 from chess_coach.prompts import build_rich_coaching_prompt  # noqa: E402
 
 
@@ -114,6 +123,7 @@ def _run_model(
     positions: list[BenchmarkPosition],
     reports: dict[str, PositionReport],
     temperature: float = 0.0,
+    guidance_by_id: dict[str, list[GuidanceEntry]] | None = None,
 ) -> list[ResponseEval]:
     if not provider.is_available():  # type: ignore[attr-defined]
         print(f"  WARNING: model {model} not available — skipping")
@@ -126,7 +136,8 @@ def _run_model(
             continue  # engine skipped this position
         opening = lookup_fen(pos.fen)
         opening_label = f"{opening.eco} {opening.name}" if opening else None
-        prompt = build_rich_coaching_prompt(report, level=pos.level, opening_name=opening_label)
+        guidance = guidance_by_id.get(pos.id) if guidance_by_id is not None else None
+        prompt = build_rich_coaching_prompt(report, level=pos.level, opening_name=opening_label, guidance=guidance)
 
         print(f"  {model}: {pos.id}...", end=" ", flush=True)
         t0 = time.perf_counter()
@@ -174,6 +185,7 @@ def _judge_evals(
     reports: dict[str, PositionReport],
     rubric: JudgeRubric,
     judge_provider: object,
+    guidance_by_id: dict[str, list[GuidanceEntry]] | None = None,
 ) -> None:
     """Run the Layer 2 judge over successful responses, setting
     ``e.judge`` in place. A judge failure on one response leaves its
@@ -185,9 +197,10 @@ def _judge_evals(
         pos = positions_by_id.get(e.position_id)
         if report is None or pos is None:
             continue
+        guidance = guidance_by_id.get(e.position_id) if guidance_by_id is not None else None
         print(f"  judge: {e.model} / {e.position_id}...", end=" ", flush=True)
         try:
-            e.judge = judge_response(judge_provider, e.response, report, pos, rubric)
+            e.judge = judge_response(judge_provider, e.response, report, pos, rubric, guidance=guidance)
             print(f"quality={e.judge.quality_score:.2f}")
         except Exception as ex:
             print(f"JUDGE ERROR (Layer 1 stands): {ex}")
@@ -220,6 +233,18 @@ def main() -> None:
         default=0.0,
         help="Model-under-test sampling temperature. Default 0.0 for "
         "reproducible benchmark scores; use 0.7 to match production coaching.",
+    )
+    parser.add_argument(
+        "--guidance",
+        choices=["on", "off"],
+        default="off",
+        help="Inject pedagogy-layer guidance into the coach AND judge prompts (Req 5). Default off (baseline).",
+    )
+    parser.add_argument(
+        "--guidance-max",
+        type=int,
+        default=3,
+        help="Max guidance entries selected per position when --guidance on (default 3).",
     )
     parser.add_argument(
         "--judge-model",
@@ -298,10 +323,47 @@ def main() -> None:
             print("FATAL: engine produced no reports — nothing to evaluate")
             sys.exit(1)
 
+        # Pedagogy-layer guidance (Req 5): build ONE selection per position
+        # and hand the identical list to both the coach prompt and the judge
+        # (single-source parity, Req 4.5). Default off = today's baseline.
+        guidance_by_id: dict[str, list[GuidanceEntry]] | None = None
+        if args.guidance == "on":
+            try:
+                ped_resource = load_resource(default_resource_path())
+            except PedagogyError as e:
+                print(f"FATAL: Knowledge_Resource unavailable: {e}")
+                sys.exit(1)
+            admitted, _guard_results = guard_entries(ped_resource.entries, engine=None)
+            admitted_resource = KnowledgeResource(
+                entries=tuple(admitted),
+                feature_vocab=ped_resource.feature_vocab,
+                eco_vocab=ped_resource.eco_vocab,
+                levels=ped_resource.levels,
+            )
+            pos_by_id = {p.id: p for p in positions}
+            guidance_by_id = {
+                pid: guidance_for_position(admitted_resource, rep, pos_by_id[pid].level, args.guidance_max)
+                for pid, rep in reports.items()
+            }
+            n_entries = sum(len(v) for v in guidance_by_id.values())
+            print(
+                f"Guidance: ON — {len(admitted)}/{len(ped_resource.entries)} entries admitted; "
+                f"{n_entries} selected across {len(guidance_by_id)} positions (max {args.guidance_max})."
+            )
+
         for model in models:
             print(f"\n--- {model} ---")
             provider = _make_provider(model, args.base_url)
-            all_evals.extend(_run_model(provider, model, positions, reports, temperature=args.temperature))
+            all_evals.extend(
+                _run_model(
+                    provider,
+                    model,
+                    positions,
+                    reports,
+                    temperature=args.temperature,
+                    guidance_by_id=guidance_by_id,
+                )
+            )
 
         # Layer 2: judge (optional).
         rubric: JudgeRubric | None = None
@@ -320,7 +382,7 @@ def main() -> None:
             judge_provider = create_provider(args.judge_provider, **judge_kwargs)
             positions_by_id = {p.id: p for p in positions}
             print(f"\n--- judging with {args.judge_model} (rubric {rubric.version}) ---")
-            _judge_evals(all_evals, positions_by_id, reports, rubric, judge_provider)
+            _judge_evals(all_evals, positions_by_id, reports, rubric, judge_provider, guidance_by_id=guidance_by_id)
     finally:
         engine.stop()
 
@@ -331,6 +393,8 @@ def main() -> None:
         temperature=args.temperature,
         judge_model=args.judge_model,
         rubric_version=rubric.version if rubric else None,
+        guidance=args.guidance,
+        guidance_max=args.guidance_max if args.guidance == "on" else 0,
     )
     results_path, summary_path = persist_results(args.out, run_config, all_evals, scoreboard)
 

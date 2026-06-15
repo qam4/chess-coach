@@ -69,6 +69,33 @@ def _mean(xs: list[float]) -> float:
     return sum(xs) / len(xs) if xs else 0.0
 
 
+def aggregate_quality(evals: list[ResponseEval]) -> tuple[float | None, list[str]]:
+    """Aggregate Layer-2 quality over scorable responses (Req 5.5).
+
+    A response is EXCLUDED from the aggregate when it is missing a Layer 1
+    or Layer 2 score — i.e. generation failed (``error`` set, so its
+    factual score is a placeholder zero) or it was never judged
+    (``judge is None``). Returns ``(mean_or_None, excluded_position_ids)``
+    so the caller can both report the aggregate and name what was left out.
+    """
+    excluded = [e.position_id for e in evals if e.error is not None or e.judge is None]
+    scored = [e.judge.quality_score for e in evals if e.error is None and e.judge is not None]
+    mean = round(_mean(scored), 4) if scored else None
+    return mean, excluded
+
+
+def quality_delta(enabled_mean: float | None, disabled_mean: float | None) -> float | None:
+    """The teaching-quality delta (enabled minus disabled), or None (Req 5.4).
+
+    Returns ``None`` when either aggregate is missing (no judged responses
+    in that run), so a delta is reported only when both runs produced a
+    quality score over the identical scenario set.
+    """
+    if enabled_mean is None or disabled_mean is None:
+        return None
+    return round(enabled_mean - disabled_mean, 4)
+
+
 def summarize_model(model: str, evals: list[ResponseEval]) -> ModelSummary:
     """Roll up one model's responses. ``evals`` must all share
     ``model``; callers group first."""
@@ -160,6 +187,11 @@ class RunConfig:
     timestamp: str
     benchmark_path: str = ""
     temperature: float = 0.0
+    # Pedagogy-layer guidance injection mode (Req 5): "on" injects the
+    # selected guidance into both the coach and judge prompts, "off" is the
+    # baseline. ``guidance_max`` is the per-position selection cap.
+    guidance: str = "off"
+    guidance_max: int = 0
 
     @classmethod
     def create(
@@ -171,6 +203,8 @@ class RunConfig:
         benchmark_path: str = "",
         benchmark_version: int = BENCHMARK_VERSION,
         temperature: float = 0.0,
+        guidance: str = "off",
+        guidance_max: int = 0,
     ) -> RunConfig:
         return cls(
             models=list(models),
@@ -180,6 +214,8 @@ class RunConfig:
             timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
             benchmark_path=benchmark_path,
             temperature=temperature,
+            guidance=guidance,
+            guidance_max=guidance_max,
         )
 
 
@@ -230,7 +266,9 @@ def persist_results(
         f"Models: {', '.join(config.models)}\n"
         f"Judge: {config.judge_model or '(none)'}  "
         f"Rubric: {config.rubric_version or '(none)'}  "
-        f"Benchmark v{config.benchmark_version}\n\n"
+        f"Benchmark v{config.benchmark_version}\n"
+        f"Guidance: {config.guidance}"
+        f"{f' (max {config.guidance_max})' if config.guidance == 'on' else ''}\n\n"
     )
     summary_path.write_text(header + scoreboard.render() + "\n", encoding="utf-8")
 
