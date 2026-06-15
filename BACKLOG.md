@@ -65,6 +65,28 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   instrument works end-to-end; the **content (seed), not the plumbing,
   is the lever** — growing the resource must beat the −0.02 baseline.
 
+  **Batch-2 result (2026-06-15) — adding entries did NOT help.** After
+  adding 6 entries for the uncovered features (phase:middlegame,
+  phase:endgame, hanging_piece_opponent, exposed_king, open_file,
+  threat_present → 19 entries), the on-run got *worse*, not better:
+  L1 factual 0.22→0.18, coverage 0.35→0.20, teaching quality 0.07→0.06
+  (vs off 0.17 / 0.09). Likely cause: with cap 3 and a bigger pool, the
+  weak 8B model received more *abstract* guidance ("make a plan", "answer
+  the threat") in place of concrete keyed facts, wrote shorter, and
+  covered fewer engine facts. **"More entries" is the wrong lever.**
+
+  **Methodology — the experiment is underpowered (do this before more
+  content work):** single runs × 9 positions × one weak model is within
+  judge noise; we cannot conclude the layer helps or hurts. To get a real
+  signal: (1) repeat runs (≥3× off/on) to separate signal from noise;
+  (2) a **bigger sample of models under test** — not just hermes3:8b but
+  qwen3:14b and ideally several across a capability range, since guidance
+  may only help models strong enough to *use* it (an 8B may be too weak
+  to benefit, making the layer's value invisible at that size); (3)
+  sharpen selection (cap 1–2, most-specific-first) rather than expand;
+  (4) a larger benchmark. The pedagogy layer's value is unproven until
+  measured across models with noise controlled.
+
 - **Who calibrates teaching quality?** Layer 3 assumes a human who can
   rate coaching. The product owner is the *student*, not a chess expert,
   so they can't be that human for the teaching axis. Calibration needs
