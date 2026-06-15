@@ -31,14 +31,20 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   see judging-endpoint item) and a wider re-validation once v2 is
   judged at scale.
 
-- **Pedagogy / curriculum layer (the other scaffold).** The engine
-  grounds *what's true about the position*; nothing yet grounds *what's
-  worth teaching and how* (the five principles, named patterns, opening
-  plans). This is the missing scaffold for end 1 of the teaching bridge
-  AND the standard a teaching-eval would grade against. Likely shape: a
-  curated knowledge resource (principles keyed to position features,
-  plans keyed to ECO codes) injected into both the coach prompt and the
-  judge prompt. Connects to IDEAS.md "Structured Learning Path".
+- **Pedagogy / curriculum layer — SHIPPED.** Implemented as the
+  `pedagogy-layer` spec (`.kiro/specs/pedagogy-layer/`, see
+  [`docs/pedagogy.md`](docs/pedagogy.md)). A curated local
+  `data/pedagogy/knowledge.yaml` (principles/patterns/plans keyed to
+  engine Position_Features + ECO, with citations), a pure `Selector`, an
+  annotation guard (schema/refs/legality + engine-soundness, no LLM), and
+  injection into BOTH the coach prompt and the judge's
+  `teaches_principle` standard via one shared selection. Wired into the
+  eval harness behind `eval_run.py --guidance on/off` for the A/B.
+  **Remaining:** grow the resource beyond the seed (breadth across the
+  theme families / openings), run the live `--guidance on` vs `off` A/B
+  to quantify the teaching-quality delta, and (later arc) progress
+  tracking + level-adaptive teaching that build on it. Connects to
+  IDEAS.md "Structured Learning Path".
 
 - **Who calibrates teaching quality?** Layer 3 assumes a human who can
   rate coaching. The product owner is the *student*, not a chess expert,

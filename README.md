@@ -141,7 +141,9 @@ python scripts/eval_run.py --models qwen3:8b --judge-model fitt-smart \
 
 See [`docs/evaluation.md`](docs/evaluation.md) for the full three-layer
 guide (objective checks, LLM-as-judge, human calibration) and how to
-add benchmark positions.
+add benchmark positions. See [`docs/pedagogy.md`](docs/pedagogy.md) for
+the pedagogy layer that grounds the judge's `teaches_principle` standard
+and the coach's "what to focus on" (the `--guidance` A/B).
 
 ## Swapping the LLM
 
