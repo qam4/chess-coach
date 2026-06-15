@@ -34,6 +34,22 @@ _GUIDANCE_INTRO = (
     "theme and connect it to a concrete, engine-sound move from the data above."
 )
 
+#: Header that marks the curated teaches_principle standard inside the judge
+#: prompt (Req 4.2).
+JUDGE_GUIDANCE_HEADER = "--- teaches_principle standard (curated guidance) ---"
+
+#: Instruction telling the judge to grade ``teaches_principle`` ONLY against
+#: the curated guidance and not its own chess knowledge (Req 4.2, 4.3, 4.4).
+_JUDGE_GUIDANCE_INTRO = (
+    "Grade the teaches_principle criterion ONLY against the curated guidance "
+    "below — this guidance is the sole standard for that criterion. Do NOT "
+    "rely on chess knowledge outside this guidance. A response passes "
+    "teaches_principle only when it names and soundly applies one of these "
+    "themes in THIS position; if it teaches a principle that is absent from "
+    "or contradicts this guidance, fail teaches_principle and name the "
+    "unsupported or contradicting principle."
+)
+
 
 def _level_filter(entries: list[GuidanceEntry], level: str | None) -> list[GuidanceEntry]:
     """Drop entries whose recorded levels exclude ``level`` (Req 3.3).
@@ -98,3 +114,30 @@ def format_guidance_block(
     if not lines:
         return ""
     return "\n".join([GUIDANCE_BLOCK_HEADER, _GUIDANCE_INTRO, *lines])
+
+
+def format_judge_guidance_block(entries: list[GuidanceEntry]) -> str:
+    """Render the selected entries as the sole standard for the judge's
+    ``teaches_principle`` criterion (Req 4.2, 4.3).
+
+    The block carries, for each entry, both ends of the teaching bridge
+    (its named theme and its how-to-apply statement) plus an instruction
+    telling the judge to grade ``teaches_principle`` ONLY against this
+    guidance and not its own chess knowledge. Mirrors the coach block's
+    per-entry rendering (``_render_entry``) so the judge sees exactly the
+    same guidance text the coach was given (single-source parity, Req
+    4.5).
+
+    Unlike :func:`format_guidance_block`, no level filter is applied here:
+    the entries handed to the judge are the identical list produced once by
+    the ``Selector`` (already level-filtered) and shared with the coach, so
+    re-filtering could only introduce divergence.
+
+    Returns the empty string for an empty selection, so the caller can omit
+    the ``teaches_principle`` standard (and the criterion itself) when there
+    is no guidance for the position (Req 4.6).
+    """
+    lines = render_guidance_entries(entries, level=None)
+    if not lines:
+        return ""
+    return "\n".join([JUDGE_GUIDANCE_HEADER, _JUDGE_GUIDANCE_INTRO, *lines])

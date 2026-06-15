@@ -23,6 +23,8 @@ import chess
 import yaml
 
 from ..models import PositionReport
+from ..pedagogy.inject import format_judge_guidance_block
+from ..pedagogy.resource import GuidanceEntry
 from .benchmark import BenchmarkPosition
 
 
@@ -141,9 +143,19 @@ class JudgeVerdict:
     quality_score: float
     judge_model: str
     rubric_version: str
+    # Criteria that were intentionally NOT graded for this position (Req
+    # 4.6) — e.g. ``teaches_principle`` when no curated guidance exists.
+    # A not-graded criterion is a distinct state from pass/fail: it is
+    # absent from ``criteria`` and excluded from the weighted score so it
+    # never silently counts as a free pass or a fail.
+    not_graded: tuple[str, ...] = ()
 
     def passed_keys(self) -> list[str]:
         return [k for k, (ok, _) in self.criteria.items() if ok]
+
+    def is_graded(self, key: str) -> bool:
+        """True when ``key`` was graded (i.e. not in ``not_graded``)."""
+        return key not in self.not_graded
 
 
 # --------------------------------------------------------------- prompt
@@ -204,18 +216,67 @@ _JSON_CONTRACT = (
 )
 
 
+_TEACHES_PRINCIPLE = "teaches_principle"
+
+
+def _ungraded_criteria(
+    rubric: JudgeRubric,
+    guidance: list[GuidanceEntry] | None,
+) -> tuple[str, ...]:
+    """Criteria omitted from grading for this position (Req 4.6).
+
+    ``teaches_principle`` is graded only against curated guidance (Req
+    4.2, 4.3). When the rubric HAS that criterion but no guidance is
+    available for the position, the criterion is dropped from the prompt
+    and recorded as not-graded — never silently passed or failed. A rubric
+    without ``teaches_principle`` (e.g. v1) is unaffected, and a non-empty
+    guidance set grades the criterion normally.
+    """
+    if _TEACHES_PRINCIPLE in rubric.keys() and not guidance:
+        return (_TEACHES_PRINCIPLE,)
+    return ()
+
+
 def build_judge_prompt(
     response: str,
     report: PositionReport,
     position: BenchmarkPosition,
     rubric: JudgeRubric,
+    guidance: list[GuidanceEntry] | None = None,
 ) -> str:
     """Build the grounded judge prompt: engine ground truth + the
-    coaching text + the rubric + a strict JSON output contract."""
+    coaching text + the rubric + a strict JSON output contract.
+
+    When ``guidance`` is non-empty AND the rubric has ``teaches_principle``,
+    the selected guidance entries are rendered as the **sole standard** for
+    that criterion, with an instruction telling the judge to grade it only
+    against the provided guidance and not its own chess knowledge (Req 4.2,
+    4.3). The guidance handed here is the identical list the coach prompt
+    received for this position (single-source parity, Req 4.5).
+
+    When ``guidance`` is empty/``None`` and the rubric has
+    ``teaches_principle``, that criterion is OMITTED from the rubric shown
+    to the judge; the resulting verdict records it as *not graded* rather
+    than passing or failing it (Req 4.6). A rubric without
+    ``teaches_principle`` (v1) is built exactly as before regardless of
+    ``guidance``.
+    """
     board = chess.Board(report.fen)
     side = "White" if board.turn == chess.WHITE else "Black"
 
-    rubric_lines = "\n".join(f"- {c.key}: {c.description}" for c in rubric.criteria)
+    has_teaches_principle = _TEACHES_PRINCIPLE in rubric.keys()
+    not_graded = _ungraded_criteria(rubric, guidance)
+    graded = [c for c in rubric.criteria if c.key not in not_graded]
+    rubric_lines = "\n".join(f"- {c.key}: {c.description}" for c in graded)
+
+    # Sole-standard guidance block for teaches_principle (Req 4.2). Only
+    # injected when the rubric actually has that criterion AND guidance is
+    # available — a rubric without teaches_principle (v1) is built exactly
+    # as before, ignoring any guidance.
+    guidance_block = ""
+    if has_teaches_principle and guidance:
+        guidance_block = format_judge_guidance_block(guidance)
+    guidance_section = f"\n\n{guidance_block}" if guidance_block else ""
 
     return (
         "You are evaluating a chess coaching response for quality.\n"
@@ -232,7 +293,8 @@ def build_judge_prompt(
         "--- Coaching response to grade ---\n"
         f"{response}\n\n"
         "--- Rubric (score each criterion pass/fail) ---\n"
-        f"{rubric_lines}\n\n"
+        f"{rubric_lines}"
+        f"{guidance_section}\n\n"
         f"{_JSON_CONTRACT}"
     )
 
@@ -253,31 +315,52 @@ def _extract_json_object(text: str) -> str:
     return text[start : end + 1]
 
 
-def _quality_score(criteria: dict[str, tuple[bool, str]], rubric: JudgeRubric) -> float:
-    total = rubric.total_weight()
+def _quality_score(
+    criteria: dict[str, tuple[bool, str]],
+    rubric: JudgeRubric,
+    not_graded: tuple[str, ...] = (),
+) -> float:
+    # A not-graded criterion (Req 4.6) is excluded from BOTH the numerator
+    # and the denominator: it must not count as a free pass or a fail. Its
+    # weight is dropped from the total so the remaining graded criteria are
+    # scored on their own.
+    ungraded = set(not_graded)
+    total = sum(c.weight for c in rubric.criteria if c.key not in ungraded)
     if total <= 0:
         return 0.0
     earned = sum(rubric.weight_of(k) for k, (ok, _) in criteria.items() if ok)
     score = earned / total
     # Apply multiplicative gates: a failed gated criterion (e.g. grounded,
     # key_idea) curves the whole score down so fluent filler can't offset
-    # a contradiction or a missed point. Gates compound.
+    # a contradiction or a missed point. Gates compound. A not-graded
+    # criterion never trips a gate.
     for crit_key, multiplier in rubric.gates:
+        if crit_key in ungraded:
+            continue
         entry = criteria.get(crit_key)
         if entry is not None and not entry[0]:
             score *= multiplier
     return round(score, 4)
 
 
-def parse_verdict(text: str, rubric: JudgeRubric, *, judge_model: str) -> JudgeVerdict:
+def parse_verdict(
+    text: str,
+    rubric: JudgeRubric,
+    *,
+    judge_model: str,
+    not_graded: tuple[str, ...] = (),
+) -> JudgeVerdict:
     """Parse the judge's reply into a complete verdict, or raise.
 
     Enforces two invariants:
-    * Every rubric criterion must be present (else VerdictParseError).
+    * Every *graded* rubric criterion must be present (else
+      VerdictParseError). Criteria in ``not_graded`` (Req 4.6) are neither
+      required in the reply nor scored — they are recorded as not-graded.
     * ``grounded`` passes iff there are no contradictions — we derive
       it from the contradictions list rather than trusting the model's
       self-reported grounded flag (Property 5).
     """
+    ungraded = set(not_graded)
     raw = _extract_json_object(text)
     try:
         data = json.loads(raw)
@@ -297,6 +380,8 @@ def parse_verdict(text: str, rubric: JudgeRubric, *, judge_model: str) -> JudgeV
 
     criteria: dict[str, tuple[bool, str]] = {}
     for key in rubric.keys():
+        if key in ungraded:
+            continue
         entry = raw_criteria.get(key)
         if not isinstance(entry, dict) or "pass" not in entry:
             raise VerdictParseError(f"judge reply missing criterion {key!r}")
@@ -316,9 +401,10 @@ def parse_verdict(text: str, rubric: JudgeRubric, *, judge_model: str) -> JudgeV
     return JudgeVerdict(
         criteria=criteria,
         contradictions=contradictions,
-        quality_score=_quality_score(criteria, rubric),
+        quality_score=_quality_score(criteria, rubric, not_graded),
         judge_model=judge_model,
         rubric_version=rubric.version,
+        not_graded=tuple(k for k in rubric.keys() if k in ungraded),
     )
 
 
@@ -332,17 +418,26 @@ def judge_response(
     position: BenchmarkPosition,
     rubric: JudgeRubric,
     *,
+    guidance: list[GuidanceEntry] | None = None,
     max_tokens: int = 900,
 ) -> JudgeVerdict:
     """Run the judge for one coaching response. Temperature 0 for
-    reproducibility; one retry on a parse failure, then raise."""
-    prompt = build_judge_prompt(response, report, position, rubric)
+    reproducibility; one retry on a parse failure, then raise.
+
+    ``guidance`` is the selector-chosen guidance for this position — the
+    identical list the coach prompt received (Req 4.5). It grounds the
+    ``teaches_principle`` criterion (Req 4.2); when it is empty and the
+    rubric has that criterion, the criterion is omitted from the prompt and
+    recorded as not-graded in the verdict (Req 4.6).
+    """
+    prompt = build_judge_prompt(response, report, position, rubric, guidance)
+    not_graded = _ungraded_criteria(rubric, guidance)
     model = getattr(provider, "model", "unknown")
     last_err: Exception | None = None
     for _attempt in range(2):
         raw = provider.generate(prompt, max_tokens=max_tokens, temperature=0.0)  # type: ignore[attr-defined]
         try:
-            return parse_verdict(raw, rubric, judge_model=model)
+            return parse_verdict(raw, rubric, judge_model=model, not_graded=not_graded)
         except VerdictParseError as e:
             last_err = e
     raise VerdictParseError(f"judge verdict unparseable after retry: {last_err}")

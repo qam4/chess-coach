@@ -184,3 +184,31 @@ def select_for_position(
         max_entries=max_entries,
     )
     return select(resource, inp), None
+
+
+def guidance_for_position(
+    resource: KnowledgeResource,
+    report: PositionReport,
+    level: str,
+    max_entries: int,
+) -> list[GuidanceEntry]:
+    """The single source of guidance for BOTH prompts (Req 4.1, 4.5).
+
+    The harness builds **one** selection per position with this helper and
+    hands the identical list to the coach prompt (``build_rich_coaching_prompt``)
+    and the judge prompt (``build_judge_prompt``). Routing both through the
+    one ``Selector`` over the one ``KnowledgeResource`` guarantees the judge
+    grades ``teaches_principle`` against the very guidance the coach was
+    given — there is no second selection path that could drift (design's
+    single-source decision; Property 9).
+
+    Returns the selected entries (already feature/ECO-matched, level-filtered,
+    ranked, and capped by :func:`select`). A malformed position yields an
+    empty list, exactly as :func:`select_for_position` reports; the error
+    indication is dropped here because both prompts treat an empty selection
+    the same way — the coach omits the guidance block and the judge omits the
+    ``teaches_principle`` criterion (Req 3.6, 4.6). Callers needing the error
+    indication should use :func:`select_for_position` directly.
+    """
+    entries, _error = select_for_position(resource, report, level, max_entries)
+    return entries
