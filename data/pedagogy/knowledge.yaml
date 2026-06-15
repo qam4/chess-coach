@@ -221,3 +221,103 @@ entries:
     levels: [advanced]
     eco_codes: [B20]
     citation: "Silman, How to Reassess Your Chess (4th ed.), ch. on imbalances"
+
+  # ---------------------------------------------------------------
+  # Batch 2 — fill the feature gaps the benchmark actually hits.
+  # Keyed to phase:middlegame, phase:endgame, hanging_piece_opponent,
+  # exposed_king, open_file, threat_present. how_to_apply describes the
+  # IDEA and what to look for; the concrete move comes from the engine
+  # lines already in the coach prompt (a weak model inventing moves was
+  # the illegal-move side effect seen in the first A/B).
+  # ---------------------------------------------------------------
+
+  - id: principle.middlegame_plan
+    type: principle
+    theme: make a plan
+    focus: >
+      In the middlegame, drifting without a plan is how good positions
+      slip away. Decide what the position is about before you move.
+    how_to_apply: >
+      Ask three questions: which of my pieces is worst-placed, what is
+      the weakest point in my opponent's camp, and which side of the
+      board is mine to play on? Improve the worst piece and aim at the
+      weakness.
+    levels: [intermediate, advanced]
+    features: [phase:middlegame]
+    citation: "Silman, How to Reassess Your Chess (4th ed.), imbalances and planning (unverified locus)"
+
+  - id: principle.endgame_king_activity
+    type: principle
+    theme: king activity in the endgame
+    focus: >
+      Once the queens are off, the king stops hiding and becomes a
+      strong fighting piece. A passive king loses endgames a active one
+      would draw or win.
+    how_to_apply: >
+      March the king toward the center and toward the pawns that matter.
+      With king and rook against a lone king, use the king and rook
+      together to drive the enemy king to the edge, where it can be
+      mated.
+    levels: [beginner, intermediate, advanced]
+    features: [phase:endgame]
+    citation: "Silman, Silman's Complete Endgame Course, king activity / K+R vs K (unverified locus)"
+
+  - id: tactic.win_hanging_piece
+    type: principle
+    theme: win the loose piece
+    focus: >
+      When your opponent leaves a piece undefended, the most reliable
+      way to win a game is simply to take it — free material decides
+      most games at the club level.
+    how_to_apply: >
+      Scan the opponent's pieces for one that is attacked more times
+      than it is defended, or not defended at all, and work out whether
+      you can win it cleanly before looking for anything fancier.
+    levels: [beginner, intermediate]
+    features: [hanging_piece_opponent]
+    citation: "Heisman, A Guide to Chess Improvement, counting and board vision (unverified locus)"
+
+  - id: principle.exposed_king
+    type: principle
+    theme: king safety — exposed king
+    focus: >
+      A king without a pawn shield, or stuck in the center, is a target:
+      the side with the safer king can attack while the other scrambles
+      to defend.
+    how_to_apply: >
+      If your own king is exposed, prioritize getting it to safety or
+      trading off the attackers before anything else. If the enemy king
+      is exposed, bring more pieces toward it and pry open lines and
+      diagonals leading to it.
+    levels: [intermediate, advanced]
+    features: [exposed_king]
+    citation: "Seirawan, Winning Chess Strategies, ch. on attacking the king (unverified locus)"
+
+  - id: principle.open_file
+    type: principle
+    theme: rooks on open files
+    focus: >
+      A rook is at its best on an open file (one with no pawns), where
+      it controls the whole file and can swing into the enemy position.
+    how_to_apply: >
+      Place a rook on the open file, and double rooks (or rook plus
+      queen) on it when you can. Contest a file the opponent already
+      controls rather than leaving it to them.
+    levels: [intermediate, advanced]
+    features: [open_file]
+    citation: "Nimzowitsch, My System, ch. on the open file (unverified locus)"
+
+  - id: principle.meet_the_threat
+    type: principle
+    theme: answer the threat first
+    focus: >
+      Before carrying out your own plan, find out what your opponent is
+      threatening. Many losses come from executing a plan while ignoring
+      an incoming threat.
+    how_to_apply: >
+      Each move, ask "if it were my opponent's turn, what would they do
+      to me?" If there is a real threat, meet it — defend the target,
+      block, capture the attacker, or make a bigger threat of your own.
+    levels: [beginner, intermediate, advanced]
+    features: [threat_present]
+    citation: "Heisman, The Improving Chess Thinker, prophylactic thinking / 'what does my opponent threaten?' (unverified locus)"
