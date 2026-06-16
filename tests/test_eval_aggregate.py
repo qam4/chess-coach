@@ -163,6 +163,57 @@ def test_compare_metric_regresses_label() -> None:
     assert c.verdict == "regresses"
 
 
+# --------------------------------------------------------------- significance (SEM/t)
+
+
+def test_sem_shrinks_with_n() -> None:
+    # Same spread, more runs -> smaller SEM.
+    few = aggregate_values([0.2, 0.4])  # std ~0.1414, n2
+    many = aggregate_values([0.2, 0.4, 0.2, 0.4])  # same-ish std, n4
+    assert many.sem < few.sem
+
+
+def test_significance_unassessable_single_run() -> None:
+    c = compare_metric("quality", aggregate_values([0.26]), aggregate_values([0.45]))
+    assert c.t_ratio is None
+    assert c.significance == "need >=2 runs/group"
+
+
+def test_significance_deterministic_when_zero_variance() -> None:
+    # Temp-0 factual: identical every run, but a real reproducible delta.
+    off = aggregate_values([0.30, 0.30, 0.30])
+    on = aggregate_values([0.33, 0.33, 0.33])
+    c = compare_metric("factual", off, on)
+    assert c.sem_diff == 0.0
+    assert c.t_ratio is None
+    assert c.significance == "deterministic"
+
+
+def test_significance_no_change_when_zero_variance_zero_delta() -> None:
+    same = aggregate_values([0.30, 0.30, 0.30])
+    c = compare_metric("factual", same, same)
+    assert c.significance == "no change"
+
+
+def test_significance_significant_when_t_large() -> None:
+    off = aggregate_values([0.25, 0.26, 0.27])  # tiny SEM
+    on = aggregate_values([0.50, 0.51, 0.52])  # tiny SEM, big gap
+    c = compare_metric("quality", off, on)
+    assert c.t_ratio is not None and abs(c.t_ratio) >= 2.0
+    assert c.significance == "significant"
+
+
+def test_significance_ns_when_noisy_and_small() -> None:
+    # The real gemma-shaped case: modest delta swamped by on-group noise.
+    off = aggregate_values([0.26, 0.32, 0.25])
+    on = aggregate_values([0.43, 0.55, 0.27])
+    c = compare_metric("quality", off, on)
+    assert c.t_ratio is not None
+    # delta ~0.14, SE_diff ~0.084 -> t ~1.6 -> suggestive, not significant
+    assert c.significance in {"suggestive", "ns"}
+    assert c.significance != "significant"
+
+
 # --------------------------------------------------------------- compare_off_on
 
 
@@ -194,4 +245,5 @@ def test_render_comparison_contains_verdict_legend() -> None:
     out = render_comparison("m", compare_off_on(off, on))
     assert "OFF vs ON" in out
     assert "delta" in out
-    assert "noise" in out
+    assert "SE_diff" in out
+    assert "significance" in out

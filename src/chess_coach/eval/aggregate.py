@@ -64,6 +64,17 @@ class MetricStats:
         something."""
         return self.n >= 2
 
+    @property
+    def sem(self) -> float:
+        """Standard error of the mean (``std / sqrt(n)``).
+
+        Unlike ``std`` (the per-run spread, which does not shrink with more
+        runs), the SEM shrinks as ``1/sqrt(n)`` -- it is how tightly the
+        *mean* is pinned down, and the right scale for asking whether a
+        difference of means is real. ``0.0`` for ``n < 2``.
+        """
+        return round(self.std / math.sqrt(self.n), 4) if self.n >= 2 else 0.0
+
 
 def aggregate_values(values: list[float]) -> MetricStats:
     """Roll a list of per-run values into a :class:`MetricStats`.
@@ -127,14 +138,27 @@ def aggregate_runs(summaries: list[ModelSummary]) -> list[AggregatedModel]:
 
 @dataclass(frozen=True)
 class MetricComparison:
-    """An off-vs-on comparison for one metric, with a noise band.
+    """An off-vs-on comparison for one metric, with two views of the spread.
 
-    ``delta`` is ``on.mean - off.mean``. ``noise`` is the combined spread
-    of the two groups (root-sum-square of the sample stds) -- the band a
-    real effect must clear. ``clears_noise`` is ``True``/``False`` once both
-    groups have ``n >= 2``, and ``None`` when the spread cannot be assessed
-    (fewer than two runs in either group), so an under-powered comparison
-    is reported honestly rather than as a spurious "significant" result.
+    ``delta`` is ``on.mean - off.mean``.
+
+    *Conservative band:* ``noise`` is the combined per-run spread
+    (root-sum-square of the sample stds) and ``clears_noise`` asks whether
+    ``|delta|`` exceeds it -- i.e. is the effect bigger than how much a
+    single run jitters. This does not shrink with more runs.
+
+    *Significance:* ``sem_diff`` is the standard error of the difference of
+    means (RSS of the two SEMs, which *does* shrink as ``1/sqrt(n)``), and
+    ``t_ratio = delta / sem_diff`` is the standard "how many standard errors
+    is the gap" measure. ``significance`` labels it: ``significant``
+    (``|t| >= 2``), ``suggestive`` (``|t| >= 1``), ``ns`` (smaller),
+    ``deterministic`` (zero variance but a real reproducible delta, e.g. a
+    temp-0 factual gain), ``no change`` (zero delta, zero variance), or
+    ``need >=2 runs/group`` when under-powered. ``t_ratio`` is ``None``
+    whenever a numeric ratio is undefined (under-powered or zero variance).
+
+    Both ``clears_noise`` and ``significance`` are ``None``/under-powered
+    until each group has ``n >= 2``.
     """
 
     metric: str
@@ -143,15 +167,38 @@ class MetricComparison:
     delta: float
     noise: float
     clears_noise: bool | None
+    sem_diff: float
+    t_ratio: float | None
+    significance: str
 
     @property
     def verdict(self) -> str:
-        """Short human label for the comparison outcome."""
+        """Short human label for the conservative per-run-spread band."""
         if self.clears_noise is None:
             return "need >=2 runs/group"
         if not self.clears_noise:
             return "within noise"
         return "improves" if self.delta > 0 else "regresses"
+
+
+def _significance(delta: float, sem_diff: float, off: MetricStats, on: MetricStats) -> tuple[float | None, str]:
+    """Classify a delta by its standard-error-of-the-difference ratio."""
+    if not (off.assessable_spread and on.assessable_spread):
+        return None, "need >=2 runs/group"
+    if sem_diff == 0.0:
+        # Zero variance in both groups: the delta (if any) is perfectly
+        # reproducible, not a noisy estimate -- label it as such rather than
+        # dividing by zero.
+        return None, ("no change" if delta == 0.0 else "deterministic")
+    t = round(delta / sem_diff, 2)
+    magnitude = abs(t)
+    if magnitude >= 2.0:
+        label = "significant"
+    elif magnitude >= 1.0:
+        label = "suggestive"
+    else:
+        label = "ns"
+    return t, label
 
 
 def compare_metric(metric: str, off: MetricStats, on: MetricStats) -> MetricComparison:
@@ -162,7 +209,19 @@ def compare_metric(metric: str, off: MetricStats, on: MetricStats) -> MetricComp
         clears: bool | None = abs(delta) > noise
     else:
         clears = None
-    return MetricComparison(metric=metric, off=off, on=on, delta=delta, noise=noise, clears_noise=clears)
+    sem_diff = round(math.hypot(off.sem, on.sem), 4)
+    t_ratio, significance = _significance(delta, sem_diff, off, on)
+    return MetricComparison(
+        metric=metric,
+        off=off,
+        on=on,
+        delta=delta,
+        noise=noise,
+        clears_noise=clears,
+        sem_diff=sem_diff,
+        t_ratio=t_ratio,
+        significance=significance,
+    )
 
 
 def compare_off_on(off: AggregatedModel, on: AggregatedModel) -> list[MetricComparison]:
@@ -201,19 +260,23 @@ def render_aggregate(models: list[AggregatedModel]) -> str:
 
 
 def render_comparison(model: str, comparisons: list[MetricComparison]) -> str:
-    """Render an off-vs-on comparison table with deltas and noise band."""
+    """Render an off-vs-on comparison table with delta, and a standard-
+    error-based significance verdict."""
     lines = [
-        "=" * 78,
+        "=" * 86,
         f"OFF vs ON  -  {model}",
-        "=" * 78,
-        f"{'metric':<26} {'off':>9} {'on':>9} {'delta':>9} {'noise':>9}  verdict",
-        "-" * 78,
+        "=" * 86,
+        f"{'metric':<26} {'off':>8} {'on':>8} {'delta':>8} {'SE_diff':>8} {'t':>6}  significance",
+        "-" * 86,
     ]
     for c in comparisons:
-        off_cell = f"{c.off.mean:.3f}"
-        on_cell = f"{c.on.mean:.3f}"
-        lines.append(f"{c.metric:<26} {off_cell:>9} {on_cell:>9} {c.delta:>+9.3f} {c.noise:>9.3f}  {c.verdict}")
-    lines.append("-" * 78)
-    lines.append("delta = on - off;  noise = combined sample std (root-sum-square)")
-    lines.append("'within noise' = |delta| <= noise;  needs >=2 runs per group to assess")
+        t_cell = f"{c.t_ratio:>6.2f}" if c.t_ratio is not None else f"{'--':>6}"
+        lines.append(
+            f"{c.metric:<26} {c.off.mean:>8.3f} {c.on.mean:>8.3f} "
+            f"{c.delta:>+8.3f} {c.sem_diff:>8.3f} {t_cell}  {c.significance}"
+        )
+    lines.append("-" * 86)
+    lines.append("delta = on - off;  SE_diff = std error of the difference (shrinks ~1/sqrt(n))")
+    lines.append("t = delta / SE_diff;  significant |t|>=2, suggestive |t|>=1, ns otherwise")
+    lines.append("'deterministic' = nonzero delta with zero variance (e.g. temp-0 factual)")
     return "\n".join(lines)
