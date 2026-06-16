@@ -97,8 +97,43 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   Run the benchmark ≥3× per condition into separate `--out` dirs, then
   aggregate. The single-run gemma A/B fed through it confirms it refuses
   to call the +0.198 quality delta significant off one run each (correct).
-  **Still TODO:** actually execute the ≥3× off/on runs (needs the EC2
-  tunnel + kiro-cli judge) and record the noise-controlled verdict.
+  **Noise-controlled gemma A/B — DONE (2026-06-16), and it deflates the
+  single-run claim.** Ran 3× off + 3× on for gemma4:12b-it-qat (rubric.v2,
+  9 positions, kiro-cli/claude-sonnet-4.6 judge, temp 0.0 so generation is
+  deterministic — repeats isolate *judge* noise), then aggregated:
+  | metric | off (mean) | on (mean) | delta | noise band | verdict |
+  |---|---|---|---|---|---|
+  | factual (L1) | 0.296 | 0.333 | +0.037 | 0.000 | deterministic ↑ |
+  | coverage | 0.296 | 0.333 | +0.037 | 0.000 | deterministic ↑ |
+  | hallucinations | 0 | 0 | 0 | — | none |
+  | illegal moves | 0 | 0 | 0 | — | none |
+  | teaching quality (L2) | **0.276** | **0.417** | **+0.141** | **0.143** | **within noise** |
+
+  Per-run quality: off = {0.26, 0.32, 0.25}; on = {0.43, 0.55, **0.27**}.
+  The judge scored the *identical* ON coaching texts anywhere from 0.27 to
+  0.55 — an on-condition std of ~0.14, as large as the effect itself. So
+  the headline teaching gain (+0.141) sits **within the combined judge
+  noise band (±0.143)**: on this data we **cannot** claim the pedagogy
+  layer improves judged teaching for gemma. The earlier single-run
+  +0.198 (0.26→0.45) was partly judge luck — exactly the over-claim the
+  repeat-run instrument was built to catch. (Even using the more lenient
+  standard-error-of-the-mean, delta/SE ≈ 1.6 — suggestive, not
+  significant at n=3.)
+
+  What *does* hold up: **factual non-regression is real and
+  deterministic** — guidance reproducibly nudges factual/coverage +0.037
+  with zero variance, 0 hallucinations, 0 illegal moves every run (Req 5.2
+  satisfied robustly for gemma). So the layer is *safe* here; its
+  *teaching benefit* is unproven against judge noise.
+
+  Implications / next: (a) the judge is the dominant noise source — to get
+  a real teaching signal, shrink it (more repeats to tighten the SEM, a
+  multi-judge panel averaged, or a larger benchmark so each mean rests on
+  more positions); (b) consider reporting SEM / a proper significance
+  measure in `eval_aggregate.py`, not just the conservative per-run-spread
+  band; (c) re-run the same protocol for qwen3:14b (whose single-run
+  +0.17 came *with* a factual regression) to see if its delta also
+  collapses into noise.
 
   (1) Note "most-specific-first" selection is already implemented in the
   `Selector` (plan > pattern > principle, relevance desc), and the cap is
