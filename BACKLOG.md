@@ -111,6 +111,33 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   capability range, repeat runs, and address the factual regression
   (tighten grounding in the guidance text or the coach prompt).
 
+  **gemma4:12b-it-qat A/B (2026-06-16) — BEST RESULT, teaching gain with
+  NO factual cost.** Same setup (19-entry resource, 9 positions,
+  claude-sonnet-4.6 judge, rubric.v2), model under test =
+  gemma4:12b-it-qat (a quantized 12B):
+  | metric | off | on |
+  |---|---|---|
+  | factual (L1) | 0.30 | **0.33** |
+  | coverage | 0.30 | **0.33** |
+  | hallucinations | 0 | 0 |
+  | illegal moves | 0 | 0 |
+  | teaching quality (L2) | 0.26 | **0.45** |
+  | pass rate | 0% | 11% |
+
+  Teaching quality rose **+0.19 (0.26→0.45)** — the biggest gain of any
+  model — and unlike qwen3:14b it came with **no factual regression**:
+  factual *rose* 0.30→0.33, coverage rose 0.30→0.33, and **0
+  hallucinations / 0 illegal moves in both passes**. So Req 5.2 (factual
+  non-regression) holds here. This is the standout "low-budget model that
+  benefits cleanly" candidate — quantized 12B, ~7s latency, cheapest of
+  the winners. Cross-model picture now: guidance is flat/negative for the
+  8B (hermes3:8b 0.09→0.07), helps qwen3:14b but with a factual cost
+  (0.14→0.31, hall 0→2), and helps gemma4:12b-it-qat the most with NO
+  cost (0.26→0.45, hall 0). Capability-dependence confirmed across three
+  models; gemma is the cleanest. Still single-run / 9-position /
+  judge-noise — repeat runs are the next rigor step. Candidate for the
+  default coaching model (config bump pending).
+
 - **Who calibrates teaching quality?** Layer 3 assumes a human who can
   rate coaching. The product owner is the *student*, not a chess expert,
   so they can't be that human for the teaching axis. Calibration needs
