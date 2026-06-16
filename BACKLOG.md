@@ -87,6 +87,24 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   (4) a larger benchmark. The pedagogy layer's value is unproven until
   measured across models with noise controlled.
 
+  **Repeat-run instrument — BUILT (2026-06-16).** The "separate signal
+  from noise" step above now has tooling: `scripts/eval_aggregate.py`
+  (logic in `src/chess_coach/eval/aggregate.py`, fully unit-tested) rolls
+  N repeated `eval_run.py` result dirs into per-metric `mean ± std`, and
+  in `--off … --on …` mode reports each metric's delta against a **noise
+  band** (combined sample std), labelling it `improves` / `regresses` /
+  `within noise` — and honestly `need >=2 runs/group` when under-powered.
+  Run the benchmark ≥3× per condition into separate `--out` dirs, then
+  aggregate. The single-run gemma A/B fed through it confirms it refuses
+  to call the +0.198 quality delta significant off one run each (correct).
+  **Still TODO:** actually execute the ≥3× off/on runs (needs the EC2
+  tunnel + kiro-cli judge) and record the noise-controlled verdict.
+
+  (1) Note "most-specific-first" selection is already implemented in the
+  `Selector` (plan > pattern > principle, relevance desc), and the cap is
+  a runtime flag (`eval_run.py --guidance-max 1|2`), so the "sharpen
+  selection" lever needs no code — just runs at cap 1–2.
+
   **qwen3:14b A/B (2026-06-15) — FIRST POSITIVE SIGNAL (capability
   matters).** Same setup, model under test = qwen3:14b:
   | metric | off | on |

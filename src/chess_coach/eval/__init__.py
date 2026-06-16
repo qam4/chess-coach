@@ -14,6 +14,18 @@ This module exposes the benchmark data model; the layers build on it.
 
 from __future__ import annotations
 
+from .aggregate import (
+    AggregatedModel,
+    MetricComparison,
+    MetricStats,
+    aggregate_model,
+    aggregate_runs,
+    aggregate_values,
+    compare_metric,
+    compare_off_on,
+    render_aggregate,
+    render_comparison,
+)
 from .benchmark import (
     BenchmarkError,
     BenchmarkPosition,
@@ -41,18 +53,26 @@ from .scoring import (
 
 __all__ = [
     "AgreementReport",
+    "AggregatedModel",
     "BenchmarkError",
     "BenchmarkPosition",
     "GroundTruthPoint",
     "JudgeRubric",
     "JudgeVerdict",
+    "MetricComparison",
+    "MetricStats",
     "ModelSummary",
     "ObjectiveResult",
     "ResponseEval",
     "RunConfig",
     "Scoreboard",
     "VerdictParseError",
+    "aggregate_model",
+    "aggregate_runs",
+    "aggregate_values",
     "build_judge_prompt",
+    "compare_metric",
+    "compare_off_on",
     "compute_agreement",
     "evaluate_objective",
     "judge_response",
@@ -61,4 +81,6 @@ __all__ = [
     "load_seed_ratings",
     "parse_verdict",
     "persist_results",
+    "render_aggregate",
+    "render_comparison",
 ]
