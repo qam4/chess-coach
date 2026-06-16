@@ -87,6 +87,30 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   (4) a larger benchmark. The pedagogy layer's value is unproven until
   measured across models with noise controlled.
 
+  **qwen3:14b A/B (2026-06-15) — FIRST POSITIVE SIGNAL (capability
+  matters).** Same setup, model under test = qwen3:14b:
+  | metric | off | on |
+  |---|---|---|
+  | factual (L1) | 0.30 | 0.24 |
+  | coverage | 0.30 | 0.28 |
+  | hallucinations | 0 | 2 |
+  | teaching quality (L2) | 0.14 | **0.31** |
+  | pass rate | 0% | 11% |
+
+  Teaching quality **more than doubled** (0.14→0.31, +0.17; two positions
+  hit 1.00 / 0.90) — a swing big enough to likely be real signal. Cross
+  model: guidance was flat/negative for hermes3:8b (0.09→0.07) but
+  substantially helped qwen3:14b (0.14→0.31), supporting the hypothesis
+  that **guidance only helps a model strong enough to use it** (an 8B is
+  too weak). Counterweight: it also made qwen3:14b a worse fact-checker —
+  factual 0.30→0.24, hallucinations 0→2 — so Req 5.2 (factual
+  non-regression) did NOT hold; teaching more led it to assert more, some
+  wrong. Real trade-off, still single-run / 9-position / judge-noise.
+  Open challenge: find a *low-budget* model that benefits (qwen3:14b works,
+  an 8B does not — trying gemma3:12b next). Next: more models across the
+  capability range, repeat runs, and address the factual regression
+  (tighten grounding in the guidance text or the coach prompt).
+
 - **Who calibrates teaching quality?** Layer 3 assumes a human who can
   rate coaching. The product owner is the *student*, not a chess expert,
   so they can't be that human for the teaching axis. Calibration needs
