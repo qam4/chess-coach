@@ -135,6 +135,49 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   +0.17 came *with* a factual regression) to see if its delta also
   collapses into noise.
 
+  **Noise-controlled qwen3:14b A/B — DONE (2026-06-17): the trade-off is
+  REAL (opposite shape from gemma).** Full 3× off + 3× on (rubric.v2, 9
+  positions, kiro-cli/sonnet-4.6 judge). Note qwen is a *thinking* model
+  and its generation is **not** deterministic even at temp 0 (factual
+  varied 0.22–0.24 across on-runs), so these repeats capture generation +
+  judge noise combined — more realistic than gemma's judge-only noise.
+  | metric | off | on | delta | t | significance |
+  |---|---|---|---|---|---|
+  | teaching quality (L2) | 0.120 | 0.217 | +0.097 | 2.04 | significant* |
+  | factual (L1) | 0.284 | 0.233 | **−0.051** | **−3.69** | **sig. regression** |
+  | coverage | 0.284 | 0.272 | −0.012 | −0.89 | ns |
+  | hallucinations | 0.0 | 1.33 | +1.33 | 2.00 | significant* |
+  | illegal moves | 0.33 | 1.67 | +1.33 | **2.83** | **significant** |
+
+  Per-run quality: off = {0.13, 0.12, 0.12}; on = {0.13, 0.22, 0.29}.
+  Unlike gemma (teaching gain washed out by noise, NO factual cost), qwen
+  shows a genuine **trade-off that survives noise control**: guidance
+  lifts teaching quality (+0.097) but at a *significant* factual cost
+  (−0.051, t=−3.69) with significantly more hallucinations and
+  illegal-move suggestions — teaching-more makes qwen assert-more-wrong.
+  **Req 5.2 (factual non-regression) fails for qwen.** Confirms the
+  earlier single-run qwen finding as a real, reproducible effect (not
+  judge luck).
+
+  **Caveat — the `|t|>=2` rule is too lenient at n=3.** It is a
+  large-sample rule of thumb; the proper two-sided 95% critical-t for
+  df~3 is ~3.2, so the borderline calls here (quality t=2.04,
+  hallucinations t=2.00) are really *suggestive*, not solidly
+  significant. The robust results are the factual regression (t=−3.69)
+  and the illegal-move rise (t=2.83). **Instrument follow-up:** make
+  `eval_aggregate.py` df-aware (critical-t table or p-value) instead of a
+  flat `|t|>=2`, and/or run more repeats to earn the large-sample rule.
+
+  **Cross-model synthesis (3 models, noise-controlled where measured):**
+  no model yet shows a *clean* significant teaching win with no factual
+  cost. hermes3:8b — guidance flat/negative (too weak to use it).
+  gemma4:12b-it-qat — teaching gain within judge noise (unproven) but
+  factual non-regression holds (safe). qwen3:14b — teaching gain
+  (borderline) but a real factual/safety regression (benefit at a cost).
+  The lever for a clean win is likely **tighter, better-grounded guidance
+  text** (so applying it doesn't tempt wrong concrete claims) and a
+  less-noisy judge, not more entries.
+
   (1) Note "most-specific-first" selection is already implemented in the
   `Selector` (plan > pattern > principle, relevance desc), and the cap is
   a runtime flag (`eval_run.py --guidance-max 1|2`), so the "sharpen
