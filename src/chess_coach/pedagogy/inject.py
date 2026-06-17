@@ -28,10 +28,19 @@ from chess_coach.pedagogy.resource import GuidanceEntry
 GUIDANCE_BLOCK_HEADER = "--- What to focus on ---"
 
 #: One-line orientation so the coaching voice knows the block is the
-#: curated "what to teach" standard, to be bridged to an engine-sound move.
+#: curated "what to teach" standard, to be bridged to an engine-sound move —
+#: with an explicit anti-fabrication clause. Applying a theme must never
+#: tempt the model into asserting a concrete tactic/move that the analysis
+#: does not actually show (the factual-regression failure mode seen when
+#: guidance was switched on for qwen3:14b: teaching-more led to
+#: asserting-more-wrong). The base SYSTEM_PROMPT_V2 grounding rules still
+#: apply; this reinforces them specifically for the curated themes.
 _GUIDANCE_INTRO = (
-    "Curated coaching themes selected for this position. Name the relevant "
-    "theme and connect it to a concrete, engine-sound move from the data above."
+    "Curated coaching themes selected for this position. Name the most "
+    "relevant theme and connect it to a concrete, engine-sound move FROM THE "
+    "ANALYSIS ABOVE. Apply a theme only if the analysis actually shows it: "
+    "never invent a move, capture, threat, or tactic to fit a theme — if the "
+    "pattern is not in the data above, teach the idea in general terms instead."
 )
 
 #: Header that marks the curated teaches_principle standard inside the judge
