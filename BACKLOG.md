@@ -180,9 +180,31 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   gemma4:12b-it-qat — teaching gain within judge noise (unproven) but
   factual non-regression holds (safe). qwen3:14b — teaching gain
   (borderline) but a real factual/safety regression (benefit at a cost).
-  The lever for a clean win is likely **tighter, better-grounded guidance
-  text** (so applying it doesn't tempt wrong concrete claims) and a
-  less-noisy judge, not more entries.
+
+  **Tightening the guidance intro text — TRIED, BACKFIRED (2026-06-17).**
+  Hypothesis: adding an anti-fabrication clause to the injected coach
+  block ("apply a theme only if the analysis shows it; never invent a
+  move/tactic to fit a theme; else teach the idea in general terms")
+  would cut qwen's factual regression while keeping the teaching gain.
+  Tested with a fresh qwen3:14b 3× ON re-run (tightened prompt) against
+  the unchanged OFF baseline and the original ON runs. It made *everything
+  worse*: vs the original guidance, factual 0.233→0.148 (t=−13.7, sig),
+  coverage 0.272→0.148 (sig), teaching quality **0.217→0.108 (halved**,
+  t=−2.3), word count 141→133 (t=−47.6, sig — the model hedged and
+  disengaged); hallucinations only marginally down (1.33→1.0, ns) and
+  illegal moves slightly up. The three runs were tightly consistent
+  (factual 0.15/0.15/0.15), so it's a real effect, not noise. **Conclusion:
+  more grounding *instructions* are the wrong lever — piling caution onto
+  the prompt makes a capable model write shorter, more hedged, LESS
+  grounded coaching, not more. Reverted (commit reverts
+  `090542d`).** Better next levers to try (validate live before merging):
+  sharpen *selection* (cap 1–2, most-specific-first) so less guidance text
+  competes with the engine facts; improve the *content* grounding of
+  individual entries' `how_to_apply` (concrete-but-conditional phrasing)
+  rather than a blanket prompt warning; or accept that guidance is a
+  teaching-vs-factual trade-off and gate it by model capability. And the
+  judge remains the dominant noise source — shrink it (more repeats /
+  multi-judge) before chasing small prompt deltas.
 
   (1) Note "most-specific-first" selection is already implemented in the
   `Selector` (plan > pattern > principle, relevance desc), and the cap is
