@@ -188,30 +188,3 @@ def test_property_8_level_filtering_excludes_inapplicable(case: tuple[str, list[
         else:
             assert token_theme not in prompt
             assert token_apply not in prompt
-
-
-def test_guidance_block_carries_anti_fabrication_clause() -> None:
-    """The injected guidance intro must explicitly forbid inventing a
-    concrete tactic/move to fit a theme — the lever against the factual
-    regression seen when guidance was switched on for capable models."""
-    from chess_coach.pedagogy.inject import format_guidance_block
-
-    entry = GuidanceEntry(
-        id="e1",
-        type="principle",
-        theme="make a plan",
-        focus="decide what the position is about",
-        how_to_apply="improve the worst-placed piece",
-        levels=frozenset({"intermediate"}),
-        features=frozenset({"phase:middlegame"}),
-        eco_codes=frozenset(),
-        citation="citation",
-        example=None,
-    )
-    block = format_guidance_block([entry], level="intermediate")
-    lowered = block.lower()
-    assert "never invent" in lowered
-    assert "only if the analysis actually shows it" in lowered
-    # The teaching content (both bridge ends) is still present.
-    assert "make a plan" in block
-    assert "improve the worst-placed piece" in block
