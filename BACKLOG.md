@@ -141,32 +141,38 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   and its generation is **not** deterministic even at temp 0 (factual
   varied 0.22–0.24 across on-runs), so these repeats capture generation +
   judge noise combined — more realistic than gemma's judge-only noise.
-  | metric | off | on | delta | t | significance |
-  |---|---|---|---|---|---|
-  | teaching quality (L2) | 0.120 | 0.217 | +0.097 | 2.04 | significant* |
-  | factual (L1) | 0.284 | 0.233 | **−0.051** | **−3.69** | **sig. regression** |
-  | coverage | 0.284 | 0.272 | −0.012 | −0.89 | ns |
-  | hallucinations | 0.0 | 1.33 | +1.33 | 2.00 | significant* |
-  | illegal moves | 0.33 | 1.67 | +1.33 | **2.83** | **significant** |
+  | metric | off | on | delta | t | df | significance |
+  |---|---|---|---|---|---|---|
+  | teaching quality (L2) | 0.120 | 0.217 | +0.097 | 2.04 | 2.0 | suggestive |
+  | factual (L1) | 0.284 | 0.233 | −0.051 | −3.69 | 2.9 | suggestive |
+  | coverage | 0.284 | 0.272 | −0.012 | −0.89 | 2.9 | ns |
+  | hallucinations | 0.0 | 1.33 | +1.33 | 2.00 | 2.0 | suggestive |
+  | illegal moves | 0.33 | 1.67 | +1.33 | 2.83 | 4.0 | **significant** |
 
   Per-run quality: off = {0.13, 0.12, 0.12}; on = {0.13, 0.22, 0.29}.
   Unlike gemma (teaching gain washed out by noise, NO factual cost), qwen
-  shows a genuine **trade-off that survives noise control**: guidance
-  lifts teaching quality (+0.097) but at a *significant* factual cost
-  (−0.051, t=−3.69) with significantly more hallucinations and
-  illegal-move suggestions — teaching-more makes qwen assert-more-wrong.
-  **Req 5.2 (factual non-regression) fails for qwen.** Confirms the
-  earlier single-run qwen finding as a real, reproducible effect (not
-  judge luck).
+  shows a directional **trade-off**: guidance lifts teaching quality
+  (+0.097) but costs factual accuracy (−0.051) and adds hallucinations /
+  illegal moves. **Honest significance (df-aware Welch t, two-sided 95%):**
+  at n=3 the critical t is ~4.30 (df≈2–3), so the *only* result that
+  clears the bar is the **illegal-move rise** (t=2.83, df=4, t*=2.78,
+  significant). Teaching gain, factual regression, and hallucination rise
+  are all **suggestive** — directionally consistent and matching the
+  single-run finding, but n=3 cannot certify them at 95%. So the read is:
+  qwen *probably* trades factual accuracy for teaching (and *definitely*
+  proposes more illegal moves), but only more repeats can promote the
+  trade-off from "suggestive" to "significant". Req 5.2 (factual
+  non-regression) is at best in question for qwen, not cleanly passed.
 
-  **Caveat — the `|t|>=2` rule is too lenient at n=3.** It is a
-  large-sample rule of thumb; the proper two-sided 95% critical-t for
-  df~3 is ~3.2, so the borderline calls here (quality t=2.04,
-  hallucinations t=2.00) are really *suggestive*, not solidly
-  significant. The robust results are the factual regression (t=−3.69)
-  and the illegal-move rise (t=2.83). **Instrument follow-up:** make
-  `eval_aggregate.py` df-aware (critical-t table or p-value) instead of a
-  flat `|t|>=2`, and/or run more repeats to earn the large-sample rule.
+  **Instrument now df-aware (2026-06-17) — caveat resolved.**
+  `eval_aggregate.py` uses a Welch t-test with a two-sided 95% critical-t
+  lookup by Welch–Satterthwaite df (table df 1–20, 1.96 beyond), replacing
+  the old flat `|t|>=2` rule that over-called small-n results. The labels
+  above are the corrected, df-aware verdicts (an earlier draft of this
+  note used the flat rule and wrongly marked factual/quality/hallucinations
+  "significant"). Remaining limitation is just sample size: at n=3 the bar
+  is high by design, so **more repeats** (or a less-noisy judge) are what
+  turn a real effect significant.
 
   **Cross-model synthesis (3 models, noise-controlled where measured):**
   no model yet shows a *clean* significant teaching win with no factual

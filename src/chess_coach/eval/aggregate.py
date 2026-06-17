@@ -40,6 +40,59 @@ _METRIC_ATTRS: dict[str, str] = {
     "word_count": "avg_word_count",
 }
 
+# Two-sided 95% critical t-values by degrees of freedom. With only a handful
+# of runs the t-distribution has fat tails, so "significant" must clear a far
+# higher bar than the large-sample |t|>=1.96: at df=2 it is 4.30, at df=3 it
+# is 3.18. A flat |t|>=2 rule (the previous heuristic) over-calls small-n
+# results as significant; this table makes the verdict honest about df.
+_CRITICAL_T_95: dict[int, float] = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+    10: 2.228,
+    11: 2.201,
+    12: 2.179,
+    13: 2.160,
+    14: 2.145,
+    15: 2.131,
+    16: 2.120,
+    17: 2.110,
+    18: 2.101,
+    19: 2.093,
+    20: 2.086,
+}
+_CRITICAL_T_95_LARGE = 1.96  # df > 20: normal-approximation tail
+
+
+def _critical_t_95(df: float) -> float:
+    """Two-sided 95% critical t for ``df`` degrees of freedom.
+
+    Non-integer Welch df is floored (conservative — a lower df has a higher
+    critical value), clamped to ``>= 1``, and falls back to the
+    normal-approximation 1.96 beyond the table.
+    """
+    d = max(1, int(df))
+    return _CRITICAL_T_95.get(d, _CRITICAL_T_95_LARGE)
+
+
+def _welch_df(off: MetricStats, on: MetricStats) -> float:
+    """Welch-Satterthwaite degrees of freedom for two samples of unequal
+    variance. Both groups must have ``n >= 2``."""
+    a = off.std**2 / off.n
+    b = on.std**2 / on.n
+    denom = (a**2) / (off.n - 1) + (b**2) / (on.n - 1)
+    if denom == 0.0:
+        # Both variances zero -> handled by the deterministic branch upstream;
+        # return n-1 as a harmless fallback.
+        return float(off.n + on.n - 2)
+    return (a + b) ** 2 / denom
+
 
 @dataclass(frozen=True)
 class MetricStats:
@@ -150,12 +203,14 @@ class MetricComparison:
     *Significance:* ``sem_diff`` is the standard error of the difference of
     means (RSS of the two SEMs, which *does* shrink as ``1/sqrt(n)``), and
     ``t_ratio = delta / sem_diff`` is the standard "how many standard errors
-    is the gap" measure. ``significance`` labels it: ``significant``
-    (``|t| >= 2``), ``suggestive`` (``|t| >= 1``), ``ns`` (smaller),
-    ``deterministic`` (zero variance but a real reproducible delta, e.g. a
-    temp-0 factual gain), ``no change`` (zero delta, zero variance), or
-    ``need >=2 runs/group`` when under-powered. ``t_ratio`` is ``None``
-    whenever a numeric ratio is undefined (under-powered or zero variance).
+    is the gap" measure. ``significance`` labels it with a **df-aware Welch
+    t-test**: ``significant`` (``|t| >= t_crit`` for the Welch-Satterthwaite
+    ``df`` at two-sided 95% — far above 1.96 at small n), ``suggestive``
+    (``|t| >= 1`` but below that bar), ``ns`` (smaller), ``deterministic``
+    (zero variance but a real reproducible delta, e.g. a temp-0 factual
+    gain), ``no change`` (zero delta, zero variance), or ``need >=2
+    runs/group`` when under-powered. ``t_ratio``, ``df`` and ``t_crit`` are
+    ``None`` whenever undefined (under-powered or zero variance).
 
     Both ``clears_noise`` and ``significance`` are ``None``/under-powered
     until each group has ``n >= 2``.
@@ -170,6 +225,8 @@ class MetricComparison:
     sem_diff: float
     t_ratio: float | None
     significance: str
+    df: float | None
+    t_crit: float | None
 
     @property
     def verdict(self) -> str:
@@ -181,24 +238,36 @@ class MetricComparison:
         return "improves" if self.delta > 0 else "regresses"
 
 
-def _significance(delta: float, sem_diff: float, off: MetricStats, on: MetricStats) -> tuple[float | None, str]:
-    """Classify a delta by its standard-error-of-the-difference ratio."""
+def _significance(
+    delta: float, sem_diff: float, off: MetricStats, on: MetricStats
+) -> tuple[float | None, str, float | None, float | None]:
+    """Classify a delta with a df-aware Welch t-test.
+
+    Returns ``(t_ratio, label, df, t_crit)``. ``significant`` requires
+    ``|t| >= t_crit(df)`` (the proper two-sided 95% critical value for the
+    Welch-Satterthwaite degrees of freedom, which is much larger than 1.96
+    at small n); ``suggestive`` is ``|t| >= 1`` but below that bar; ``ns``
+    is smaller. ``deterministic`` / ``no change`` cover zero variance, and
+    ``need >=2 runs/group`` covers the under-powered case.
+    """
     if not (off.assessable_spread and on.assessable_spread):
-        return None, "need >=2 runs/group"
+        return None, "need >=2 runs/group", None, None
     if sem_diff == 0.0:
         # Zero variance in both groups: the delta (if any) is perfectly
         # reproducible, not a noisy estimate -- label it as such rather than
         # dividing by zero.
-        return None, ("no change" if delta == 0.0 else "deterministic")
+        return None, ("no change" if delta == 0.0 else "deterministic"), None, None
     t = round(delta / sem_diff, 2)
+    df = _welch_df(off, on)
+    t_crit = _critical_t_95(df)
     magnitude = abs(t)
-    if magnitude >= 2.0:
+    if magnitude >= t_crit:
         label = "significant"
     elif magnitude >= 1.0:
         label = "suggestive"
     else:
         label = "ns"
-    return t, label
+    return t, label, round(df, 1), round(t_crit, 2)
 
 
 def compare_metric(metric: str, off: MetricStats, on: MetricStats) -> MetricComparison:
@@ -210,7 +279,7 @@ def compare_metric(metric: str, off: MetricStats, on: MetricStats) -> MetricComp
     else:
         clears = None
     sem_diff = round(math.hypot(off.sem, on.sem), 4)
-    t_ratio, significance = _significance(delta, sem_diff, off, on)
+    t_ratio, significance, df, t_crit = _significance(delta, sem_diff, off, on)
     return MetricComparison(
         metric=metric,
         off=off,
@@ -221,6 +290,8 @@ def compare_metric(metric: str, off: MetricStats, on: MetricStats) -> MetricComp
         sem_diff=sem_diff,
         t_ratio=t_ratio,
         significance=significance,
+        df=df,
+        t_crit=t_crit,
     )
 
 
@@ -260,23 +331,25 @@ def render_aggregate(models: list[AggregatedModel]) -> str:
 
 
 def render_comparison(model: str, comparisons: list[MetricComparison]) -> str:
-    """Render an off-vs-on comparison table with delta, and a standard-
-    error-based significance verdict."""
+    """Render an off-vs-on comparison table with delta and a df-aware
+    Welch-t significance verdict."""
     lines = [
-        "=" * 86,
+        "=" * 92,
         f"OFF vs ON  -  {model}",
-        "=" * 86,
-        f"{'metric':<26} {'off':>8} {'on':>8} {'delta':>8} {'SE_diff':>8} {'t':>6}  significance",
-        "-" * 86,
+        "=" * 92,
+        f"{'metric':<26} {'off':>8} {'on':>8} {'delta':>8} {'t':>6} {'df':>5} {'t*.95':>6}  significance",
+        "-" * 92,
     ]
     for c in comparisons:
         t_cell = f"{c.t_ratio:>6.2f}" if c.t_ratio is not None else f"{'--':>6}"
+        df_cell = f"{c.df:>5.1f}" if c.df is not None else f"{'--':>5}"
+        crit_cell = f"{c.t_crit:>6.2f}" if c.t_crit is not None else f"{'--':>6}"
         lines.append(
             f"{c.metric:<26} {c.off.mean:>8.3f} {c.on.mean:>8.3f} "
-            f"{c.delta:>+8.3f} {c.sem_diff:>8.3f} {t_cell}  {c.significance}"
+            f"{c.delta:>+8.3f} {t_cell} {df_cell} {crit_cell}  {c.significance}"
         )
-    lines.append("-" * 86)
-    lines.append("delta = on - off;  SE_diff = std error of the difference (shrinks ~1/sqrt(n))")
-    lines.append("t = delta / SE_diff;  significant |t|>=2, suggestive |t|>=1, ns otherwise")
+    lines.append("-" * 92)
+    lines.append("t = delta / SE_diff (Welch);  significant |t| >= t*.95 (critical t for df)")
+    lines.append("suggestive |t| >= 1 but below t*.95;  ns smaller;  small n -> high t*.95")
     lines.append("'deterministic' = nonzero delta with zero variance (e.g. temp-0 factual)")
     return "\n".join(lines)

@@ -201,6 +201,9 @@ def test_significance_significant_when_t_large() -> None:
     c = compare_metric("quality", off, on)
     assert c.t_ratio is not None and abs(c.t_ratio) >= 2.0
     assert c.significance == "significant"
+    # df-aware fields are populated for a numeric comparison
+    assert c.df is not None and c.t_crit is not None
+    assert abs(c.t_ratio) >= c.t_crit
 
 
 def test_significance_ns_when_noisy_and_small() -> None:
@@ -212,6 +215,36 @@ def test_significance_ns_when_noisy_and_small() -> None:
     # delta ~0.14, SE_diff ~0.084 -> t ~1.6 -> suggestive, not significant
     assert c.significance in {"suggestive", "ns"}
     assert c.significance != "significant"
+
+
+def test_significance_df_aware_demotes_borderline_small_n() -> None:
+    # The exact qwen-quality shape: t ~2.0 but df ~2, so the proper 95%
+    # critical t (~4.3) is NOT cleared. The old flat |t|>=2 rule wrongly
+    # called this "significant"; df-aware must call it "suggestive".
+    off = aggregate_values([0.13, 0.12, 0.12])
+    on = aggregate_values([0.13, 0.22, 0.29])
+    c = compare_metric("quality", off, on)
+    assert c.t_ratio is not None and abs(c.t_ratio) > 1.5
+    assert c.df is not None and c.t_crit is not None
+    assert c.t_crit > 2.0  # small-n bar is well above the flat rule
+    assert abs(c.t_ratio) < c.t_crit  # t ~2 does NOT clear the ~4.3 bar
+    assert c.significance == "suggestive"
+
+
+def test_significance_fields_none_when_deterministic() -> None:
+    c = compare_metric("factual", aggregate_values([0.30, 0.30, 0.30]), aggregate_values([0.33, 0.33, 0.33]))
+    assert c.significance == "deterministic"
+    assert c.df is None
+    assert c.t_crit is None
+
+
+def test_critical_t_falls_with_more_df() -> None:
+    from chess_coach.eval.aggregate import _critical_t_95
+
+    # Smaller samples demand a higher bar.
+    assert _critical_t_95(2) > _critical_t_95(10) > _critical_t_95(100)
+    assert _critical_t_95(2) == 4.303
+    assert _critical_t_95(100) == 1.96
 
 
 # --------------------------------------------------------------- compare_off_on
