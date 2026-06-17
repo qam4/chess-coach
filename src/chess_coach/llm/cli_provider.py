@@ -68,6 +68,13 @@ class CliProvider(LLMProvider):
             input=stdin_text,
             capture_output=True,
             text=True,
+            # Force UTF-8 regardless of the platform default (Windows defaults
+            # to cp1252, which raises UnicodeDecodeError on the non-Latin-1
+            # bytes a "thinking" model's output routinely contains). errors=
+            # "replace" keeps a judge robust: one odd byte must never crash
+            # the run -- the verdict parser tolerates a stray replacement char.
+            encoding="utf-8",
+            errors="replace",
             timeout=self.timeout,
         )
         if proc.returncode != 0:

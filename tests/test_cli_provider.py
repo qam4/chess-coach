@@ -65,3 +65,22 @@ def test_factory_creates_cli_provider() -> None:
     p = create_provider("cli", model="kiro-cli", command=[sys.executable, "-c", "pass"])
     assert isinstance(p, CliProvider)
     assert p.model == "kiro-cli"
+
+
+def test_decodes_utf8_output_regardless_of_platform_default() -> None:
+    # A "thinking" model's output routinely contains non-Latin-1 bytes
+    # (em dashes, sqrt, accents). The child writes raw UTF-8 bytes; the
+    # provider must decode them as UTF-8, not the Windows cp1252 default.
+    cmd = [sys.executable, "-c", r"import sys; sys.stdout.buffer.write('caf\u00e9 \u2014 \u221a'.encode('utf-8'))"]
+    p = CliProvider(model="stub", command=cmd)
+    assert p.generate("x") == "café — √"
+
+
+def test_invalid_bytes_do_not_crash_the_judge() -> None:
+    # 0x8f is the exact byte that crashed the qwen judge run under cp1252.
+    # With errors="replace" the provider must return a string (one stray
+    # byte never aborts a run), not raise UnicodeDecodeError.
+    cmd = [sys.executable, "-c", r"import sys; sys.stdout.buffer.write(b'\x8f ok')"]
+    p = CliProvider(model="stub", command=cmd)
+    out = p.generate("x")
+    assert "ok" in out
