@@ -99,6 +99,29 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   position explanation; (b) rethink what the guidance entries actually add.
   The instrument is ready to gate any such change with a real win-rate.
 
+  **Pairwise qwen3:14b off vs on — DONE (2026-06-18): also no teaching
+  benefit; completes the picture.** Same 3x3 saved runs (27 head-to-heads,
+  sonnet judge). Result: **off 12, on 14, 1 tie; on win-rate 54%; p=0.85 —
+  NOT significant.** qwen's ON wins marginally more (directionally matching
+  the absolute-score hint that guidance helped qwen), but at 54% it is a coin
+  flip. Crucially qwen generation is non-deterministic, so these 27 are truer
+  independent samples than gemma's ~9 — a stronger 'no effect' read. Both
+  models side by side: gemma 44% on (p=0.69, off-leaning), qwen 54% on
+  (p=0.85, on-leaning) — within chance in OPPOSITE directions, the signature
+  of no real effect. And qwen's guidance also carried a factual cost
+  (0.28→0.23), so for qwen the layer is net-negative.
+
+  **DECISIVE CONCLUSION (both models, low-noise measure):** the pedagogy
+  layer as currently built produces NO detectable teaching improvement — the
+  earlier absolute-score 'gains' (gemma +0.141, qwen +0.097) were judge
+  noise. This is no longer 'unproven within noise'; pairwise actively shows
+  no benefit. Redirect effort accordingly: (1) measure the move-feedback path
+  (step 1), the coaching moment that matters most and which we have NOT tested;
+  (2) rethink what guidance entries add (the current 'name a theme' framing
+  may simply not move a one-shot position explanation); (3) the layer is still
+  SAFE (cap-1: 0 hallucination/illegal, factual up) so it can ship as a
+  no-harm default while the teaching question moves to the move-feedback path.
+
 - **`rubric.v2` — shipped (leniency defects fixed); teaching-bridge
   grounding still open.** `data/eval/rubric.v2.yaml` now exists: it adds
   the `teaches_principle` bridge criterion, ties `actionable` to the key
