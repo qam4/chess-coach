@@ -206,6 +206,39 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   judge remains the dominant noise source — shrink it (more repeats /
   multi-judge) before chasing small prompt deltas.
 
+  **Sharpening selection (cap 1) — TRIED, no teaching gain (2026-06-18).**
+  The other lever from the prompt-tightening note: fewer, most-specific
+  entries. Ran gemma4:12b-it-qat 3× ON at `--guidance-max 1` vs the OFF
+  baseline and the cap-3 ON runs (rubric.v2, 9 positions, sonnet judge):
+  | metric | OFF | cap-1 ON | cap-3 ON |
+  |---|---|---|---|
+  | factual (L1) | 0.296 | **0.352** | 0.333 |
+  | teaching quality (L2) | 0.276 | 0.250 | **0.417** |
+  | hallucinations / illegal | 0/0 | 0/0 | 0/0 |
+
+  cap-1 vs OFF: factual *up* +0.056 (deterministic), teaching −0.027 (ns) —
+  flat. cap-1 vs cap-3: factual ~tied, teaching −0.168 (t=2.03, suggestive)
+  — cap-1 teaches *less* than cap-3. **Read: cap-1 is the SAFEST setting
+  (best factual of all conditions, zero hallucinations/illegal) but buys NO
+  teaching gain — quality sits at baseline.** The (noisy) teaching signal
+  lives in the broader cap-3 selection, not cap-1; sharpening trades
+  teaching away for safety — the mirror image of the prompt-tightening
+  result.
+
+  **Overall conclusion after both levers (2026-06-18).** Neither "less
+  guidance via tighter prompt" (backfired) nor "less guidance via cap-1
+  selection" (flat teaching) improves the teaching axis. Where a teaching
+  gain appears (gemma cap-3, qwen cap-3) it is within judge noise or comes
+  with a factual cost. The blocker is NOT the selection cap or the prompt
+  wording — it is that **the teaching effect is small and the judge is too
+  noisy at n=3 × 9 positions to resolve it.** Stop tuning knobs; the
+  high-value next steps are (a) a **less-noisy judge** (multi-judge panel
+  and/or more repeats to shrink the SEM) and (b) a **bigger benchmark**
+  (20–40 positions) so each mean rests on more signal. Until then the
+  honest status of the pedagogy layer is: *safe* (no factual/illegal cost
+  at cap 1, and cap-1 even nudges factual up) but its *teaching benefit is
+  unproven*.
+
   (1) Note "most-specific-first" selection is already implemented in the
   `Selector` (plan > pattern > principle, relevance desc), and the cap is
   a runtime flag (`eval_run.py --guidance-max 1|2`), so the "sharpen
