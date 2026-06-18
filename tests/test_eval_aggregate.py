@@ -280,3 +280,64 @@ def test_render_comparison_contains_verdict_legend() -> None:
     assert "delta" in out
     assert "SE_diff" in out
     assert "significance" in out
+
+
+# --------------------------------------------------------------- pairwise A/B
+
+
+def test_pairwise_clean_sweep_is_significant() -> None:
+    from chess_coach.eval import summarize_pairwise
+
+    s = summarize_pairwise(["on"] * 9, "off", "on")
+    assert s.wins_b == 9 and s.wins_a == 0 and s.ties == 0
+    assert s.n_decisive == 9
+    assert s.win_rate_b == 1.0
+    assert s.significant is True  # 9-0 -> p ~0.004
+    assert s.p_value < 0.05
+    assert "on wins" in s.verdict
+
+
+def test_pairwise_near_even_is_not_significant() -> None:
+    from chess_coach.eval import summarize_pairwise
+
+    s = summarize_pairwise(["on", "off", "on", "off", "on"], "off", "on")
+    assert s.wins_b == 3 and s.wins_a == 2
+    assert s.significant is False
+    assert s.p_value > 0.05
+
+
+def test_pairwise_eight_to_one_is_significant() -> None:
+    from chess_coach.eval import summarize_pairwise
+
+    s = summarize_pairwise(["on"] * 8 + ["off"], "off", "on")
+    assert s.wins_b == 8 and s.wins_a == 1
+    assert s.significant is True  # 8-1 -> p ~0.039
+    assert s.p_value < 0.05
+
+
+def test_pairwise_ties_excluded_from_win_rate() -> None:
+    from chess_coach.eval import summarize_pairwise
+
+    s = summarize_pairwise(["on", "on", "tie", "tie", "off"], "off", "on")
+    assert s.n == 5
+    assert s.ties == 2
+    assert s.n_decisive == 3  # 2 on + 1 off
+    assert s.win_rate_b == round(2 / 3, 4)
+
+
+def test_pairwise_all_ties_no_decisive() -> None:
+    from chess_coach.eval import summarize_pairwise
+
+    s = summarize_pairwise(["tie", "tie"], "off", "on")
+    assert s.n_decisive == 0
+    assert s.significant is False
+    assert s.verdict == "no decisive comparisons"
+
+
+def test_render_pairwise_contains_verdict() -> None:
+    from chess_coach.eval import render_pairwise, summarize_pairwise
+
+    out = render_pairwise(summarize_pairwise(["on"] * 7 + ["off"] * 2, "off", "on"))
+    assert "PAIRWISE" in out
+    assert "win-rate" in out
+    assert "sign test" in out

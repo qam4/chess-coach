@@ -18,6 +18,7 @@ from .aggregate import (
     AggregatedModel,
     MetricComparison,
     MetricStats,
+    PairwiseSummary,
     aggregate_model,
     aggregate_runs,
     aggregate_values,
@@ -25,6 +26,8 @@ from .aggregate import (
     compare_off_on,
     render_aggregate,
     render_comparison,
+    render_pairwise,
+    summarize_pairwise,
 )
 from .benchmark import (
     BenchmarkError,
@@ -63,6 +66,7 @@ __all__ = [
     "MetricStats",
     "ModelSummary",
     "ObjectiveResult",
+    "PairwiseSummary",
     "ResponseEval",
     "RunConfig",
     "Scoreboard",
@@ -83,4 +87,6 @@ __all__ = [
     "persist_results",
     "render_aggregate",
     "render_comparison",
+    "render_pairwise",
+    "summarize_pairwise",
 ]

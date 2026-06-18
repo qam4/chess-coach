@@ -353,3 +353,96 @@ def render_comparison(model: str, comparisons: list[MetricComparison]) -> str:
     lines.append("suggestive |t| >= 1 but below t*.95;  ns smaller;  small n -> high t*.95")
     lines.append("'deterministic' = nonzero delta with zero variance (e.g. temp-0 factual)")
     return "\n".join(lines)
+
+
+# --------------------------------------------------------------- pairwise A/B
+
+
+@dataclass(frozen=True)
+class PairwiseSummary:
+    """Win/loss/tie tally of a pairwise A-vs-B judging run, with a sign test.
+
+    Pairwise judging asks the judge "which of these two is better?" rather than
+    scoring each absolutely -- removing the absolute-anchoring noise that makes
+    small teaching deltas invisible. ``win_rate_b`` is over *decisive*
+    comparisons (ties excluded); ``p_value`` is a two-sided exact sign test of
+    "B is preferred at rate 0.5" (the null = no real difference).
+    """
+
+    label_a: str
+    label_b: str
+    n: int
+    wins_a: int
+    wins_b: int
+    ties: int
+    n_decisive: int
+    win_rate_b: float
+    p_value: float
+    significant: bool
+
+    @property
+    def verdict(self) -> str:
+        if self.n_decisive == 0:
+            return "no decisive comparisons"
+        if self.wins_a == self.wins_b:
+            return f"tied ({self.wins_a}-{self.wins_b}, {self.ties} ties)"
+        winner = self.label_b if self.wins_b > self.wins_a else self.label_a
+        tail = "significant" if self.significant else "not significant"
+        return f"{winner} wins ({self.wins_b}-{self.wins_a}, p={self.p_value:.3f}, {tail})"
+
+
+def _sign_test_p(wins_a: int, wins_b: int) -> float:
+    """Two-sided exact sign test of fairness given decisive trials.
+
+    Under the null (no preference) decisive outcomes are Binom(n, 0.5). The
+    two-sided p-value sums the probability of every outcome at least as extreme
+    as the observed split. Stdlib only.
+    """
+    n = wins_a + wins_b
+    if n == 0:
+        return 1.0
+    observed = math.comb(n, max(wins_a, wins_b))
+    tail = sum(math.comb(n, i) for i in range(n + 1) if math.comb(n, i) <= observed)
+    p: float = tail / (2**n)
+    return min(1.0, p)
+
+
+def summarize_pairwise(winners: list[str], label_a: str, label_b: str) -> PairwiseSummary:
+    """Tally pairwise winners (each ``label_a`` / ``label_b`` / ``"tie"``)."""
+    wins_a = sum(1 for w in winners if w == label_a)
+    wins_b = sum(1 for w in winners if w == label_b)
+    ties = sum(1 for w in winners if w == "tie")
+    n_decisive = wins_a + wins_b
+    p = _sign_test_p(wins_a, wins_b)
+    return PairwiseSummary(
+        label_a=label_a,
+        label_b=label_b,
+        n=len(winners),
+        wins_a=wins_a,
+        wins_b=wins_b,
+        ties=ties,
+        n_decisive=n_decisive,
+        win_rate_b=round(wins_b / n_decisive, 4) if n_decisive else 0.0,
+        p_value=round(p, 4),
+        significant=p < 0.05,
+    )
+
+
+def render_pairwise(summary: PairwiseSummary) -> str:
+    """Render the pairwise A/B result."""
+    s = summary
+    lines = [
+        "=" * 70,
+        f"PAIRWISE  {s.label_a}  vs  {s.label_b}",
+        "=" * 70,
+        f"comparisons : {s.n}  (decisive {s.n_decisive}, ties {s.ties})",
+        f"{s.label_a} wins : {s.wins_a}",
+        f"{s.label_b} wins : {s.wins_b}",
+        f"{s.label_b} win-rate (of decisive): {s.win_rate_b:.0%}",
+        f"two-sided sign test p : {s.p_value:.3f}",
+        "-" * 70,
+        f"verdict: {s.verdict}",
+        "-" * 70,
+        "win-rate excludes ties; p<0.05 => the preference is unlikely to be chance",
+    ]
+    return "\n".join(lines)
