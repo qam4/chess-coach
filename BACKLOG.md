@@ -12,6 +12,68 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
 ## Coaching-eval harness
 
+- **Eval sensitivity & validity — THE next investment (decided 2026-06-18).**
+  After three guidance A/Bs (more entries, tighter prompt, sharper cap-1
+  selection) every teaching-quality result came back *within judge noise*:
+  the absolute 0–1 rubric score wobbles ~±0.14 when the judge re-scores the
+  same text, which swamps the effect we are trying to detect (gemma on-vs-off
+  was +0.141 vs a ±0.143 band). We could not tell whether a change helped.
+  Two distinct problems, and fixing only the first would just measure the
+  wrong thing more precisely:
+
+  - **(A) Sensitivity** — the judge is too noisy at n=3 × 9 positions to
+    resolve small teaching deltas.
+  - **(B) Validity** — the benchmark only tests the *position-explanation*
+    path (Step 3 of the play loop: “explain this position”). That is the
+    “position analyser” mode the product explicitly does NOT want to be
+    (see VISION.md). It does not test the *move-feedback* path (Step 1:
+    given the move the student just played, is the feedback good teaching?),
+    which is the reactive, student-facing moment that matters most.
+
+  **Decision / direction (in priority order):**
+
+  1. **Switch change-detection from absolute scoring to PAIRWISE judging.**
+     Biggest sensitivity win. Instead of scoring each response 0–1 and
+     differencing two jittery numbers, show the judge BOTH responses for the
+     same position (randomized, recorded order) and ask *which teaches
+     better*. A judge re-anchoring “what does 0.4 mean?” every time is the
+     dominant noise source; a relative A-vs-B preference removes it. Output
+     becomes a **win-rate** (“on beats off 7/9”) with a real significance
+     test (binomial / sign test) — directly answering “did this change
+     (prompt / model / guidance) have the impact we want?”, which absolute
+     diffs could not. This is the standard tool for preference/arena evals.
+     **The pairwise library already exists and is tested** (`pairwise_compare`,
+     randomized+recorded order, Property 6); it is only missing a CLI mode
+     (tasks.md 6.3 `[~]`). So this is high value, low cost. Keep absolute
+     rubric scoring as the secondary factual/safety readout (the objective
+     Layer 1 is unaffected and remains the safety backstop).
+  2. **Fix validity: evaluate the move-feedback path, with a teaching
+     rubric.** Add benchmark scenarios of the form `(position, move the
+     student just played)` with ground truth (sound/inaccuracy/blunder +
+     the principle it touches), so we measure the Step-1 coaching moment,
+     not just position analysis. The move-feedback prompt is structurally
+     about *the student’s move*, so it resists “position analyser” answers.
+     Lean the rubric further toward teaching: reward naming ONE transferable
+     idea + ONE concrete action, penalize feature-dumping.
+  3. **Grow + curate the benchmark** to 20–40 positions across phases/levels,
+     biased toward cases where a teaching principle clearly applies (so the
+     signal is not diluted by positions where guidance cannot matter). The
+     annotation guard (`eval_check_annotations.py`) makes authoring safe.
+  4. **Calibrate the (pairwise) judge** against a few of the product owner’s
+     own A-vs-B picks (Layer 3 agreement) before trusting it at scale.
+
+  **Honest ceiling (do not lose sight of):** a frontier judge rating a
+  one-shot response is a *proxy*. The true measure of teaching is **student
+  improvement over time** — a much bigger, longitudinal build with real
+  users. Pairwise + calibration keeps the proxy trustworthy; it does not
+  replace outcome measurement. Ties to the “Who calibrates teaching
+  quality?” and “Structured Learning Path” items.
+
+  **First concrete step:** wire `--pairwise` into `eval_run.py`, then re-run
+  the gemma guidance on-vs-off as a pairwise A/B. If guidance truly helps
+  teaching, “on” should win materially more than 50% of head-to-heads —
+  visible where the absolute-score diff was not.
+
 - **`rubric.v2` — shipped (leniency defects fixed); teaching-bridge
   grounding still open.** `data/eval/rubric.v2.yaml` now exists: it adds
   the `teaches_principle` bridge criterion, ties `actionable` to the key
@@ -303,10 +365,12 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   player improve), not expert prose-rating — a much bigger build, ties
   to progress tracking.
 
-- **Pairwise `--pairwise` CLI flag.** The pairwise judging library
+- **Pairwise `--pairwise` CLI flag — PROMOTED to the next step** (see
+  “Eval sensitivity & validity” above). The pairwise judging library
   (`pairwise_compare`, randomized+recorded order, Property 6) is built
-  and tested, but not exposed as an `eval_run.py` CLI mode. Optional
-  per the design; wire it when we actually want A-vs-B model runs.
+  and tested, but not exposed as an `eval_run.py` CLI mode. No longer
+  “optional”: it is the chosen fix for change-detection noise — wire it,
+  then re-run the gemma guidance A/B as a pairwise win-rate.
   (Tracked as tasks.md 6.3 `[~]`.)
 
 - **Hallucination detector misses relational falsehoods.** It catches
