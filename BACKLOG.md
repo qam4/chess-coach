@@ -74,6 +74,31 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   teaching, “on” should win materially more than 50% of head-to-heads —
   visible where the absolute-score diff was not.
 
+  **First pairwise result — DONE (2026-06-18): confirms guidance does NOT
+  help gemma, and validates the instrument.** Ran `eval_pairwise.py` over the
+  saved gemma 3x3 off/on runs (27 randomized head-to-heads, sonnet judge,
+  no tunnel — judge-only). Result: **off 14, on 11, 2 ties; on win-rate 44%;
+  two-sided sign test p=0.69 — NOT significant.** Head-to-head, ON does not
+  beat OFF (off is marginally ahead, within chance). This is the decisive
+  read the absolute score couldn't give: the earlier +0.141 absolute “gain”
+  was judge noise, not real teaching improvement. The pairwise instrument
+  earned its keep — a clear yes/no where differencing noisy 0–1 scores was a
+  shrug.
+
+  *Independence caveat:* gemma generation is deterministic at temp 0, so the
+  27 comparisons are really ~9 unique text-pairs each re-judged ~3x with
+  randomized slot order — they sample judge variance, not response variance,
+  so effective n is closer to 9. The sign-test p slightly overstates power;
+  but the signal is so flat (44%) that the conclusion (no benefit) is robust
+  either way. For models with non-deterministic generation (qwen) the 3 runs
+  would add genuine response diversity too.
+
+  **Implication:** the pedagogy layer as built does not improve teaching for
+  gemma even by the low-noise measure. The lever is now CONTENT/VALIDITY, not
+  more measurement: (a) evaluate the move-feedback path (step 1), not just
+  position explanation; (b) rethink what the guidance entries actually add.
+  The instrument is ready to gate any such change with a real win-rate.
+
 - **`rubric.v2` — shipped (leniency defects fixed); teaching-bridge
   grounding still open.** `data/eval/rubric.v2.yaml` now exists: it adds
   the `teaches_principle` bridge criterion, ties `actionable` to the key
