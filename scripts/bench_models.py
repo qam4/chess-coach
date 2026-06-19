@@ -1,9 +1,12 @@
 """Benchmark LLM models on the same coaching prompt."""
 
+import os
+import sys
+import time
+
 from chess_coach.engine import CoachingEngine
-from chess_coach.prompts import build_rich_coaching_prompt
 from chess_coach.llm.ollama import OllamaProvider
-import os, time, sys
+from chess_coach.prompts import build_rich_coaching_prompt
 
 path = os.path.expanduser("~/src/fred/blunder/build/rel/blunder")
 engine = CoachingEngine(path, args=["--uci"], ping_timeout=5.0, coaching_timeout=10.0)
@@ -20,7 +23,7 @@ for model in models:
     print(f"--- {model} ---")
     llm = OllamaProvider(model=model, base_url="http://localhost:11434", timeout=300)
 
-    print(f"  Warming up...")
+    print("  Warming up...")
     t_warm = time.perf_counter()
     _ = llm.generate("Say hi", max_tokens=10, temperature=0.7)
     print(f"  Warm: {time.perf_counter() - t_warm:.1f}s")

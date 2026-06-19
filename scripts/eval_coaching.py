@@ -169,7 +169,8 @@ MOVE_TESTS: list[dict] = [
         "expect_class": ["good", "inaccuracy", "mistake", "blunder"],
         "expect_keywords": [],
         "expect_not": [],
-        "notes": "1...f6 is bad but at depth 8 the engine can't reliably distinguish it from sound openings. Opening leniency applies.",
+        "notes": "1...f6 is bad but at depth 8 the engine can't reliably "
+        "distinguish it from sound openings. Opening leniency applies.",
     },
     {
         "name": "Dubious: 1...a5",

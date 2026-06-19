@@ -126,9 +126,14 @@ def main() -> None:
         levels=resource.levels,
     )
 
-    if not model.is_available():
+    reachable, model_found = model.check_status()
+    if not reachable:
         engine.stop()
-        print(f"FATAL: model {args.model} not available at {args.base_url}")
+        print(f"FATAL: endpoint unreachable at {args.base_url} — is the SSH tunnel up?")
+        sys.exit(1)
+    if not model_found:
+        engine.stop()
+        print(f"FATAL: tunnel up but model {args.model} is not loaded at {args.base_url}")
         sys.exit(1)
 
     rng = random.Random(args.seed)
