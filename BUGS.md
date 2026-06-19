@@ -187,13 +187,27 @@ Tracked issues discovered during development and testing.
   their own king/rook. Undermines trust and teaches the wrong mental
   model of whose turn/threats are whose. Likely affects any position
   where the side to move is the one under threat.
-- **Root cause**: Not yet diagnosed. The engine `position_report` is
-  correct and labels threats by color ("White: Qh5 ..."), so the data is
-  sound. The confusion is introduced downstream — candidates: the rich
-  coaching prompt does not state clearly enough whose turn it is / which
-  color the student plays, and/or the LLM defaults to White's
-  perspective. Needs investigation in `build_rich_coaching_prompt`
-  (prompts.py) and how side-to-move is conveyed.
+- **Root cause**: CONFIRMED (diagnosed by code inspection of
+  `build_rich_coaching_prompt` and `RICH_COACHING_PROMPT_V2` in
+  `prompts.py`). The prompt never states, in natural language, whose turn
+  it is or which color the student is playing. Side-to-move is present
+  ONLY as the active-color field inside the FEN string
+  (`Position (FEN): ...`). Meanwhile every other signal points at White:
+  the engine data sections are rendered in absolute color terms
+  ("White: Qh5 can give check ..."), and `Overall evaluation: {eval_cp}`
+  is White-relative by engine convention (+0.17 favors White) without
+  saying so. With no explicit perspective anchor, the LLM (especially a
+  small model like qwen3:8b) latches onto the salient White-labeled
+  threats and positive eval and narrates from White's side, attributing
+  White's pieces to the student. The same gap exists in
+  `RICH_MOVE_EVALUATION_PROMPT_V2`.
+- **Proposed fix**: Derive side-to-move from the FEN and state it
+  explicitly in the prompt, e.g. "It is Black to move. You are coaching
+  the player with the Black pieces. The evaluation is from White's
+  perspective (positive favors White)." Consider presenting threats and
+  eval from the student's perspective as well. Add a unit test asserting
+  the built prompt names the side to move; validate live that the
+  perspective confusion is gone.
 - **Repro**: `chess-coach explain
   "rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2"
   --level beginner` with qwen3:8b.
