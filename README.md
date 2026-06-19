@@ -74,7 +74,8 @@ chess-coach explain "r1bqkb1r/pppppppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQ
     --depth 12 --level beginner
 
 # Start the web UI
-chess-coach serve
+chess-coach serve            # serves http://localhost:8000
+chess-coach serve --port 8080
 ```
 
 ## Configuration
@@ -105,6 +106,21 @@ The engine protocol defaults to UCI. If Blunder supports the coaching protocol
 (`coach ping`), chess-coach automatically uses it for richer analysis data
 (eval breakdown, threats, hanging pieces, pawn structure, king safety). If not,
 it falls back to standard UCI analysis.
+
+### Recommended models
+
+Coaching runs on a local LLM via Ollama. The right choice trades response
+speed against explanation quality:
+
+| Model | Notes |
+|-------|-------|
+| `qwen3:8b` | Default. A reasoning model — accurate but "thinks" before answering, so responses are slower. |
+| `gemma4:12b-it-qat` | A quantized 12B that gives clean, well-grounded coaching at ~7s per response. Good quality/speed balance. |
+| `qwen3:14b` | Stronger reasoning; slower (~60s per call). |
+| `hermes3:8b` | Fast, no "thinking" step — lowest latency, lower coaching quality. |
+
+For interactive play, favor the faster models; for one-off position analysis,
+the larger ones read better. Any Ollama model works — set it under `llm.model`.
 
 ## Development
 

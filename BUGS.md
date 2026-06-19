@@ -172,3 +172,46 @@ Tracked issues discovered during development and testing.
 - **Status**: FIXED — when the dominant factor contradicts the eval,
   find the factor that does explain the advantage and present both:
   "White's piece activity outweighs Black's king safety edge."
+
+### BUG-011: Coach attributes the opponent's pieces to the student (perspective confusion)
+- **Observed**: `chess-coach explain` on a Black-to-move position after
+  1.e4 e5 2.Qh5 (FEN
+  `rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2`,
+  `--level beginner`). The coaching text told the student "your queen is
+  on h5" and that it "pins your opponent's king to their own rook on h8".
+  Qh5 is **White's** queen; the side to move (the student) is Black, and
+  h8 is Black's own rook. The coach narrated White's pieces and threats
+  as if they belonged to the student.
+- **Impact**: Actively misleading coaching. The student is told their
+  opponent's attacking piece is their own and that they are threatening
+  their own king/rook. Undermines trust and teaches the wrong mental
+  model of whose turn/threats are whose. Likely affects any position
+  where the side to move is the one under threat.
+- **Root cause**: Not yet diagnosed. The engine `position_report` is
+  correct and labels threats by color ("White: Qh5 ..."), so the data is
+  sound. The confusion is introduced downstream — candidates: the rich
+  coaching prompt does not state clearly enough whose turn it is / which
+  color the student plays, and/or the LLM defaults to White's
+  perspective. Needs investigation in `build_rich_coaching_prompt`
+  (prompts.py) and how side-to-move is conveyed.
+- **Repro**: `chess-coach explain
+  "rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2"
+  --level beginner` with qwen3:8b.
+- **Status**: OPEN — found during Phase 9 manual end-to-end verification.
+
+### BUG-012: CLI crashes with UnicodeEncodeError when stdout is not UTF-8
+- **Observed**: `chess-coach check` (and other commands that print ✓ / box
+  drawing) aborted with
+  `UnicodeEncodeError: 'charmap' codec can't encode character '\u2713'`
+  on Windows whenever stdout was not an interactive UTF-8 console — e.g.
+  output piped/redirected, or running in CI logs (which default to
+  cp1252 on Windows runners).
+- **Impact**: Any redirected/captured run of the CLI on Windows crashed
+  before doing useful work; would have broken CI and the kiro-monitor
+  output capture.
+- **Root cause**: The CLI emits Unicode (check marks, box-drawing, emoji)
+  via `click.echo` / rich, but the standard streams inherit the OS code
+  page (cp1252 on Windows) when not attached to a UTF-8 console.
+- **Status**: FIXED — `main()` in `cli.py` now reconfigures
+  `sys.stdout`/`sys.stderr` to `encoding="utf-8", errors="replace"` at
+  startup, so Unicode output works regardless of the console code page.
