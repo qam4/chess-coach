@@ -33,6 +33,8 @@ def response_key(position_id: str, model: str) -> str:
 
 @dataclass
 class AgreementReport:
+    """Agreement between human and judge ratings, per-criterion and overall, against a threshold."""
+
     n: int  # number of (position, model) pairs rated by BOTH human and judge
     per_criterion: dict[str, float]
     overall: float
@@ -42,6 +44,7 @@ class AgreementReport:
 
     @property
     def ok(self) -> bool:
+        """True if there is at least one shared rating and no criterion falls below the threshold."""
         return self.n > 0 and not self.below_threshold
 
 

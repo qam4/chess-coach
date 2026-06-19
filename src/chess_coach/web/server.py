@@ -32,10 +32,12 @@ def create_app(coach: Coach) -> FastAPI:
 
     @app.get("/")
     async def index() -> FileResponse:
+        """Serve the single-page coaching UI (``index.html``)."""
         return FileResponse(str(STATIC_DIR / "index.html"))
 
     @app.post("/api/analyze")
     async def analyze(req: AnalyzeRequest) -> dict:  # type: ignore[type-arg]
+        """Run the full LLM coaching pipeline on a FEN and return coaching text, best move, and debug info."""
         try:
             response = app.state.coach.explain(
                 req.fen,
@@ -120,6 +122,7 @@ def create_app(coach: Coach) -> FastAPI:
 
     @app.get("/api/health")
     async def health() -> dict:  # type: ignore[type-arg]
+        """Report engine and LLM connectivity; status is ``ok`` only when both are healthy."""
         status = app.state.coach.check()
         return {
             "status": "ok" if all(status.values()) else "degraded",
@@ -129,10 +132,12 @@ def create_app(coach: Coach) -> FastAPI:
 
     @app.get("/api/play/strength")
     async def get_strength() -> dict:  # type: ignore[type-arg]
+        """Return the current play strength (``play_elo``; 0 means full strength)."""
         return {"play_elo": app.state.coach.play_elo}
 
     @app.post("/api/play/strength")
     async def set_strength(req: dict) -> dict:  # type: ignore[type-arg]
+        """Set the engine's play strength (0-2500 Elo, 0 = full strength) and return the applied value."""
         elo = req.get("play_elo", 0)
         if not isinstance(elo, int) or elo < 0 or elo > 2500:
             raise HTTPException(
@@ -151,6 +156,7 @@ def create_app(coach: Coach) -> FastAPI:
 
     @app.post("/api/play/move")
     async def play_move(req: PlayMoveRequest) -> dict:  # type: ignore[type-arg]
+        """Apply the user's move, get the engine's reply with coaching feedback, and report game state."""
         # Validate FEN
         try:
             board = chess.Board(req.fen)
@@ -212,6 +218,7 @@ def create_app(coach: Coach) -> FastAPI:
 
     @app.post("/api/play/new")
     async def play_new(req: PlayNewRequest) -> dict:  # type: ignore[type-arg]
+        """Start a new game; if the user picks black, the engine plays the first move and explains it."""
         if req.color not in ("white", "black"):
             raise HTTPException(status_code=400, detail="color must be 'white' or 'black'")
 
@@ -254,6 +261,7 @@ def create_app(coach: Coach) -> FastAPI:
 
     @app.post("/api/play/undo")
     async def play_undo(req: PlayUndoRequest) -> dict:  # type: ignore[type-arg]
+        """Undo the last move pair by replaying history, then return the re-evaluated position."""
         if not req.moves:
             raise HTTPException(status_code=400, detail="No moves to undo")
 
@@ -300,9 +308,11 @@ def create_app(coach: Coach) -> FastAPI:
 
     @app.post("/api/analyze/stream")
     async def analyze_stream(req: AnalyzeRequest) -> StreamingResponse:
+        """Stream the coaching pipeline as Server-Sent Events, emitting progress then a final result."""
         coach = app.state.coach
 
         async def generate() -> typing.AsyncGenerator[str, None]:
+            """SSE event stream: yield ``progress`` events as the pipeline runs, then a ``done`` or error event."""
             queue: asyncio.Queue[str | None] = asyncio.Queue()
             trace_events: list[dict[str, typing.Any]] = []
             loop = asyncio.get_event_loop()
@@ -362,6 +372,7 @@ def create_app(coach: Coach) -> FastAPI:
 
     @app.post("/api/play/move/stream")
     async def play_move_stream(req: PlayMoveRequest) -> StreamingResponse:
+        """Stream the play-move pipeline (move evaluation + engine reply) as Server-Sent Events."""
         # Validate upfront
         try:
             board = chess.Board(req.fen)
@@ -379,6 +390,7 @@ def create_app(coach: Coach) -> FastAPI:
         coach = app.state.coach
 
         async def generate() -> typing.AsyncGenerator[str, None]:
+            """SSE event stream: yield ``progress`` events through the play pipeline, then a final result event."""
             queue: asyncio.Queue[str | None] = asyncio.Queue()
             trace_events: list[dict[str, typing.Any]] = []
             loop = asyncio.get_event_loop()

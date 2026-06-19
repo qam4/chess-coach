@@ -42,6 +42,8 @@ class EngineTerminatedError(CoachingProtocolError):
 
 @dataclass(frozen=True)
 class EvalBreakdown:
+    """Per-term breakdown of the engine's static evaluation, in centipawns."""
+
     material: int
     mobility: int
     king_safety: int
@@ -50,6 +52,7 @@ class EvalBreakdown:
     piece_bonuses: int = 0
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {
             "material": self.material,
             "mobility": self.mobility,
@@ -61,6 +64,7 @@ class EvalBreakdown:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> EvalBreakdown:
+        """Build an EvalBreakdown from its dict form."""
         return cls(
             material=d["material"],
             mobility=d["mobility"],
@@ -73,20 +77,26 @@ class EvalBreakdown:
 
 @dataclass(frozen=True)
 class HangingPiece:
+    """An undefended or under-defended piece on a given square."""
+
     square: str
     piece: str
     color: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {"square": self.square, "piece": self.piece, "color": self.color}
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> HangingPiece:
+        """Build a HangingPiece from its dict form."""
         return cls(square=d["square"], piece=d["piece"], color=d.get("color", ""))
 
 
 @dataclass(frozen=True)
 class Threat:
+    """A tactical or positional threat from one square against target squares."""
+
     type: str
     source_square: str
     target_squares: list[str]
@@ -94,6 +104,7 @@ class Threat:
     uci_move: str = ""
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {
             "type": self.type,
             "source_square": self.source_square,
@@ -104,6 +115,7 @@ class Threat:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Threat:
+        """Build a Threat from its dict form."""
         return cls(
             type=d["type"],
             source_square=d["source_square"],
@@ -115,11 +127,14 @@ class Threat:
 
 @dataclass(frozen=True)
 class PawnFeatures:
+    """Pawn-structure features for one side: isolated, doubled, and passed pawns."""
+
     isolated: list[str]
     doubled: list[str]
     passed: list[str]
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {
             "isolated": list(self.isolated),
             "doubled": list(self.doubled),
@@ -128,6 +143,7 @@ class PawnFeatures:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> PawnFeatures:
+        """Build a PawnFeatures from its dict form."""
         return cls(
             isolated=list(d["isolated"]),
             doubled=list(d["doubled"]),
@@ -137,19 +153,25 @@ class PawnFeatures:
 
 @dataclass(frozen=True)
 class KingSafety:
+    """King-safety assessment for one side: a centipawn score and description."""
+
     score: int
     description: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {"score": self.score, "description": self.description}
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> KingSafety:
+        """Build a KingSafety from its dict form."""
         return cls(score=d["score"], description=d["description"])
 
 
 @dataclass(frozen=True)
 class TacticalMotif:
+    """A detected tactical motif (fork, pin, skewer, etc.) and whether it appears in the PV."""
+
     type: str
     squares: list[str]
     pieces: list[str]
@@ -157,6 +179,7 @@ class TacticalMotif:
     description: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {
             "type": self.type,
             "squares": list(self.squares),
@@ -167,6 +190,7 @@ class TacticalMotif:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> TacticalMotif:
+        """Build a TacticalMotif from its dict form."""
         return cls(
             type=d["type"],
             squares=list(d["squares"]),
@@ -178,6 +202,8 @@ class TacticalMotif:
 
 @dataclass(frozen=True)
 class ThreatMapEntry:
+    """Attacker/defender counts for a single square, with a net-attacked flag."""
+
     square: str
     piece: str | None
     white_attackers: int
@@ -187,6 +213,7 @@ class ThreatMapEntry:
     net_attacked: bool
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {
             "square": self.square,
             "piece": self.piece,
@@ -199,6 +226,7 @@ class ThreatMapEntry:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ThreatMapEntry:
+        """Build a ThreatMapEntry from its dict form."""
         return cls(
             square=d["square"],
             piece=d["piece"],
@@ -212,12 +240,15 @@ class ThreatMapEntry:
 
 @dataclass(frozen=True)
 class PVLine:
+    """A principal variation: its depth, evaluation, move list, and a thematic label."""
+
     depth: int
     eval_cp: int
     moves: list[str]
     theme: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {
             "depth": self.depth,
             "eval_cp": self.eval_cp,
@@ -227,6 +258,7 @@ class PVLine:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> PVLine:
+        """Build a PVLine from its dict form."""
         return cls(
             depth=d["depth"],
             eval_cp=d["eval_cp"],
@@ -237,6 +269,8 @@ class PVLine:
 
 @dataclass(frozen=True)
 class PositionReport:
+    """Full engine analysis of a single position: evaluation, threats, structure, tactics, and PVs."""
+
     fen: str
     eval_cp: int
     eval_breakdown: EvalBreakdown
@@ -252,6 +286,7 @@ class PositionReport:
     critical_reason: str | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {
             "fen": self.fen,
             "eval_cp": self.eval_cp,
@@ -270,6 +305,7 @@ class PositionReport:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> PositionReport:
+        """Build a PositionReport from its dict form."""
         return cls(
             fen=d["fen"],
             eval_cp=d["eval_cp"],
@@ -291,6 +327,8 @@ class PositionReport:
 
 @dataclass(frozen=True)
 class ComparisonReport:
+    """Comparison of a user's move against the engine's best move, with classification and refutation."""
+
     fen: str
     user_move: str
     user_eval_cp: int
@@ -307,6 +345,7 @@ class ComparisonReport:
     critical_reason: str | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict."""
         return {
             "fen": self.fen,
             "user_move": self.user_move,
@@ -326,6 +365,7 @@ class ComparisonReport:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ComparisonReport:
+        """Build a ComparisonReport from its dict form."""
         ref_line = d["refutation_line"]
         return cls(
             fen=d["fen"],

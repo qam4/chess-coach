@@ -50,6 +50,8 @@ class ResponseEval:
 
 @dataclass
 class ModelSummary:
+    """Aggregated evaluation metrics rolled up across one model's responses."""
+
     model: str
     n: int
     factual_mean: float
@@ -127,10 +129,13 @@ def summarize_model(model: str, evals: list[ResponseEval]) -> ModelSummary:
 
 @dataclass
 class Scoreboard:
+    """Collection of per-model summaries with table rendering and serialization."""
+
     summaries: list[ModelSummary] = field(default_factory=list)
 
     @classmethod
     def from_response_evals(cls, evals: list[ResponseEval]) -> Scoreboard:
+        """Group response evals by model, summarize each, and return a Scoreboard sorted by factual mean."""
         by_model: dict[str, list[ResponseEval]] = {}
         for e in evals:
             by_model.setdefault(e.model, []).append(e)
@@ -140,6 +145,7 @@ class Scoreboard:
         return cls(summaries=summaries)
 
     def render(self) -> str:
+        """Render the scoreboard as a fixed-width text table."""
         if not self.summaries:
             return "(no results)"
         lines = [
@@ -167,6 +173,7 @@ class Scoreboard:
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the scoreboard to a JSON-compatible dict."""
         return {"summaries": [asdict(s) for s in self.summaries]}
 
 
@@ -206,6 +213,7 @@ class RunConfig:
         guidance: str = "off",
         guidance_max: int = 0,
     ) -> RunConfig:
+        """Build a RunConfig, stamping the current timestamp and copying the model list."""
         return cls(
             models=list(models),
             judge_model=judge_model,

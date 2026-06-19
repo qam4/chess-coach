@@ -81,7 +81,9 @@ class SoundnessEngine(Protocol):
         user_move: str,
         depth: int | None = None,
         movetime: int | None = None,
-    ) -> ComparisonReport: ...
+    ) -> ComparisonReport:
+        """Compare a user's move against the engine's best move and return the comparison report."""
+        ...
 
 
 @dataclass(frozen=True)

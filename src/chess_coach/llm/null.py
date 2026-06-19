@@ -12,10 +12,13 @@ class NullProvider(LLMProvider):
         super().__init__(model="none", base_url="", timeout=0)
 
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
+        """Return an empty string; this provider performs no LLM generation."""
         return ""
 
     def is_available(self) -> bool:
+        """Always return False since no LLM backend is configured."""
         return False
 
     def smoke_test(self) -> tuple[bool, str]:
+        """Report success without calling any backend (template-only mode)."""
         return True, "LLM disabled (template-only mode)"

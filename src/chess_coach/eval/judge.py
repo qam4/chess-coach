@@ -41,6 +41,8 @@ class VerdictParseError(Exception):
 
 @dataclass(frozen=True)
 class Criterion:
+    """A single rubric criterion: its key, description, and scoring weight."""
+
     key: str
     description: str
     weight: float
@@ -48,6 +50,8 @@ class Criterion:
 
 @dataclass(frozen=True)
 class JudgeRubric:
+    """A judging rubric: a versioned set of weighted criteria with optional score gates."""
+
     version: str
     criteria: tuple[Criterion, ...]
     # Optional multiplicative score gates: (criterion_key, on_fail_multiplier).
@@ -56,12 +60,15 @@ class JudgeRubric:
     gates: tuple[tuple[str, float], ...] = ()
 
     def keys(self) -> list[str]:
+        """Return the criterion keys in rubric order."""
         return [c.key for c in self.criteria]
 
     def total_weight(self) -> float:
+        """Return the sum of all criterion weights."""
         return sum(c.weight for c in self.criteria)
 
     def weight_of(self, key: str) -> float:
+        """Return the weight of the criterion with the given key, or 0.0 if not found."""
         for c in self.criteria:
             if c.key == key:
                 return c.weight
@@ -69,6 +76,7 @@ class JudgeRubric:
 
 
 def load_rubric(path: str | Path) -> JudgeRubric:
+    """Load and validate a judging rubric from a YAML file, returning a JudgeRubric."""
     path = Path(path)
     if not path.exists():
         raise RubricError(f"rubric file not found: {path}")
@@ -130,6 +138,7 @@ def _parse_gates(
 
 
 def default_rubric_path() -> Path:
+    """Return the path to the bundled default rubric (``data/eval/rubric.v1.yaml``)."""
     return Path(__file__).resolve().parents[3] / "data" / "eval" / "rubric.v1.yaml"
 
 
@@ -138,6 +147,8 @@ def default_rubric_path() -> Path:
 
 @dataclass
 class JudgeVerdict:
+    """A judge's evaluation of one coaching response: per-criterion pass/fail, score, and metadata."""
+
     criteria: dict[str, tuple[bool, str]]  # key -> (pass, reason)
     contradictions: list[str]
     quality_score: float
@@ -151,6 +162,7 @@ class JudgeVerdict:
     not_graded: tuple[str, ...] = ()
 
     def passed_keys(self) -> list[str]:
+        """Return the keys of criteria that passed."""
         return [k for k, (ok, _) in self.criteria.items() if ok]
 
     def is_graded(self, key: str) -> bool:
@@ -448,6 +460,8 @@ def judge_response(
 
 @dataclass
 class PairwiseResult:
+    """A single pairwise judging outcome: which of two models won on a position, with audit fields."""
+
     position_id: str
     model_a: str
     model_b: str

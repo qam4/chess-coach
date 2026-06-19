@@ -36,6 +36,7 @@ class OpenAICompatProvider(LLMProvider):
         self._client = httpx.Client(base_url=base_url, timeout=self.timeout, headers=headers)
 
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
+        """Request a completion from the ``/v1/chat/completions`` endpoint and return the message content."""
         resp = self._client.post(
             "/v1/chat/completions",
             json={
@@ -49,6 +50,7 @@ class OpenAICompatProvider(LLMProvider):
         return str(resp.json()["choices"][0]["message"]["content"])
 
     def is_available(self) -> bool:
+        """Return True if the ``/v1/models`` endpoint responds with HTTP 200."""
         try:
             resp = self._client.get("/v1/models", timeout=self.probe_timeout)
             return resp.status_code == 200

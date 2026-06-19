@@ -58,6 +58,7 @@ class CliProvider(LLMProvider):
         return list(self.command), prompt
 
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
+        """Run the configured subprocess with the prompt and return its stdout as the completion."""
         # NOTE: max_tokens / temperature can't be mapped to an arbitrary CLI,
         # so they're ignored here. A judge wants temperature 0 — bake that
         # into the configured command if the tool supports it.
@@ -87,5 +88,6 @@ class CliProvider(LLMProvider):
         return shutil.which(self.command[0]) is not None
 
     def check_status(self) -> tuple[bool, bool]:
+        """Report (server_reachable, model_available); both reflect whether the executable is on PATH."""
         found = self.is_available()
         return found, found

@@ -61,6 +61,7 @@ class BenchmarkPosition:
     notes: str = ""
 
     def required_points(self) -> tuple[GroundTruthPoint, ...]:
+        """Return only the ground-truth points marked as required."""
         return tuple(p for p in self.points if p.required)
 
 

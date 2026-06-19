@@ -33,6 +33,7 @@ class AnalysisLine:
 
     @property
     def score_str(self) -> str:
+        """Format the score as a human-readable string (e.g. ``+1.25`` or ``#+3`` for mate)."""
         if abs(self.score_cp) >= 20000:
             mate_in = (20001 - abs(self.score_cp) + 1) // 2
             sign = "+" if self.score_cp > 0 else "-"
@@ -50,6 +51,7 @@ class AnalysisResult:
 
     @property
     def top_line(self) -> AnalysisLine | None:
+        """Return the best (first) analysis line, or None if there are none."""
         return self.lines[0] if self.lines else None
 
 
@@ -57,16 +59,24 @@ class EngineProtocol(ABC):
     """Abstract interface for chess engine communication."""
 
     @abstractmethod
-    def start(self) -> None: ...
+    def start(self) -> None:
+        """Launch the engine subprocess and complete protocol handshake."""
+        ...
 
     @abstractmethod
-    def stop(self) -> None: ...
+    def stop(self) -> None:
+        """Shut down the engine subprocess."""
+        ...
 
     @abstractmethod
-    def analyze(self, fen: str, depth: int = 18, time_limit: float | None = None) -> AnalysisResult: ...
+    def analyze(self, fen: str, depth: int = 18, time_limit: float | None = None) -> AnalysisResult:
+        """Analyze a position and return the engine's evaluation lines."""
+        ...
 
     @abstractmethod
-    def is_ready(self) -> bool: ...
+    def is_ready(self) -> bool:
+        """Return True if the engine process is running and ready for commands."""
+        ...
 
     @abstractmethod
     def play(self, fen: str, depth: int = 18, time_limit: float | None = None) -> str:
@@ -85,6 +95,7 @@ class XboardEngine(EngineProtocol):
         self._stdout: IO[str] | None = None
 
     def start(self) -> None:
+        """Launch the engine and perform the Xboard ``protover 2`` handshake."""
         cmd = [self._path] + self._args
         self._proc = subprocess.Popen(
             cmd,
@@ -103,14 +114,17 @@ class XboardEngine(EngineProtocol):
         self._send("post")  # Enable thinking output
 
     def stop(self) -> None:
+        """Send ``quit`` and wait for the engine subprocess to exit."""
         if self._proc and self._proc.poll() is None:
             self._send("quit")
             self._proc.wait(timeout=5)
 
     def is_ready(self) -> bool:
+        """Return True while the engine subprocess is alive."""
         return self._proc is not None and self._proc.poll() is None
 
     def analyze(self, fen: str, depth: int = 18, time_limit: float | None = None) -> AnalysisResult:
+        """Run Xboard ``analyze`` mode and collect thinking lines into an AnalysisResult."""
         result = AnalysisResult(fen=fen)
 
         self._send("force")
@@ -320,6 +334,7 @@ class UciEngine(EngineProtocol):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
+        """Launch the engine and complete the UCI ``uci``/``isready`` handshake."""
         cmd = [self._path] + self._args
         self._proc = subprocess.Popen(
             cmd,
@@ -346,11 +361,13 @@ class UciEngine(EngineProtocol):
         self._read_until("readyok", timeout=2.0)
 
     def stop(self) -> None:
+        """Send ``quit`` and wait for the engine subprocess to exit."""
         if self._proc and self._proc.poll() is None:
             self._send("quit")
             self._proc.wait(timeout=5)
 
     def is_ready(self) -> bool:
+        """Return True while the engine subprocess is alive."""
         return self._proc is not None and self._proc.poll() is None
 
     # ------------------------------------------------------------------
@@ -363,6 +380,7 @@ class UciEngine(EngineProtocol):
         depth: int = 18,
         time_limit: float | None = None,
     ) -> AnalysisResult:
+        """Run a UCI ``go`` search and collect ``info`` lines into an AnalysisResult."""
         result = AnalysisResult(fen=fen)
 
         self._send(f"position fen {fen}")
@@ -621,10 +639,12 @@ class CoachingEngine(EngineProtocol):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
+        """Start the inner UCI engine and probe for coaching protocol support."""
         self._inner.start()
         self._probe_coaching_protocol()
 
     def stop(self) -> None:
+        """Stop the inner UCI engine."""
         self._inner.stop()
 
     def set_option(self, name: str, value: str | int | bool) -> None:
@@ -632,12 +652,15 @@ class CoachingEngine(EngineProtocol):
         self._inner.set_option(name, value)
 
     def analyze(self, fen: str, depth: int = 18, time_limit: float | None = None) -> AnalysisResult:
+        """Delegate UCI analysis to the inner engine."""
         return self._inner.analyze(fen, depth, time_limit)
 
     def is_ready(self) -> bool:
+        """Return True while the inner engine subprocess is alive."""
         return self._inner.is_ready()
 
     def play(self, fen: str, depth: int = 18, time_limit: float | None = None) -> str:
+        """Delegate move selection to the inner engine and return the move in coordinate notation."""
         return self._inner.play(fen, depth, time_limit)
 
     # ------------------------------------------------------------------

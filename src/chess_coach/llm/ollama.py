@@ -32,6 +32,7 @@ class OllamaProvider(LLMProvider):
         self._client = httpx.Client(base_url=base_url, timeout=self.timeout)
 
     def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
+        """Stream a completion from the Ollama ``/api/generate`` endpoint and return the joined text."""
         logger.debug(
             "Ollama generate: model=%s prompt_len=%d max_tokens=%d timeout=%.0fs",
             self.model,
@@ -89,6 +90,7 @@ class OllamaProvider(LLMProvider):
         return result
 
     def is_available(self) -> bool:
+        """Return True if Ollama's ``/api/tags`` is reachable and the configured model is loaded."""
         try:
             resp = self._client.get("/api/tags", timeout=self.probe_timeout)
             if resp.status_code != 200:

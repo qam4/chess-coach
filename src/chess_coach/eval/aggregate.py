@@ -382,6 +382,7 @@ class PairwiseSummary:
 
     @property
     def verdict(self) -> str:
+        """Render a one-line human-readable summary of the pairwise outcome and significance."""
         if self.n_decisive == 0:
             return "no decisive comparisons"
         if self.wins_a == self.wins_b:

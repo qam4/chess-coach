@@ -291,12 +291,14 @@ class ObjectiveResult:
 
     @property
     def coverage_fraction(self) -> float:
+        """Fraction of required key facts mentioned in the response (1.0 when none are required)."""
         if self.coverage_total == 0:
             return 1.0
         return len(self.coverage_hits) / self.coverage_total
 
     @property
     def passed(self) -> bool:
+        """True if the factual score meets the pass threshold."""
         return self.factual_score >= PASS_THRESHOLD
 
 

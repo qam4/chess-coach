@@ -40,10 +40,12 @@ class FactorChange:
 
     @property
     def improved(self) -> bool:
+        """True if the move increased this eval component."""
         return self.delta_cp > 0
 
     @property
     def worsened(self) -> bool:
+        """True if the move decreased this eval component."""
         return self.delta_cp < 0
 
 
@@ -91,6 +93,7 @@ class MoveInsight:
     eval_after_cp: int = 0
 
     def to_dict(self) -> dict[str, object]:
+        """Serialize to a JSON-compatible dict (threat lists collapse to counts)."""
         return {
             "move_uci": self.move_uci,
             "move_san": self.move_san,
