@@ -849,3 +849,49 @@ class TestBackwardCompatibility:
         result = build_coaching_prompt(analysis_text, level="beginner", opening_name="Sicilian Defense")
         assert "Sicilian Defense" in result
         assert "beginner" in result
+
+
+def test_move_eval_prompt_injects_guidance() -> None:
+    """Pedagogy guidance reaches the MOVE-FEEDBACK prompt (both bridge ends),
+    and an empty/None selection leaves the prompt byte-for-byte unchanged so
+    move feedback is identical to today when no guidance is supplied."""
+    from chess_coach.pedagogy.resource import GuidanceEntry
+
+    report = ComparisonReport(
+        fen=STARTING_FEN,
+        user_move="e2e4",
+        user_eval_cp=20,
+        best_move="d2d4",
+        best_eval_cp=30,
+        eval_drop_cp=10,
+        classification="good",
+        nag="!",
+        best_move_idea="take the center",
+        refutation_line=None,
+        missed_tactics=[],
+        top_lines=[],
+        critical_moment=False,
+        critical_reason=None,
+    )
+    entry = GuidanceEntry(
+        id="e1",
+        type="principle",
+        theme="make a plan",
+        focus="decide the point of the position",
+        how_to_apply="improve your worst-placed piece",
+        levels=frozenset({"intermediate"}),
+        features=frozenset({"phase:opening"}),
+        eco_codes=frozenset(),
+        citation="c",
+        example=None,
+    )
+    baseline = build_rich_move_evaluation_prompt(report, level="intermediate")
+    with_guidance = build_rich_move_evaluation_prompt(report, level="intermediate", guidance=[entry])
+
+    assert "make a plan" in with_guidance
+    assert "improve your worst-placed piece" in with_guidance
+    assert "make a plan" not in baseline
+    # None/empty selection => prompt unchanged, grounding intact.
+    assert build_rich_move_evaluation_prompt(report, guidance=None) == baseline
+    assert build_rich_move_evaluation_prompt(report, guidance=[]) == baseline
+    assert "GROUNDING RULES (strict):" in with_guidance

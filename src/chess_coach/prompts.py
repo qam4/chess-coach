@@ -599,7 +599,11 @@ def _format_comparison_top_lines(report: ComparisonReport) -> str:
     return "\n".join(lines)
 
 
-def build_rich_move_evaluation_prompt(report: ComparisonReport, level: str = "intermediate") -> str:
+def build_rich_move_evaluation_prompt(
+    report: ComparisonReport,
+    level: str = "intermediate",
+    guidance: list[GuidanceEntry] | None = None,
+) -> str:
     """Build a rich move evaluation prompt from a ComparisonReport.
 
     Uses ``SYSTEM_PROMPT_V2`` with grounding, pedagogy, and tone instructions,
@@ -623,6 +627,14 @@ def build_rich_move_evaluation_prompt(report: ComparisonReport, level: str = "in
         The complete prompt string ready to send to the LLM.
     """
     sections: list[str] = []
+
+    # Curated guidance (the "what to focus on" half of the teaching bridge),
+    # level-filtered. Inserted first so the move feedback LEADS with the
+    # selected themes; the engine-grounding instructions below are untouched.
+    # An empty selection adds nothing, so feedback is unchanged without guidance.
+    guidance_block = format_guidance_block(guidance or [], level=level)
+    if guidance_block:
+        sections.append(guidance_block)
 
     # Conditionally-present sections
     missed_section = _format_missed_tactics(report)
