@@ -22,7 +22,7 @@ from pathlib import Path
 import chess
 import yaml
 
-from ..models import PositionReport
+from ..models import ComparisonReport, PositionReport
 from ..pedagogy.inject import format_judge_guidance_block
 from ..pedagogy.resource import GuidanceEntry
 from .benchmark import BenchmarkPosition
@@ -531,6 +531,83 @@ def pairwise_compare(
         position_id=position.id,
         model_a=model_a,
         model_b=model_b,
+        winner=winner,
+        first_shown=first_model,
+        reason=reason,
+    )
+
+
+# --------------------------------------------------- pairwise: move feedback
+
+
+def build_move_feedback_pairwise_prompt(
+    response_1: str,
+    response_2: str,
+    report: ComparisonReport,
+    level: str,
+) -> str:
+    """Pairwise prompt for two coaching responses that give FEEDBACK on the
+    move a student just played (the step-1 coaching moment, not position
+    analysis). The engine comparison is the ground truth; the judge picks the
+    better *teaching feedback*. Slot order is randomized by the caller."""
+    return (
+        "You are comparing two chess coaching responses that give FEEDBACK on "
+        "a move a student just played. TREAT THE ENGINE DATA BELOW AS GROUND "
+        "TRUTH; do not use your own chess calculation. Pick the response that "
+        "is the better teaching feedback: it correctly conveys whether the move "
+        "was good or a mistake, names the key idea or principle at stake, "
+        "explains why in human terms, gives an actionable correction (the "
+        "better move/plan), and fits the target level. Penalize feedback that "
+        "misjudges the move or just narrates the position.\n\n"
+        f"Position FEN: {report.fen}\n"
+        f"Student's move: {report.user_move}\n"
+        f"Engine best move: {report.best_move}\n"
+        f"Eval drop from the student's move: {report.eval_drop_cp} cp\n"
+        f"Engine classification: {report.classification}\n"
+        f"What the best move achieves: {report.best_move_idea}\n"
+        f"Target level: {level}\n\n"
+        f"--- Response 1 ---\n{response_1}\n\n"
+        f"--- Response 2 ---\n{response_2}\n\n"
+        'Respond with ONLY JSON: {"winner": "1"|"2"|"tie", "reason": "<one clause>"}'
+    )
+
+
+def pairwise_compare_move(
+    provider: object,
+    label_a: str,
+    response_a: str,
+    label_b: str,
+    response_b: str,
+    report: ComparisonReport,
+    level: str,
+    *,
+    rng: random.Random,
+    max_tokens: int = 400,
+) -> PairwiseResult:
+    """Move-feedback counterpart of :func:`pairwise_compare`: compare two
+    feedback responses for the same played move, randomizing slot order to
+    cancel position bias and recording the assignment (Property 6)."""
+    a_first = rng.random() < 0.5
+    if a_first:
+        resp1, resp2, first_model = response_a, response_b, label_a
+    else:
+        resp1, resp2, first_model = response_b, response_a, label_b
+
+    prompt = build_move_feedback_pairwise_prompt(resp1, resp2, report, level)
+    raw = provider.generate(prompt, max_tokens=max_tokens, temperature=0.0)  # type: ignore[attr-defined]
+    winner_slot, reason = parse_pairwise(raw)
+
+    if winner_slot == "tie":
+        winner = "tie"
+    else:
+        slot1_model = label_a if a_first else label_b
+        slot2_model = label_b if a_first else label_a
+        winner = slot1_model if winner_slot == "1" else slot2_model
+
+    return PairwiseResult(
+        position_id=report.fen,
+        model_a=label_a,
+        model_b=label_b,
         winner=winner,
         first_shown=first_model,
         reason=reason,

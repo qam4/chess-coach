@@ -1,0 +1,46 @@
+# Move-feedback benchmark: (position, student move) scenarios for evaluating
+# reactive coaching feedback (the step-1 coaching moment), NOT position
+# analysis. Ground truth (sound / inaccuracy / blunder, the better move, the
+# missed idea) is derived from the engine at eval time -- do NOT hand-annotate
+# verdicts here (see eval/move_feedback.py). Each `move` must be legal in `fen`.
+#
+# A deliberate mix of sound and dubious moves so the feedback path is exercised
+# across "well played" and "here's what you missed" cases.
+
+version: 1
+scenarios:
+  - id: opening_e4_sound
+    fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    move: e2e4
+    level: beginner
+    note: "principled central opening move"
+
+  - id: weakening_f6
+    fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+    move: f7f6
+    level: beginner
+    note: "weakens the king's diagonal; should be teachable"
+
+  - id: develop_nf3_sound
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+    move: g1f3
+    level: beginner
+    note: "natural development, attacks e5"
+
+  - id: premature_queen_qh5
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+    move: d1h5
+    level: intermediate
+    note: "early queen sortie; principle of not bringing the queen out too soon"
+
+  - id: weakening_g5
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    move: g7g5
+    level: beginner
+    note: "loosening kingside pawn move"
+
+  - id: develop_nc6_sound
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    move: b8c6
+    level: beginner
+    note: "natural development, defends e5"
