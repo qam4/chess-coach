@@ -460,6 +460,17 @@ def serve(ctx: click.Context, port: int) -> None:
 
 
 def main() -> None:
+    """CLI entry point: force UTF-8 console output, then dispatch to the Click command group."""
+    # Ensure Unicode output (check marks, box drawing, emoji) works even when
+    # the console/redirected stream defaults to a non-UTF-8 codec (e.g. Windows
+    # cp1252), which otherwise raises UnicodeEncodeError and aborts the command.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
     cli()
 
 
