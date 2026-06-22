@@ -424,9 +424,15 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 - **Hallucination detector misses relational falsehoods.** It catches
   "piece on square X" placement claims, but not false claims like
   "you've developed both bishops" when none are developed (seen live
-  from hermes3:8b). The judge's `grounded` criterion is the backstop;
-  extending the objective check to catch development/possession claims
-  is a future improvement.
+  from hermes3:8b). Another class it misses: **piece-type
+  misidentification** — during BUG-011 verification, qwen3:8b described
+  the hanging e5 *pawn* as a "queen" (and in another run contradicted
+  itself about whose queen attacks it). The engine data was correct;
+  the model mislabeled it. The judge's `grounded` criterion is the
+  backstop; extending the objective check to catch development/possession
+  and piece-type claims is a future improvement. These are LLM-output
+  quality issues (not code bugs) — the value is in the eval harness
+  measuring their *rate*, not in chasing single anecdotes.
 
 - **Engine-as-oracle quality at depth 8.** Ground truth is the engine
   report; at depth 8 it can disagree with opening theory (e.g. it
