@@ -220,7 +220,9 @@ You are given a structured engine analysis of a chess position. Use ONLY the \
 data below — do not add your own analysis or invent ideas not present here.
 
 Position (FEN): {fen}
-Overall evaluation: {eval_cp} centipawns
+Overall evaluation: {eval_cp} centipawns (from White's perspective: positive \
+favors White, negative favors Black)
+{perspective}
 
 {sections}
 
@@ -280,6 +282,7 @@ engine's best move. Use ONLY the data below — do not re-analyze the position \
 or add ideas not present here.
 
 Position (FEN): {fen}
+{perspective}
 
 Student's move: {user_move}
 Student's move evaluation: {user_eval_cp} centipawns
@@ -466,6 +469,25 @@ def _build_level_instructions(level: str) -> str:
     return "\n".join(parts) + "\n"
 
 
+def _format_perspective(fen: str) -> str:
+    """Return a line naming whose turn it is and which side the student plays.
+
+    Parsed from the FEN's active-color field. Without this, the prompt only
+    conveys side-to-move implicitly (inside the FEN string) while all engine
+    data is in absolute White/Black terms, so the LLM tends to narrate from
+    White's side and attribute the opponent's pieces to the student (BUG-011).
+    """
+    parts = fen.split()
+    active = parts[1].lower() if len(parts) > 1 else "w"
+    student, opponent = ("Black", "White") if active == "b" else ("White", "Black")
+    return (
+        f"Side to move: {student}. You are coaching the player with the {student} "
+        f'pieces — address them as "you" and refer to {opponent} as their opponent. '
+        f"The engine data below labels items by color (White/Black); translate them "
+        f"to the student's perspective."
+    )
+
+
 def build_rich_coaching_prompt(
     report: PositionReport,
     level: str = "intermediate",
@@ -564,6 +586,7 @@ def build_rich_coaching_prompt(
         level=level,
         fen=report.fen,
         eval_cp=report.eval_cp,
+        perspective=_format_perspective(report.fen),
         sections="\n\n".join(sections),
         level_instructions=level_instructions,
         critical_section=critical_section,
@@ -666,6 +689,7 @@ def build_rich_move_evaluation_prompt(
         system=SYSTEM_PROMPT_V2,
         level=level,
         fen=report.fen,
+        perspective=_format_perspective(report.fen),
         user_move=report.user_move,
         user_eval_cp=report.user_eval_cp,
         best_move=report.best_move,

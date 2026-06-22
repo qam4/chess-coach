@@ -211,7 +211,21 @@ Tracked issues discovered during development and testing.
 - **Repro**: `chess-coach explain
   "rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2"
   --level beginner` with qwen3:8b.
-- **Status**: OPEN — found during Phase 9 manual end-to-end verification.
+- **Status**: FIXED (root cause) — found during Phase 9 manual
+  verification. `_format_perspective(fen)` in `prompts.py` now injects an
+  explicit "Side to move: <color>. You are coaching the player with the
+  <color> pieces ... translate engine White/Black labels to the student's
+  perspective" line into both rich prompts, and the eval line states it is
+  White-relative. Regression tests added in `tests/test_prompts.py`.
+  Live re-verification on the repro position (qwen3:8b, 2 runs) confirms
+  the severe inversion is gone: the coach now correctly treats the student
+  as Black and White as the opponent ("your pawn on e5 is hanging", "your
+  opponent's queen is aiming to take it"). NOTE — residual small-model
+  slips remain at temperature 0.7 (one run contradicted itself once with
+  "your queen is already attacking that pawn"; another mislabeled the
+  hanging e5 pawn as a "queen"). These are LLM-consistency / piece-type
+  errors, not the perspective inversion, and track the broader
+  small-model reliability limitation rather than this bug.
 
 ### BUG-012: CLI crashes with UnicodeEncodeError when stdout is not UTF-8
 - **Observed**: `chess-coach check` (and other commands that print ✓ / box
