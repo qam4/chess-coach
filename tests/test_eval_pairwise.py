@@ -153,3 +153,38 @@ class TestMajorityWinner:
 
     def test_single_vote(self) -> None:
         assert majority_winner(["on"], "off", "on")[0] == "on"
+
+
+# ------------------------------------------------ judge JSON parsing robustness
+
+
+class TestPairwiseParseRobustness:
+    """parse_pairwise tolerates the malformed replies that lost situations."""
+
+    def test_plain_json(self) -> None:
+        winner, reason = parse_pairwise('{"winner": "1", "reason": "clear"}')
+        assert winner == "1"
+        assert reason == "clear"
+
+    def test_control_character_in_reason(self) -> None:
+        # A raw newline inside the reason string previously raised
+        # "Invalid control character" — strict=False now tolerates it.
+        winner, reason = parse_pairwise('{"winner": "2", "reason": "line one\nline two"}')
+        assert winner == "2"
+        assert "line one" in reason
+
+    def test_trailing_prose_after_object(self) -> None:
+        # Trailing text after the JSON previously raised "Extra data".
+        reply = '{"winner": "1", "reason": "best"}\n\nHope that helps!'
+        winner, _ = parse_pairwise(reply)
+        assert winner == "1"
+
+    def test_markdown_fenced(self) -> None:
+        reply = '```json\n{"winner": "tie", "reason": "even"}\n```'
+        winner, _ = parse_pairwise(reply)
+        assert winner == "tie"
+
+    def test_brace_inside_reason_string(self) -> None:
+        winner, reason = parse_pairwise('{"winner": "2", "reason": "use {x} notation"}')
+        assert winner == "2"
+        assert "{x}" in reason

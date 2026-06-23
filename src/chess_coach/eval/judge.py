@@ -315,16 +315,42 @@ def build_judge_prompt(
 
 
 def _extract_json_object(text: str) -> str:
-    """Pull the outermost {...} object out of a reply that may carry
-    markdown fences or trailing prose (a common frontier quirk)."""
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if fenced:
-        return fenced.group(1)
+    """Pull the first complete {...} object out of a reply that may carry
+    markdown fences, trailing prose, or stray braces (common frontier quirks).
+
+    Strips a markdown code fence if present, then brace-matches from the first
+    ``{`` while respecting string literals and escapes — so trailing text after
+    the object, or a ``}`` inside a reason string, doesn't truncate or over-grab
+    the result (the old first-brace/last-brace slice produced 'Extra data').
+    """
+    m = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    if m:
+        text = m.group(1)
     start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end < start:
+    if start == -1:
         raise VerdictParseError("no JSON object found in judge reply")
-    return text[start : end + 1]
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    raise VerdictParseError("no complete JSON object found in judge reply")
 
 
 def _quality_score(
@@ -375,7 +401,7 @@ def parse_verdict(
     ungraded = set(not_graded)
     raw = _extract_json_object(text)
     try:
-        data = json.loads(raw)
+        data = json.loads(raw, strict=False)
     except json.JSONDecodeError as e:
         raise VerdictParseError(f"judge reply is not valid JSON: {e}") from e
     if not isinstance(data, dict):
@@ -500,7 +526,7 @@ def parse_pairwise(text: str) -> tuple[str, str]:
     """Return (winner, reason) where winner is '1', '2', or 'tie'."""
     raw = _extract_json_object(text)
     try:
-        data = json.loads(raw)
+        data = json.loads(raw, strict=False)
     except json.JSONDecodeError as e:
         raise VerdictParseError(f"pairwise reply not valid JSON: {e}") from e
     winner = str(data.get("winner", "")).strip().lower()
