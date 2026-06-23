@@ -38,7 +38,7 @@ from chess_coach.eval import (  # noqa: E402
     render_pairwise,
     summarize_pairwise,
 )
-from chess_coach.eval.judge import pairwise_compare_move  # noqa: E402
+from chess_coach.eval.judge import majority_winner, pairwise_compare_move  # noqa: E402
 from chess_coach.llm import create_provider  # noqa: E402
 from chess_coach.llm.ollama import OllamaProvider  # noqa: E402
 from chess_coach.pedagogy.guard import guard_entries  # noqa: E402
@@ -70,6 +70,14 @@ def main() -> None:
     parser.add_argument("--depth", type=int, default=None)
     parser.add_argument("--multipv", type=int, default=3)
     parser.add_argument("--guidance-max", type=int, default=3)
+    parser.add_argument(
+        "--judge-repeats",
+        type=int,
+        default=1,
+        help="Judge each pair this many times and take the majority verdict "
+        "(denoises the judge; generation is deterministic so this does not "
+        "inflate the sample size).",
+    )
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", default="output/eval_move_feedback_pairwise")
@@ -159,22 +167,31 @@ def main() -> None:
                 print(f"GEN ERROR: {e}")
                 continue
             try:
-                res = pairwise_compare_move(judge, "off", resp_off, "on", resp_on, comparison, sc.level, rng=rng)
+                votes: list[str] = []
+                last_reason = ""
+                for _ in range(max(1, args.judge_repeats)):
+                    res = pairwise_compare_move(judge, "off", resp_off, "on", resp_on, comparison, sc.level, rng=rng)
+                    votes.append(res.winner)
+                    last_reason = res.reason
+                winner, vote_counts = majority_winner(votes, "off", "on")
             except Exception as e:
                 print(f"JUDGE ERROR (skipped): {e}")
                 continue
-            winners.append(res.winner)
+            winners.append(winner)
             records.append(
                 {
                     "id": sc.id,
                     "move": sc.move,
                     "classification": comparison.classification,
-                    "winner": res.winner,
-                    "first_shown": res.first_shown,
-                    "reason": res.reason,
+                    "winner": winner,
+                    "votes": vote_counts,
+                    "reason": last_reason,
                 }
             )
-            print(f"{res.winner} ({comparison.classification})")
+            vote_str = ""
+            if args.judge_repeats > 1:
+                vote_str = f" [off {vote_counts['off']} / on {vote_counts['on']} / tie {vote_counts['tie']}]"
+            print(f"{winner} ({comparison.classification}){vote_str}")
     finally:
         engine.stop()
 
@@ -191,6 +208,7 @@ def main() -> None:
                 "model": args.model,
                 "judge_model": args.judge_model,
                 "guidance_max": args.guidance_max,
+                "judge_repeats": args.judge_repeats,
                 "seed": args.seed,
                 "path": "move_feedback",
                 "summary": {

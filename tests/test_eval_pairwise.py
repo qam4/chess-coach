@@ -8,6 +8,7 @@ import random
 from chess_coach.eval.benchmark import BenchmarkPosition, GroundTruthPoint
 from chess_coach.eval.judge import (
     build_pairwise_prompt,
+    majority_winner,
     pairwise_compare,
     parse_pairwise,
 )
@@ -113,3 +114,42 @@ def test_openai_compat_sends_bearer_when_key_given() -> None:
 def test_openai_compat_no_auth_header_without_key() -> None:
     p = OpenAICompatProvider(model="m", base_url="http://judge")
     assert "authorization" not in p._client.headers
+
+
+# ----------------------------------------------------- majority_winner (repeats)
+
+
+class TestMajorityWinner:
+    """Reducing repeated judgments of the same pair to one verdict."""
+
+    def test_clear_majority_on(self) -> None:
+        winner, counts = majority_winner(["on", "on", "off"], "off", "on")
+        assert winner == "on"
+        assert counts == {"off": 1, "on": 2, "tie": 0}
+
+    def test_clear_majority_off(self) -> None:
+        winner, counts = majority_winner(["off", "off", "on"], "off", "on")
+        assert winner == "off"
+
+    def test_exact_split_is_tie(self) -> None:
+        winner, _ = majority_winner(["off", "on"], "off", "on")
+        assert winner == "tie"
+
+    def test_ties_do_not_decide(self) -> None:
+        # Equal off/on with extra ties stays a tie.
+        winner, counts = majority_winner(["off", "on", "tie", "tie"], "off", "on")
+        assert winner == "tie"
+        assert counts["tie"] == 2
+
+    def test_tie_votes_break_toward_plurality(self) -> None:
+        # A plurality for "on" wins even when ties are present.
+        winner, _ = majority_winner(["on", "on", "tie"], "off", "on")
+        assert winner == "on"
+
+    def test_empty_is_tie(self) -> None:
+        winner, counts = majority_winner([], "off", "on")
+        assert winner == "tie"
+        assert counts == {"off": 0, "on": 0, "tie": 0}
+
+    def test_single_vote(self) -> None:
+        assert majority_winner(["on"], "off", "on")[0] == "on"

@@ -44,3 +44,86 @@ scenarios:
     move: b8c6
     level: beginner
     note: "natural development, defends e5"
+  - id: blunder_king_move_ke7
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    move: e8e7
+    level: beginner
+    note: "moving the king loses castling and exposes it"
+
+  - id: blunder_queen_sortie_qg5
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    move: d8g5
+    level: beginner
+    note: "early queen sortie that hangs to Nxg5"
+
+  - id: dubious_rook_pawn_a5
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    move: a7a5
+    level: beginner
+    note: "purposeless rook-pawn move, ignores development"
+
+  - id: dubious_queen_blocks_qe7
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    move: d8e7
+    level: intermediate
+    note: "blocks the f8 bishop's development"
+
+  - id: sound_petrov_nf6
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    move: g8f6
+    level: beginner
+    note: "sound: counterattacks e4 (Petrov Defense)"
+
+  - id: sound_philidor_d6
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    move: d7d6
+    level: beginner
+    note: "solid defensive setup (Philidor)"
+
+  - id: blunder_kingside_g5
+    fen: "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"
+    move: g7g5
+    level: beginner
+    note: "wrecks the kingside pawn shield"
+
+  - id: blunder_hang_pawn_b5
+    fen: "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"
+    move: b7b5
+    level: beginner
+    note: "hangs the b5 pawn to Bxb5"
+
+  - id: dubious_premature_nd4
+    fen: "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"
+    move: c6d4
+    level: intermediate
+    note: "premature knight leap; allows Nxe5 ideas"
+
+  - id: sound_italian_bc5
+    fen: "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"
+    move: f8c5
+    level: beginner
+    note: "sound development (Giuoco Piano)"
+
+  - id: blunder_bongcloud_ke2
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+    move: e1e2
+    level: beginner
+    note: "exposes the king and blocks development"
+
+  - id: dubious_early_queen_qg4
+    fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+    move: d1g4
+    level: intermediate
+    note: "premature queen move out of the opening"
+
+  - id: dubious_rook_pawn_a4
+    fen: "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+    move: a2a4
+    level: beginner
+    note: "purposeless edge-pawn move, ignores the center"
+
+  - id: sound_castle_oo
+    fen: "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+    move: e1g1
+    level: beginner
+    note: "sound: castle the king to safety"

@@ -626,3 +626,27 @@ def pairwise_compare_move(
         first_shown=first_model,
         reason=reason,
     )
+
+
+def majority_winner(winners: list[str], label_a: str, label_b: str) -> tuple[str, dict[str, int]]:
+    """Reduce repeated judgments of the SAME pair to one verdict by majority.
+
+    When generation is deterministic, judging a pair N times samples the
+    judge's own variance rather than new responses; taking the majority
+    denoises each comparison without inflating the sample size (the unit of
+    analysis stays the position/pair). Returns the majority ``winner``
+    (``label_a``, ``label_b``, or ``"tie"`` on an empty input or an exact
+    split) together with the vote counts for auditing.
+    """
+    counts = {
+        label_a: winners.count(label_a),
+        label_b: winners.count(label_b),
+        "tie": winners.count("tie"),
+    }
+    if counts[label_a] > counts[label_b]:
+        winner = label_a
+    elif counts[label_b] > counts[label_a]:
+        winner = label_b
+    else:
+        winner = "tie"
+    return winner, counts
