@@ -73,6 +73,9 @@ chess-coach explain "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
 chess-coach explain "r1bqkb1r/pppppppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4" \
     --depth 12 --level beginner
 
+# Socratic mode: ask guiding questions instead of giving the answer
+chess-coach explain "rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2" --socratic
+
 # Start the web UI
 chess-coach serve            # serves http://localhost:8000
 chess-coach serve --port 8080

@@ -119,3 +119,60 @@ class TestCoachCheck:
         status = coach.check()
 
         assert status == {"engine": False, "llm": False}
+
+
+# --------------------------------------------------------------------------
+# Socratic mode wiring (rich coaching-protocol path)
+# --------------------------------------------------------------------------
+
+
+def _coaching_report():
+    from chess_coach.models import (
+        EvalBreakdown,
+        KingSafety,
+        PawnFeatures,
+        PositionReport,
+    )
+
+    empty = PawnFeatures([], [], [])
+    return PositionReport(
+        fen=STARTING_FEN,
+        eval_cp=20,
+        eval_breakdown=EvalBreakdown(0, 0, 0, 0),
+        hanging_pieces={"white": [], "black": []},
+        threats={"white": [], "black": []},
+        pawn_structure={"white": empty, "black": empty},
+        king_safety={"white": KingSafety(0, ""), "black": KingSafety(0, "")},
+        top_lines=[],
+        tactics=[],
+        threat_map=[],
+        threat_map_summary=None,
+        critical_moment=False,
+        critical_reason=None,
+    )
+
+
+def _mock_coaching_engine():
+    from chess_coach.engine import CoachingEngine
+
+    engine = MagicMock(spec=CoachingEngine)
+    engine.coaching_available = True
+    engine.is_ready.return_value = True
+    engine.get_position_report.return_value = _coaching_report()
+    return engine
+
+
+class TestCoachSocratic:
+    """explain(socratic=True) routes to the Socratic prompt, else the explainer."""
+
+    def test_socratic_uses_socratic_prompt(self):
+        coach = Coach(engine=_mock_coaching_engine(), llm=_mock_llm())
+        resp = coach.explain(STARTING_FEN, socratic=True)
+        assert "SOCRATIC INSTRUCTIONS" in resp.llm_prompt
+        assert "guiding questions" in resp.llm_prompt
+
+    def test_non_socratic_uses_explain_prompt(self):
+        coach = Coach(engine=_mock_coaching_engine(), llm=_mock_llm())
+        resp = coach.explain(STARTING_FEN, socratic=False)
+        assert "COACHING INSTRUCTIONS" in resp.llm_prompt
+        assert "SOCRATIC INSTRUCTIONS" not in resp.llm_prompt

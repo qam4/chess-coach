@@ -21,6 +21,7 @@ from chess_coach.prompts import (
     build_move_evaluation_prompt,
     build_rich_coaching_prompt,
     build_rich_move_evaluation_prompt,
+    build_socratic_prompt,
 )
 
 logger = logging.getLogger(__name__)
@@ -182,10 +183,16 @@ class Coach:
         fen: str,
         depth: int | None = None,
         level: str | None = None,
+        socratic: bool = False,
         on_progress: typing.Callable[[str], None] | None = None,
         on_debug: DebugCallback | None = None,
     ) -> CoachingResponse:
-        """Analyze a position and generate a coaching explanation."""
+        """Analyze a position and generate a coaching explanation.
+
+        When ``socratic`` is True, the coach asks guiding questions (grounded
+        in the engine features, without revealing the best move or evaluation)
+        instead of explaining the position.
+        """
         use_depth = depth if depth is not None else self.depth
         use_level = level if level is not None else self.level
 
@@ -240,7 +247,10 @@ class Coach:
             _progress(f"Engine done ({t1 - t0:.1f}s). LLM thinking...")
 
             opening_label = f"{opening.eco} {opening.name}" if opening else None
-            prompt = build_rich_coaching_prompt(report, level=use_level, opening_name=opening_label)
+            if socratic:
+                prompt = build_socratic_prompt(report, level=use_level, opening_name=opening_label)
+            else:
+                prompt = build_rich_coaching_prompt(report, level=use_level, opening_name=opening_label)
             logger.debug("Rich coaching prompt length: %d chars", len(prompt))
 
             _trace(
@@ -263,7 +273,15 @@ class Coach:
                     raise ValueError("Empty LLM response")
             except Exception as e:
                 logger.warning("LLM failed for position coaching: %s — falling back to templates", e)
-                coaching_text = generate_position_coaching(report, level=use_level)
+                if socratic:
+                    coaching_text = (
+                        "Before you choose a move, ask yourself: Are any of my "
+                        "pieces undefended? What is my opponent threatening right "
+                        "now? Which of my pieces is doing the least, and could it "
+                        "do more? Take a look and see what stands out."
+                    )
+                else:
+                    coaching_text = generate_position_coaching(report, level=use_level)
             t3 = time.perf_counter()
             logger.info("LLM generation took %.1fs", t3 - t2)
             logger.info("Total explain took %.1fs", t3 - t0)

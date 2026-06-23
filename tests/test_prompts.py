@@ -57,9 +57,12 @@ class TestBuildCoachingPrompt:
 from chess_coach.models import (  # noqa: E402
     ComparisonReport,
     EvalBreakdown,
+    HangingPiece,
     KingSafety,
     PawnFeatures,
     PositionReport,
+    PVLine,
+    Threat,
 )
 from chess_coach.prompts import (  # noqa: E402
     _format_perspective,
@@ -67,6 +70,7 @@ from chess_coach.prompts import (  # noqa: E402
     _uci_to_san,
     build_rich_coaching_prompt,
     build_rich_move_evaluation_prompt,
+    build_socratic_prompt,
 )
 
 WHITE_TO_MOVE_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -223,3 +227,81 @@ class TestMoveEvaluationUsesSan:
         prompt = build_rich_move_evaluation_prompt(report, "beginner")
         assert "O-O" in prompt
         assert "e1g1" not in prompt
+
+
+# --------------------------------------------------------------------------
+# Socratic mode: the prompt must ask guiding questions and must NOT leak the
+# answer (best move, top lines, or the evaluation).
+# --------------------------------------------------------------------------
+
+
+def _socratic_report() -> PositionReport:
+    """A report with a threat, a hanging pawn, a strong eval, and a PV.
+
+    Used to confirm the Socratic prompt grounds questions in the qualitative
+    features while withholding the eval (250cp) and the solution moves.
+    """
+    empty_pawns = PawnFeatures([], [], [])
+    return PositionReport(
+        fen=BLACK_TO_MOVE_FEN,
+        eval_cp=250,
+        eval_breakdown=EvalBreakdown(material=250, mobility=10, king_safety=0, pawn_structure=0),
+        hanging_pieces={
+            "white": [],
+            "black": [HangingPiece(square="e5", piece="pawn", color="black")],
+        },
+        threats={
+            "white": [
+                Threat(
+                    type="capture",
+                    source_square="h5",
+                    target_squares=["e5"],
+                    description="White queen can capture the undefended e5 pawn",
+                    uci_move="h5e5",
+                )
+            ],
+            "black": [],
+        },
+        pawn_structure={"white": empty_pawns, "black": empty_pawns},
+        king_safety={"white": KingSafety(0, "castled"), "black": KingSafety(-20, "king exposed")},
+        top_lines=[PVLine(depth=12, eval_cp=250, moves=["b8c6", "f1c4"], theme="")],
+        tactics=[],
+        threat_map=[],
+        threat_map_summary=None,
+        critical_moment=False,
+        critical_reason=None,
+    )
+
+
+class TestSocraticPrompt:
+    """build_socratic_prompt asks questions, grounded, without the answer."""
+
+    def test_asks_guiding_questions(self) -> None:
+        prompt = build_socratic_prompt(_socratic_report(), "beginner")
+        assert "guiding questions" in prompt
+        assert "Do not give the answer, the best move, or the evaluation" in prompt
+
+    def test_states_side_to_move(self) -> None:
+        prompt = build_socratic_prompt(_socratic_report(), "beginner")
+        assert "Side to move: Black" in prompt
+
+    def test_grounded_in_features(self) -> None:
+        # The questions should be able to point at the real hanging pawn / threat.
+        prompt = build_socratic_prompt(_socratic_report(), "beginner")
+        assert "e5" in prompt  # the hanging pawn the student should notice
+
+    def test_does_not_reveal_evaluation(self) -> None:
+        prompt = build_socratic_prompt(_socratic_report(), "beginner")
+        assert "250" not in prompt
+        assert "+2.5" not in prompt
+        assert "--- Material Balance ---" not in prompt
+
+    def test_does_not_reveal_best_move_or_pv(self) -> None:
+        prompt = build_socratic_prompt(_socratic_report(), "beginner")
+        assert "Top Engine Lines" not in prompt
+        assert "b8c6" not in prompt  # raw best move withheld
+        assert "Nc6" not in prompt  # and its SAN
+
+    def test_grounding_rules_present(self) -> None:
+        prompt = build_socratic_prompt(_socratic_report(), "beginner")
+        assert "Never reveal or name the best move" in prompt

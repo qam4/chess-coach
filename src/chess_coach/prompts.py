@@ -641,6 +641,107 @@ def build_rich_coaching_prompt(
     )
 
 
+SOCRATIC_SYSTEM_PROMPT = """\
+You are a Socratic chess coach. You do NOT tell the student the answer, the \
+best move, or the evaluation. Instead you ask short, guiding questions that \
+lead the student to notice the important features of the position themselves \
+and reach the idea on their own.
+
+GROUNDING RULES (strict):
+- Base every question ONLY on the engine data sections provided below.
+- Never invent threats, piece placements, or tactical ideas not in the data.
+- Never reveal or name the best move, the winning plan, or the numeric \
+evaluation — not even as a hint phrased as a question.
+- If the data has no concrete features, ask a general orienting question \
+(about development or king safety) rather than inventing specifics.
+
+HOW TO ASK:
+- Ask 2-3 short questions, each pointing the student toward one real feature \
+in the data (a threat, an undefended piece, king safety, pawn structure).
+- Order them from what to notice first toward what to do about it.
+- Be warm and encouraging; end with a brief nudge to look for themselves.
+"""
+
+SOCRATIC_COACHING_PROMPT_V2 = """\
+{system}
+
+Student level: {level}
+
+Below is structured engine analysis of a chess position. Use ONLY this data \
+to decide what to ask. Do NOT explain the position, state the evaluation, or \
+name the best move — ask guiding questions instead.
+
+Position (FEN): {fen}
+{perspective}
+
+{sections}
+
+SOCRATIC INSTRUCTIONS:
+- Ask 2-3 short guiding questions that lead the student toward the key \
+idea(s) in the data above, without revealing them.
+- Each question should point at a real feature (a threat, an undefended \
+piece, king safety, a pawn weakness) — never invent one.
+- Do not give the answer, the best move, or the evaluation; make the student \
+do the noticing.
+- End with one short, encouraging nudge to look at the board.
+{level_instructions}\
+Keep it brief: at most 3 questions, no lecturing.\
+"""
+
+
+def build_socratic_prompt(
+    report: PositionReport,
+    level: str = "intermediate",
+    opening_name: str | None = None,
+) -> str:
+    """Build a Socratic coaching prompt — guiding questions, not answers.
+
+    Includes the qualitative engine features (threats, hanging pieces, tactics,
+    threat map, king safety, pawn structure) so the questions stay grounded,
+    but deliberately OMITS the top engine lines, the eval breakdown numbers,
+    and the overall evaluation so the LLM cannot hand the student the answer.
+    The engine holds the answer key; the coach only asks.
+
+    Args:
+        report: The structured position report from the engine.
+        level: Student level (``"beginner"``, ``"intermediate"``, or
+            ``"advanced"``).
+        opening_name: Optional opening name to include.
+
+    Returns:
+        The complete Socratic prompt string ready to send to the LLM.
+    """
+    sections: list[str] = []
+    if opening_name:
+        sections.append(f"--- Opening ---\n{opening_name}")
+
+    # Qualitative, answer-free feature sections only — no top lines, no eval
+    # breakdown numbers, no overall evaluation.
+    threats = _format_threats(report)
+    if threats is not None:
+        sections.append(threats)
+    hanging = _format_hanging_pieces(report)
+    if hanging is not None:
+        sections.append(hanging)
+    tactics = _format_tactics(report)
+    if tactics is not None:
+        sections.append(tactics)
+    threat_map = _format_threat_map(report)
+    if threat_map is not None:
+        sections.append(threat_map)
+    sections.append(_format_king_safety(report))
+    sections.append(_format_pawn_structure(report))
+
+    return SOCRATIC_COACHING_PROMPT_V2.format(
+        system=SOCRATIC_SYSTEM_PROMPT,
+        level=level,
+        fen=report.fen,
+        perspective=_format_perspective(report.fen),
+        sections="\n\n".join(sections),
+        level_instructions=_build_level_instructions(level),
+    )
+
+
 def _format_missed_tactics(report: ComparisonReport) -> str | None:
     """Format missed tactics section, or return None if empty."""
     if not report.missed_tactics:

@@ -116,8 +116,15 @@ def cli(ctx: click.Context, config: str, verbose: bool) -> None:
     default=False,
     help="Use template engine (no LLM, instant, no hallucination)",
 )
+@click.option(
+    "--socratic",
+    "-s",
+    is_flag=True,
+    default=False,
+    help="Ask guiding questions instead of explaining (Socratic mode; needs the LLM)",
+)
 @click.pass_context
-def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, template: bool) -> None:
+def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, template: bool, socratic: bool) -> None:
     """Explain a chess position given as a FEN string."""
     cfg = load_config(ctx.obj["config_path"])
 
@@ -130,6 +137,10 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, 
 
     use_level = level or coaching_cfg.get("level", "intermediate")
     use_depth = depth or engine_cfg.get("depth", 18)
+
+    if socratic and template:
+        console.print("[yellow]Note:[/] --socratic needs the LLM; ignoring it in --template mode.")
+        socratic = False
 
     # Template mode: no LLM needed
     if template:
@@ -269,7 +280,7 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, 
             try:
                 from chess_coach.coach import TraceStep  # noqa: F811
 
-                response = coach.explain(fen, on_progress=_update, on_debug=_debug)
+                response = coach.explain(fen, socratic=socratic, on_progress=_update, on_debug=_debug)
             except httpx.TimeoutException as exc:
                 console.print(
                     f"\n[red]✗[/] LLM request timed out after {llm_timeout:.0f}s.\n"
