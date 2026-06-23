@@ -138,7 +138,16 @@ class TestAnalyzeEndpoint:
             STARTING_FEN,
             depth=20,
             level="advanced",
+            socratic=False,
         )
+
+    @pytest.mark.asyncio
+    async def test_analyze_forwards_socratic_flag(self, app) -> None:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            await ac.post("/api/analyze", json={"fen": STARTING_FEN, "socratic": True})
+        _, kwargs = app.state.coach.explain.call_args
+        assert kwargs["socratic"] is True
 
 
 class TestIndexEndpoint:

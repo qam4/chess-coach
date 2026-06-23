@@ -575,12 +575,14 @@
     var fen = fenInput.value.trim();
     if (!fen) return;
 
-    var useTemplate = document.getElementById('templateToggle').checked;
+    var socratic = document.getElementById('socraticToggle').checked;
+    // Socratic needs the LLM; quick/template mode can't ask questions.
+    var useTemplate = document.getElementById('templateToggle').checked && !socratic;
 
     setLoading(true, useTemplate ? 'Template analyzing…' : 'Engine analyzing…');
     clearArrows();
     clearDebug();
-    appendDebug('Analyze request: FEN=' + fen + ' depth=' + depthSlider.value + ' level=' + levelSelect.value + (useTemplate ? ' [template]' : ''));
+    appendDebug('Analyze request: FEN=' + fen + ' depth=' + depthSlider.value + ' level=' + levelSelect.value + (socratic ? ' [socratic]' : '') + (useTemplate ? ' [template]' : ''));
 
     if (useTemplate) {
       fetch('/api/analyze/template', {
@@ -619,6 +621,7 @@
         fen: fen,
         depth: parseInt(depthSlider.value, 10),
         level: levelSelect.value,
+        socratic: socratic,
       }),
     })
       .then(function (res) {
@@ -636,7 +639,8 @@
         if (finalData) {
           renderCoaching(finalData);
           updateEvalBar(finalData.score);
-          if (finalData.best_move) drawBestMoveArrow(finalData.best_move);
+          // Socratic mode withholds the answer — don't draw the best-move arrow.
+          if (finalData.best_move && !socratic) drawBestMoveArrow(finalData.best_move);
           appendDebug('--- Done ---');
         }
       })

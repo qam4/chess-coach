@@ -43,6 +43,7 @@ def create_app(coach: Coach) -> FastAPI:
                 req.fen,
                 depth=req.depth,
                 level=req.level,
+                socratic=req.socratic,
             )
             top_line = None
             if hasattr(response, "analysis_text"):
@@ -335,6 +336,7 @@ def create_app(coach: Coach) -> FastAPI:
                         req.fen,
                         depth=req.depth,
                         level=req.level,
+                        socratic=req.socratic,
                         on_debug=_on_debug,
                     )
                 except Exception as exc:
@@ -870,6 +872,7 @@ class AnalyzeRequest(BaseModel):
     fen: str
     depth: int = 18
     level: str = "intermediate"
+    socratic: bool = False
 
 
 class PlayMoveRequest(BaseModel):
