@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import chess
+
 from chess_coach.models import (
     ComparisonReport,
     PositionReport,
@@ -316,6 +318,52 @@ Keep your response concise (under 100 words).\
 # ---------------------------------------------------------------------------
 
 
+def _uci_to_san(fen: str, uci: str) -> str:
+    """Convert a single UCI move to SAN for the given position.
+
+    Models read SAN — which names the piece (e.g. ``Ke7``, ``O-O``, ``Qg4``) —
+    far more reliably than raw coordinates like ``e1g1`` (the move-feedback eval
+    showed the model frequently misidentifying the moved piece from UCI). Falls
+    back to the raw UCI string if the move can't be parsed or is illegal, so a
+    bad datum degrades gracefully instead of raising.
+    """
+    try:
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(uci)
+        if move in board.legal_moves:
+            return board.san(move)
+    except (ValueError, AssertionError):
+        pass
+    return uci
+
+
+def _uci_line_to_san(fen: str, ucis: list[str]) -> str:
+    """Convert a UCI move sequence to a space-joined SAN line from ``fen``.
+
+    Walks the position move by move; if any move is illegal/unparseable from
+    the running position, that move and the remainder are emitted as raw UCI
+    rather than guessing a wrong piece. Returns the original space-joined UCI
+    if the base position itself is invalid.
+    """
+    try:
+        board = chess.Board(fen)
+    except (ValueError, AssertionError):
+        return " ".join(ucis)
+    out: list[str] = []
+    for i, uci in enumerate(ucis):
+        try:
+            move = chess.Move.from_uci(uci)
+            if move in board.legal_moves:
+                out.append(board.san(move))
+                board.push(move)
+                continue
+        except (ValueError, AssertionError):
+            pass
+        out.extend(ucis[i:])  # couldn't convert — emit this move and rest raw
+        break
+    return " ".join(out)
+
+
 def _format_eval_breakdown(report: PositionReport) -> str:
     """Format the eval breakdown section."""
     eb = report.eval_breakdown
@@ -426,7 +474,7 @@ def _format_top_lines(report: PositionReport) -> str:
     for i, pv in enumerate(report.top_lines, 1):
         if not pv.moves:
             continue
-        moves_str = " ".join(pv.moves)
+        moves_str = _uci_line_to_san(report.fen, pv.moves)
         theme_str = f" — theme: {pv.theme}" if pv.theme else ""
         lines.append(f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str}{theme_str}")
     return "\n".join(lines)
@@ -609,7 +657,17 @@ def _format_refutation_line(report: ComparisonReport) -> str | None:
     """Format refutation line section, or return None if not present."""
     if report.refutation_line is None:
         return None
-    moves_str = " ".join(report.refutation_line)
+    # The refutation is the opponent's reply to the student's move, so render it
+    # in SAN from the position AFTER that move; fall back to report.fen if the
+    # student's move can't be applied.
+    base_fen = report.fen
+    try:
+        board = chess.Board(report.fen)
+        board.push_uci(report.user_move)
+        base_fen = board.fen()
+    except (ValueError, AssertionError):
+        base_fen = report.fen
+    moves_str = _uci_line_to_san(base_fen, report.refutation_line)
     return f"--- Refutation Line ---\nOpponent's punishing response: {moves_str}"
 
 
@@ -617,7 +675,7 @@ def _format_comparison_top_lines(report: ComparisonReport) -> str:
     """Format the top engine lines from a ComparisonReport."""
     lines = ["--- Top Engine Lines ---"]
     for i, pv in enumerate(report.top_lines, 1):
-        moves_str = " ".join(pv.moves)
+        moves_str = _uci_line_to_san(report.fen, pv.moves)
         lines.append(f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}")
     return "\n".join(lines)
 
@@ -690,9 +748,9 @@ def build_rich_move_evaluation_prompt(
         level=level,
         fen=report.fen,
         perspective=_format_perspective(report.fen),
-        user_move=report.user_move,
+        user_move=_uci_to_san(report.fen, report.user_move),
         user_eval_cp=report.user_eval_cp,
-        best_move=report.best_move,
+        best_move=_uci_to_san(report.fen, report.best_move),
         best_eval_cp=report.best_eval_cp,
         eval_drop_cp=report.eval_drop_cp,
         classification=report.classification,
