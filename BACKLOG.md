@@ -153,6 +153,36 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   string-aware) + `json.loads(strict=False)` so situations stop being
   dropped (was losing ~3-4 of 20 per run).
 
+  **Capability gradient — FIRST SIGNIFICANT WIN (2026-06-23).** With the
+  de-confounded measurement (SAN moves, 20 situations, 5-vote majority,
+  hardened judge parsing => 0 dropped), ran the move-feedback A/B on three
+  models:
+  | model | type | result | p | verdict |
+  |---|---|---|---|---|
+  | gemma4:12b-it-qat | non-reasoning | 8-8 (50%) | 1.00 | no benefit |
+  | qwen3:8b | reasoning | 14-6 (70%) | 0.115 | leans positive, ns |
+  | **qwen3:14b** | reasoning | **15-5 (75%)** | **0.041** | **significant** |
+
+  A clean, coherent gradient: guidance does nothing for the non-reasoning
+  model, helps the small reasoning model (promising, just short of
+  significance), and **significantly helps the larger reasoning model** —
+  the FIRST statistically significant teaching benefit for the pedagogy
+  layer anywhere. qwen3:14b judge rationales confirm it's real teaching
+  (ON wins by naming the concrete principle / actual move / tactical
+  punishment), not the old piece-misID artifact. **Conclusion: the pedagogy
+  layer is validated for a model strong enough to use it.** Reframes the
+  default-model choice — gemma was attractive on speed but can't use the
+  guidance; a reasoning model (qwen3:14b, maybe 8b) unlocks the teaching
+  benefit. Caveats: single runs; qwen3:14b p=0.041 is solid-not-bulletproof
+  and qwen generation is non-deterministic, so a replication would firm it
+  up; 8b's 70% would likely cross into significance with a little more data.
+  Still a frontier-judge proxy, not measured student improvement (true
+  north). Results: output/eval_mf_pairwise_qwen14/pairwise.json; qwen3:8b in
+  output/mf_qwen8_monitor/output.log (its pairwise.json write hit a full
+  disk — data intact in the log). Next levers: replicate qwen3:14b (≥3x);
+  test capability threshold; revisit whether guidance content can help a
+  non-reasoning model; consider the default coaching model bump.
+
 - **`rubric.v2` — shipped (leniency defects fixed); teaching-bridge
   grounding still open.** `data/eval/rubric.v2.yaml` now exists: it adds
   the `teaches_principle` bridge criterion, ties `actionable` to the key
