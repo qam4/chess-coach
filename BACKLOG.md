@@ -122,6 +122,37 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   SAFE (cap-1: 0 hallucination/illegal, factual up) so it can ship as a
   no-harm default while the teaching question moves to the move-feedback path.
 
+  **Move-feedback path MEASURED (2026-06-23): also no benefit for gemma,
+  once the measurement was de-confounded.** Built the move-feedback
+  benchmark (`data/eval/move_feedback.yaml`, now 20 (position, student-move)
+  situations, engine-graded, mistake-biased) and a pairwise A/B harness
+  (`scripts/eval_move_feedback_pairwise.py`) with repeated judging
+  (`--judge-repeats N`, majority-voted per situation to denoise the judge;
+  generation is deterministic so this doesn't inflate n). First gemma run
+  (5 votes/pair) read guidance ON 11-6 (65%, p=0.33) — but reading the
+  judge's per-situation rationales showed most verdicts were decided by one
+  response **misidentifying which piece moved** from the raw UCI coordinates
+  in the prompt (e.g. reading `e1g1` as a bishop move), NOT by teaching
+  quality. That was a real prompt bug: moves were fed as UCI. Fixed by
+  rendering moves in SAN (named piece) in the rich prompts (commit on
+  prompts.py; `_uci_to_san`/`_uci_line_to_san`). Re-run after the fix:
+  **8-8 tie (50%, p=1.0)**, and crucially **zero piece-misID complaints in
+  any of the 16 judge rationales** — the confound was gone and the judge
+  compared actual teaching. So the 11-6 was largely the artifact; the clean
+  result is **no detectable teaching benefit for gemma on the move-feedback
+  path either**. Mechanism visible in the votes: guidance ON adds a named
+  principle (sometimes helps) but also adds filler (judge preferred the more
+  concise OFF on clear blunders) — a wash. **Both coaching paths, cleanly
+  measured, now agree: the pedagogy layer as built does not improve teaching
+  for gemma.** The remaining lever is CONTENT (what the guidance entries say)
+  or MODEL CAPABILITY (qwen3:14b showed a borderline gain on position
+  explanation — worth a move-feedback run), not more measurement. Side
+  findings banked: the SAN fix is a genuine coaching-quality win for real
+  users; the kiro-cli judge intermittently returns malformed JSON (raw
+  newline / trailing prose) — hardened `_extract_json_object` (brace-matched,
+  string-aware) + `json.loads(strict=False)` so situations stop being
+  dropped (was losing ~3-4 of 20 per run).
+
 - **`rubric.v2` — shipped (leniency defects fixed); teaching-bridge
   grounding still open.** `data/eval/rubric.v2.yaml` now exists: it adds
   the `teaches_principle` bridge criterion, ties `actionable` to the key
