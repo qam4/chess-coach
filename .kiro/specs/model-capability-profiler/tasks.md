@@ -11,36 +11,36 @@ scoring.
 
 ## Tasks
 
-- [ ] 1. Pure core: data model + JSON persistence
-  - [ ] 1.1 Create `src/chess_coach/eval/profile.py` with frozen dataclasses
+- [x] 1. Pure core: data model + JSON persistence
+  - [x] 1.1 Create `src/chess_coach/eval/profile.py` with frozen dataclasses
         `DimensionResult`, `CapabilityProfile`, `ConfigSuggestion`,
         `ConfigRecommendation`, `ProfileThresholds`. Dimensions are a `list`
         (Req 7.1). Keep `metrics` (quality facts) and `latency_s` (cost)
         separate fields (Req 5.2, principle 2).
-  - [ ] 1.2 Add `profile_to_dict` / `from_dict` round-tripping for
+  - [x] 1.2 Add `profile_to_dict` / `from_dict` round-tripping for
         `CapabilityProfile` so a run can be written to and re-read from JSON.
-  - [ ] 1.3 Unit tests: dataclass construction + JSON round-trip equality.
+  - [x] 1.3 Unit tests: dataclass construction + JSON round-trip equality.
   - _Requirements: 1.4, 5.2, 7.1, 7.2_
 
-- [ ] 2. Pure core: threshold → recommendation mapping
-  - [ ] 2.1 Implement `recommend(profile, thresholds) -> ConfigRecommendation`:
+- [x] 2. Pure core: threshold → recommendation mapping
+  - [x] 2.1 Implement `recommend(profile, thresholds) -> ConfigRecommendation`:
         factual `< factual_min` OR hallucinations `> 0` ⇒
         `coaching.template_only: true` (else false); guidance win-rate
         `>= guidance_win_rate_min` ⇒ `coaching.guidance: on` (else off);
         latency ⇒ NO suggestion (fact only); reachability fail ⇒ a single
         "model unusable" suggestion. Each suggestion carries a reason citing
         the measured number.
-  - [ ] 2.2 Unit tests for every branch: low factual → template_only;
+  - [x] 2.2 Unit tests for every branch: low factual → template_only;
         hallucinations present → template_only; win-rate above/below threshold
         → guidance on/off; latency never yields a suggestion (Req 5.3);
         reachability-fail short-circuit.
   - _Requirements: 3.3, 4.2, 5.3, 7.2_
 
-- [ ] 3. Pure core: rendering
-  - [ ] 3.1 Implement `render_profile` (per-dimension facts: name, status,
+- [x] 3. Pure core: rendering
+  - [x] 3.1 Implement `render_profile` (per-dimension facts: name, status,
         metrics, latency side-by-side) and `render_recommendation` (config
         snippet + one-line reason per setting).
-  - [ ] 3.2 Unit tests: rendered report contains each dimension's facts;
+  - [x] 3.2 Unit tests: rendered report contains each dimension's facts;
         recommendation renders as a pasteable config block with reasons.
   - _Requirements: 6.1, 6.2_
 

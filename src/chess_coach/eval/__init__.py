@@ -54,6 +54,16 @@ from .move_feedback import (
     load_move_feedback_scenarios,
 )
 from .objective import ObjectiveResult, evaluate_objective
+from .profile import (
+    CapabilityProfile,
+    ConfigRecommendation,
+    ConfigSuggestion,
+    DimensionResult,
+    ProfileThresholds,
+    recommend,
+    render_profile,
+    render_recommendation,
+)
 from .scoring import (
     ModelSummary,
     ResponseEval,
@@ -67,6 +77,10 @@ __all__ = [
     "AggregatedModel",
     "BenchmarkError",
     "BenchmarkPosition",
+    "CapabilityProfile",
+    "ConfigRecommendation",
+    "ConfigSuggestion",
+    "DimensionResult",
     "GroundTruthPoint",
     "JudgeRubric",
     "JudgeVerdict",
@@ -77,6 +91,7 @@ __all__ = [
     "MoveFeedbackScenario",
     "ObjectiveResult",
     "PairwiseSummary",
+    "ProfileThresholds",
     "ResponseEval",
     "RunConfig",
     "Scoreboard",
@@ -99,8 +114,11 @@ __all__ = [
     "pairwise_compare_move",
     "parse_verdict",
     "persist_results",
+    "recommend",
     "render_aggregate",
     "render_comparison",
     "render_pairwise",
+    "render_profile",
+    "render_recommendation",
     "summarize_pairwise",
 ]
