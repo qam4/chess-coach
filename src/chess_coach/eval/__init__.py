@@ -52,6 +52,7 @@ from .move_feedback import (
     MoveFeedbackScenario,
     default_move_feedback_path,
     load_move_feedback_scenarios,
+    run_move_feedback_pairwise,
 )
 from .objective import ObjectiveResult, evaluate_objective
 from .profile import (
@@ -120,5 +121,6 @@ __all__ = [
     "render_pairwise",
     "render_profile",
     "render_recommendation",
+    "run_move_feedback_pairwise",
     "summarize_pairwise",
 ]

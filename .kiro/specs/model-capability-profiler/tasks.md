@@ -44,12 +44,12 @@ scoring.
         recommendation renders as a pasteable config block with reasons.
   - _Requirements: 6.1, 6.2_
 
-- [ ] 4. Refactor move-feedback pairwise into a reusable function
-  - [ ] 4.1 Extract the per-scenario generate→judge→majority loop in
+- [x] 4. Refactor move-feedback pairwise into a reusable function
+  - [x] 4.1 Extract the per-scenario generate→judge→majority loop in
         `scripts/eval_move_feedback_pairwise.py` into an importable function
         (e.g. `run_move_feedback_pairwise(...) -> PairwiseSummary`) so both the
         existing script and the profiler call the same code (no duplication).
-  - [ ] 4.2 Confirm the existing pairwise tests still pass; add a focused test
+  - [x] 4.2 Confirm the existing pairwise tests still pass; add a focused test
         for the extracted function with a stub judge + mocked engine/model.
   - _Requirements: 1.2, 4.1_
 

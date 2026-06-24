@@ -135,3 +135,98 @@ def test_move_pairwise_compare_tie() -> None:
     judge = _StubJudge('{"winner": "tie", "reason": "equal"}')
     res = pairwise_compare_move(judge, "off", "x", "on", "y", _comparison_report(), "beginner", rng=random.Random(1))
     assert res.winner == "tie"
+
+
+# --------------------------------------------- run_move_feedback_pairwise (shared loop)
+
+
+def _position_report():
+    from chess_coach.models import (
+        EvalBreakdown,
+        KingSafety,
+        PawnFeatures,
+        PositionReport,
+    )
+
+    empty = PawnFeatures([], [], [])
+    return PositionReport(
+        fen=START,
+        eval_cp=20,
+        eval_breakdown=EvalBreakdown(0, 0, 0, 0),
+        hanging_pieces={"white": [], "black": []},
+        threats={"white": [], "black": []},
+        pawn_structure={"white": empty, "black": empty},
+        king_safety={"white": KingSafety(0, ""), "black": KingSafety(0, "")},
+        top_lines=[],
+        tactics=[],
+        threat_map=[],
+        threat_map_summary=None,
+        critical_moment=False,
+        critical_reason=None,
+    )
+
+
+def _empty_resource():
+    # A real, schema-valid resource with no entries → guidance selection is
+    # empty, which exercises the loop without needing curated content.
+    from chess_coach.pedagogy.resource import KnowledgeResource
+
+    return KnowledgeResource(
+        entries=(),
+        feature_vocab=frozenset({"phase:opening"}),
+        eco_vocab=frozenset({"C20"}),
+        levels=frozenset({"beginner", "intermediate", "advanced"}),
+    )
+
+
+def _scenarios():
+    from chess_coach.eval.move_feedback import MoveFeedbackScenario
+
+    return [
+        MoveFeedbackScenario(id="s1", fen=START, move="e2e4", level="beginner"),
+        MoveFeedbackScenario(id="s2", fen=START, move="d2d4", level="beginner"),
+    ]
+
+
+def _mock_engine_and_model():
+    import random as _random
+    from unittest.mock import MagicMock
+
+    from chess_coach.engine import CoachingEngine
+    from chess_coach.llm.base import LLMProvider
+
+    engine = MagicMock(spec=CoachingEngine)
+    engine.get_comparison_report.return_value = _comparison_report()
+    engine.get_position_report.return_value = _position_report()
+    model = MagicMock(spec=LLMProvider)
+    model.generate.return_value = "Some feedback."
+    return engine, model, _random.Random(0)
+
+
+def test_run_pairwise_produces_summary_and_records() -> None:
+    from chess_coach.eval import run_move_feedback_pairwise
+
+    engine, model, rng = _mock_engine_and_model()
+    judge = _StubJudge('{"winner": "2", "reason": "clearer"}')
+    summary, records = run_move_feedback_pairwise(
+        _scenarios(), engine, model, judge, _empty_resource(), depth=8, judge_repeats=1, rng=rng
+    )
+    assert summary is not None
+    assert summary.n == 2
+    assert len(records) == 2
+    assert records[0]["winner"] in ("off", "on", "tie")
+
+
+def test_run_pairwise_engine_skip_yields_no_summary() -> None:
+    from chess_coach.eval import run_move_feedback_pairwise
+
+    engine, model, rng = _mock_engine_and_model()
+    engine.get_comparison_report.side_effect = RuntimeError("engine down")
+    judge = _StubJudge('{"winner": "1", "reason": "x"}')
+    msgs: list[str] = []
+    summary, records = run_move_feedback_pairwise(
+        _scenarios(), engine, model, judge, _empty_resource(), rng=rng, on_progress=msgs.append
+    )
+    assert summary is None
+    assert records == []
+    assert any("ENGINE SKIP" in m for m in msgs)

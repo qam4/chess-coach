@@ -17,8 +17,11 @@ learned that lesson the hard way with mis-annotated positions).
 
 from __future__ import annotations
 
+import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import chess
 import yaml
@@ -100,3 +103,110 @@ def load_move_feedback_scenarios(path: str | Path) -> list[MoveFeedbackScenario]
     if not scenarios:
         raise MoveFeedbackError(f"{path}: no scenarios found")
     return scenarios
+
+
+# --------------------------------------------------- pairwise A/B runner
+
+
+def run_move_feedback_pairwise(
+    scenarios: list[MoveFeedbackScenario],
+    engine: "CoachingEngine",
+    model: "LLMProvider",
+    judge: object,
+    resource: "KnowledgeResource",
+    *,
+    depth: int | None = None,
+    multipv: int = 3,
+    guidance_max: int = 3,
+    temperature: float = 0.0,
+    judge_repeats: int = 1,
+    rng: random.Random | None = None,
+    on_progress: Callable[[str], None] | None = None,
+) -> "tuple[PairwiseSummary | None, list[dict[str, object]]]":
+    """Run the move-feedback guidance A/B (off vs on) over ``scenarios``.
+
+    For each scenario: get the engine comparison + position report, build the
+    move-feedback prompt with guidance OFF and ON, generate both with ``model``,
+    and have ``judge`` pick the better feedback ``judge_repeats`` times,
+    majority-voted (denoises the judge without inflating n — generation is
+    deterministic at ``temperature=0``).
+
+    The caller owns the engine lifecycle (this does not start or stop it) and
+    all I/O: pass ``on_progress`` to receive one human-readable line per
+    scenario (result or skip reason). Returns ``(summary, records)`` where
+    ``summary`` is ``None`` if no comparison produced a decisive result.
+
+    This is the shared implementation behind both
+    ``scripts/eval_move_feedback_pairwise.py`` and the model-capability
+    profiler's guidance dimension.
+    """
+    # Imported here (not at module top) to keep the lightweight scenario
+    # loader free of the heavier prompt/pedagogy/judge dependency graph.
+    from ..pedagogy.selector import guidance_for_position
+    from ..prompts import build_rich_move_evaluation_prompt
+    from .aggregate import summarize_pairwise
+    from .judge import majority_winner, pairwise_compare_move
+
+    rng = rng or random.Random(0)
+    winners: list[str] = []
+    records: list[dict[str, object]] = []
+
+    def _emit(msg: str) -> None:
+        if on_progress:
+            on_progress(msg)
+
+    for sc in scenarios:
+        try:
+            comparison = engine.get_comparison_report(sc.fen, sc.move, depth=depth)
+            pos_report = engine.get_position_report(sc.fen, multipv=multipv, depth=depth)
+        except Exception as e:
+            _emit(f"{sc.id} ({sc.move})... ENGINE SKIP: {e}")
+            continue
+
+        guidance = guidance_for_position(resource, pos_report, sc.level, guidance_max)
+        prompt_off = build_rich_move_evaluation_prompt(comparison, level=sc.level)
+        prompt_on = build_rich_move_evaluation_prompt(comparison, level=sc.level, guidance=guidance)
+        try:
+            resp_off = model.generate(prompt_off, max_tokens=512, temperature=temperature)
+            resp_on = model.generate(prompt_on, max_tokens=512, temperature=temperature)
+        except Exception as e:
+            _emit(f"{sc.id} ({sc.move})... GEN ERROR: {e}")
+            continue
+
+        try:
+            votes: list[str] = []
+            last_reason = ""
+            for _ in range(max(1, judge_repeats)):
+                res = pairwise_compare_move(judge, "off", resp_off, "on", resp_on, comparison, sc.level, rng=rng)
+                votes.append(res.winner)
+                last_reason = res.reason
+            winner, vote_counts = majority_winner(votes, "off", "on")
+        except Exception as e:
+            _emit(f"{sc.id} ({sc.move})... JUDGE ERROR (skipped): {e}")
+            continue
+
+        winners.append(winner)
+        records.append(
+            {
+                "id": sc.id,
+                "move": sc.move,
+                "classification": comparison.classification,
+                "winner": winner,
+                "votes": vote_counts,
+                "reason": last_reason,
+            }
+        )
+        vote_str = ""
+        if judge_repeats > 1:
+            vote_str = f" [off {vote_counts['off']} / on {vote_counts['on']} / tie {vote_counts['tie']}]"
+        _emit(f"{sc.id} ({sc.move})... {winner} ({comparison.classification}){vote_str}")
+
+    summary = summarize_pairwise(winners, "off", "on") if winners else None
+    return summary, records
+
+
+if TYPE_CHECKING:
+    from ..engine import CoachingEngine
+    from ..llm.base import LLMProvider
+    from ..pedagogy.resource import KnowledgeResource
+    from .aggregate import PairwiseSummary

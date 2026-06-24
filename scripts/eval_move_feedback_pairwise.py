@@ -36,9 +36,8 @@ from chess_coach.eval import (  # noqa: E402
     default_move_feedback_path,
     load_move_feedback_scenarios,
     render_pairwise,
-    summarize_pairwise,
+    run_move_feedback_pairwise,
 )
-from chess_coach.eval.judge import majority_winner, pairwise_compare_move  # noqa: E402
 from chess_coach.llm import create_provider  # noqa: E402
 from chess_coach.llm.ollama import OllamaProvider  # noqa: E402
 from chess_coach.pedagogy.guard import guard_entries  # noqa: E402
@@ -48,8 +47,6 @@ from chess_coach.pedagogy.resource import (  # noqa: E402
     default_resource_path,
     load_resource,
 )
-from chess_coach.pedagogy.selector import guidance_for_position  # noqa: E402
-from chess_coach.prompts import build_rich_move_evaluation_prompt  # noqa: E402
 
 
 def _build_engine(engine_cfg: dict, coaching_timeout: float) -> CoachingEngine:  # type: ignore[type-arg]
@@ -145,61 +142,28 @@ def main() -> None:
         sys.exit(1)
 
     rng = random.Random(args.seed)
-    winners: list[str] = []
-    records: list[dict[str, object]] = []
     print(f"Move-feedback pairwise: {args.model}, guidance off vs on (max {args.guidance_max})\n")
     try:
-        for sc in scenarios:
-            print(f"  {sc.id} ({sc.move})...", end=" ", flush=True)
-            try:
-                comparison = engine.get_comparison_report(sc.fen, sc.move, depth=depth)
-                pos_report = engine.get_position_report(sc.fen, multipv=args.multipv, depth=depth)
-            except Exception as e:
-                print(f"ENGINE SKIP: {e}")
-                continue
-            guidance = guidance_for_position(resource, pos_report, sc.level, args.guidance_max)
-            prompt_off = build_rich_move_evaluation_prompt(comparison, level=sc.level)
-            prompt_on = build_rich_move_evaluation_prompt(comparison, level=sc.level, guidance=guidance)
-            try:
-                resp_off = model.generate(prompt_off, max_tokens=512, temperature=args.temperature)
-                resp_on = model.generate(prompt_on, max_tokens=512, temperature=args.temperature)
-            except Exception as e:
-                print(f"GEN ERROR: {e}")
-                continue
-            try:
-                votes: list[str] = []
-                last_reason = ""
-                for _ in range(max(1, args.judge_repeats)):
-                    res = pairwise_compare_move(judge, "off", resp_off, "on", resp_on, comparison, sc.level, rng=rng)
-                    votes.append(res.winner)
-                    last_reason = res.reason
-                winner, vote_counts = majority_winner(votes, "off", "on")
-            except Exception as e:
-                print(f"JUDGE ERROR (skipped): {e}")
-                continue
-            winners.append(winner)
-            records.append(
-                {
-                    "id": sc.id,
-                    "move": sc.move,
-                    "classification": comparison.classification,
-                    "winner": winner,
-                    "votes": vote_counts,
-                    "reason": last_reason,
-                }
-            )
-            vote_str = ""
-            if args.judge_repeats > 1:
-                vote_str = f" [off {vote_counts['off']} / on {vote_counts['on']} / tie {vote_counts['tie']}]"
-            print(f"{winner} ({comparison.classification}){vote_str}")
+        summary, records = run_move_feedback_pairwise(
+            scenarios,
+            engine,
+            model,
+            judge,
+            resource,
+            depth=depth,
+            multipv=args.multipv,
+            guidance_max=args.guidance_max,
+            temperature=args.temperature,
+            judge_repeats=args.judge_repeats,
+            rng=rng,
+            on_progress=lambda m: print(f"  {m}"),
+        )
     finally:
         engine.stop()
 
-    if not winners:
+    if summary is None:
         print("\nNo comparisons produced — nothing to summarize.")
         sys.exit(1)
-
-    summary = summarize_pairwise(winners, "off", "on")
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "pairwise.json").write_text(
