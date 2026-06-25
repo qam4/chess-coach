@@ -53,27 +53,27 @@ scoring.
         for the extracted function with a stub judge + mocked engine/model.
   - _Requirements: 1.2, 4.1_
 
-- [ ] 5. Producer: dimension runners (thin, reuse harness)
-  - [ ] 5.1 `reachability`: `OllamaProvider.check_status` (unreachable vs
+- [x] 5. Producer: dimension runners (thin, reuse harness)
+  - [x] 5.1 `reachability`: `OllamaProvider.check_status` (unreachable vs
         not-loaded) + one smoke `generate`; emit a `DimensionResult`; on
         failure, short-circuit the run (Req 2.3).
-  - [ ] 5.2 `factual`: run the existing objective/factual eval over a fixed
+  - [x] 5.2 `factual`: run the existing objective/factual eval over a fixed
         position set; record mean factual + hallucination/illegal counts into a
         `DimensionResult`.
-  - [ ] 5.3 `guidance`: call the extracted move-feedback pairwise function;
+  - [x] 5.3 `guidance`: call the extracted move-feedback pairwise function;
         record on-win-rate + decisive/total + significance.
-  - [ ] 5.4 `latency`: time N warm `generate` calls (warm first); record p50 as
+  - [x] 5.4 `latency`: time N warm `generate` calls (warm first); record p50 as
         an `info` dimension.
   - _Requirements: 2.1, 2.2, 3.1, 4.1, 4.3, 5.1_
 
-- [ ] 6. Producer entry point + output
-  - [ ] 6.1 Create `scripts/profile_model.py`: args (model, base-url, judge
+- [x] 6. Producer entry point + output
+  - [x] 6.1 Create `scripts/profile_model.py`: args (model, base-url, judge
         config mirroring the pairwise script, thresholds with defaults, out
         path). Run dimensions cheapest-first, assemble `CapabilityProfile`,
         call `recommend`.
-  - [ ] 6.2 Print `render_profile` then `render_recommendation`; write
+  - [x] 6.2 Print `render_profile` then `render_recommendation`; write
         `output/profile_<model>.json`. Do NOT modify any config file (Req 6.3).
-  - [ ] 6.3 Light integration test: mocked unreachable model → run stops after
+  - [x] 6.3 Light integration test: mocked unreachable model → run stops after
         reachability and reports unusable (no downstream dimensions).
   - _Requirements: 1.1, 1.3, 6.1, 6.2, 6.3, 6.4_
 
