@@ -82,5 +82,56 @@ def test_reachability_fail_recommendation_is_unusable() -> None:
     assert rec.suggestions[0].value == "(unusable)"
 
 
+class TestGuidanceCoverageGuard:
+    """A mostly-failed guidance run must surface WHY, not a survivor win-rate."""
+
+    def test_mostly_failed_run_reports_reason_not_winrate(self, monkeypatch) -> None:
+        import random
+
+        # 19/20 generations failed (dead tunnel); only 1 decisive comparison.
+        skips = [{"id": f"s{i}", "stage": "gen", "error": "connection refused"} for i in range(19)]
+        monkeypatch.setattr(pm, "run_move_feedback_pairwise", lambda *a, **k: (None, [], skips))
+        dim = pm._dim_guidance(
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            depth=8,
+            multipv=3,
+            guidance_max=3,
+            temperature=0.0,
+            judge_repeats=1,
+            win_rate_min=0.6,
+            rng=random.Random(0),
+        )
+        assert dim.status == "fail"
+        assert "insufficient comparisons" in dim.notes
+        assert "connection refused" in dim.notes  # the underlying reason bubbled up
+        assert "on_win_rate" not in dim.metrics  # no confident verdict from a failed run
+
+    def test_healthy_run_reports_winrate(self, monkeypatch) -> None:
+        import random
+
+        from chess_coach.eval import summarize_pairwise
+
+        summary = summarize_pairwise(["on"] * 15 + ["off"] * 5, "off", "on")
+        monkeypatch.setattr(pm, "run_move_feedback_pairwise", lambda *a, **k: (summary, [], []))
+        dim = pm._dim_guidance(
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            depth=8,
+            multipv=3,
+            guidance_max=3,
+            temperature=0.0,
+            judge_repeats=1,
+            win_rate_min=0.6,
+            rng=random.Random(0),
+        )
+        assert dim.status == "pass"
+        assert dim.metrics["on_win_rate"] == 0.75
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

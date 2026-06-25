@@ -122,7 +122,7 @@ def run_move_feedback_pairwise(
     judge_repeats: int = 1,
     rng: random.Random | None = None,
     on_progress: Callable[[str], None] | None = None,
-) -> "tuple[PairwiseSummary | None, list[dict[str, object]]]":
+) -> "tuple[PairwiseSummary | None, list[dict[str, object]], list[dict[str, str]]]":
     """Run the move-feedback guidance A/B (off vs on) over ``scenarios``.
 
     For each scenario: get the engine comparison + position report, build the
@@ -133,8 +133,12 @@ def run_move_feedback_pairwise(
 
     The caller owns the engine lifecycle (this does not start or stop it) and
     all I/O: pass ``on_progress`` to receive one human-readable line per
-    scenario (result or skip reason). Returns ``(summary, records)`` where
-    ``summary`` is ``None`` if no comparison produced a decisive result.
+    scenario (result or skip reason). Returns ``(summary, records, skips)``:
+    ``summary`` is ``None`` if no comparison produced a decisive result;
+    ``skips`` is a list of ``{"id", "stage", "error"}`` for scenarios that
+    failed (stage ``"engine"``/``"gen"``/``"judge"``) so the **underlying
+    failure reason bubbles up** — a dead tunnel or unauthenticated judge must
+    not be mistaken for a model that produced no signal.
 
     This is the shared implementation behind both
     ``scripts/eval_move_feedback_pairwise.py`` and the model-capability
@@ -150,6 +154,7 @@ def run_move_feedback_pairwise(
     rng = rng or random.Random(0)
     winners: list[str] = []
     records: list[dict[str, object]] = []
+    skips: list[dict[str, str]] = []
 
     def _emit(msg: str) -> None:
         if on_progress:
@@ -160,6 +165,7 @@ def run_move_feedback_pairwise(
             comparison = engine.get_comparison_report(sc.fen, sc.move, depth=depth)
             pos_report = engine.get_position_report(sc.fen, multipv=multipv, depth=depth)
         except Exception as e:
+            skips.append({"id": sc.id, "stage": "engine", "error": str(e)})
             _emit(f"{sc.id} ({sc.move})... ENGINE SKIP: {e}")
             continue
 
@@ -170,6 +176,7 @@ def run_move_feedback_pairwise(
             resp_off = model.generate(prompt_off, max_tokens=512, temperature=temperature)
             resp_on = model.generate(prompt_on, max_tokens=512, temperature=temperature)
         except Exception as e:
+            skips.append({"id": sc.id, "stage": "gen", "error": str(e)})
             _emit(f"{sc.id} ({sc.move})... GEN ERROR: {e}")
             continue
 
@@ -182,6 +189,7 @@ def run_move_feedback_pairwise(
                 last_reason = res.reason
             winner, vote_counts = majority_winner(votes, "off", "on")
         except Exception as e:
+            skips.append({"id": sc.id, "stage": "judge", "error": str(e)})
             _emit(f"{sc.id} ({sc.move})... JUDGE ERROR (skipped): {e}")
             continue
 
@@ -202,7 +210,24 @@ def run_move_feedback_pairwise(
         _emit(f"{sc.id} ({sc.move})... {winner} ({comparison.classification}){vote_str}")
 
     summary = summarize_pairwise(winners, "off", "on") if winners else None
-    return summary, records
+    return summary, records, skips
+
+
+def summarize_skips(skips: list[dict[str, str]]) -> str:
+    """One-line summary of why scenarios failed (stage counts + a sample error).
+
+    Lets the underlying failure reason bubble up to a dimension/report instead
+    of being lost as a bare "no decisive comparisons".
+    """
+    if not skips:
+        return ""
+    counts: dict[str, int] = {}
+    for s in skips:
+        counts[s["stage"]] = counts.get(s["stage"], 0) + 1
+    dominant = max(counts, key=lambda k: counts[k])
+    sample = next((s["error"] for s in skips if s["stage"] == dominant), "")
+    parts = ", ".join(f"{stage}={n}" for stage, n in sorted(counts.items()))
+    return f"{len(skips)} failed ({parts}); dominant {dominant}: {sample}"
 
 
 if TYPE_CHECKING:

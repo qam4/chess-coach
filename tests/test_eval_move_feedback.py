@@ -208,25 +208,64 @@ def test_run_pairwise_produces_summary_and_records() -> None:
 
     engine, model, rng = _mock_engine_and_model()
     judge = _StubJudge('{"winner": "2", "reason": "clearer"}')
-    summary, records = run_move_feedback_pairwise(
+    summary, records, skips = run_move_feedback_pairwise(
         _scenarios(), engine, model, judge, _empty_resource(), depth=8, judge_repeats=1, rng=rng
     )
     assert summary is not None
     assert summary.n == 2
     assert len(records) == 2
+    assert skips == []
     assert records[0]["winner"] in ("off", "on", "tie")
 
 
-def test_run_pairwise_engine_skip_yields_no_summary() -> None:
+def test_run_pairwise_engine_skip_records_reason() -> None:
     from chess_coach.eval import run_move_feedback_pairwise
 
     engine, model, rng = _mock_engine_and_model()
     engine.get_comparison_report.side_effect = RuntimeError("engine down")
     judge = _StubJudge('{"winner": "1", "reason": "x"}')
     msgs: list[str] = []
-    summary, records = run_move_feedback_pairwise(
+    summary, records, skips = run_move_feedback_pairwise(
         _scenarios(), engine, model, judge, _empty_resource(), rng=rng, on_progress=msgs.append
     )
     assert summary is None
     assert records == []
+    # The underlying reason bubbles up via skips (not just a bare no-result).
+    assert len(skips) == 2
+    assert all(s["stage"] == "engine" for s in skips)
+    assert "engine down" in skips[0]["error"]
     assert any("ENGINE SKIP" in m for m in msgs)
+
+
+def test_run_pairwise_judge_failure_recorded_as_judge_stage() -> None:
+    from chess_coach.eval import run_move_feedback_pairwise
+
+    engine, model, rng = _mock_engine_and_model()
+
+    class _BrokenJudge:
+        def generate(self, prompt: str, max_tokens: int = 400, temperature: float = 0.0) -> str:
+            raise RuntimeError("Not logged in")
+
+    summary, records, skips = run_move_feedback_pairwise(
+        _scenarios(), engine, model, _BrokenJudge(), _empty_resource(), rng=rng
+    )
+    assert summary is None
+    assert records == []
+    assert all(s["stage"] == "judge" for s in skips)
+    assert "Not logged in" in skips[0]["error"]
+
+
+def test_summarize_skips_names_dominant_reason() -> None:
+    from chess_coach.eval import summarize_skips
+
+    assert summarize_skips([]) == ""
+    s = summarize_skips(
+        [
+            {"id": "a", "stage": "gen", "error": "connection refused"},
+            {"id": "b", "stage": "gen", "error": "connection refused"},
+            {"id": "c", "stage": "judge", "error": "Not logged in"},
+        ]
+    )
+    assert "3 failed" in s
+    assert "gen=2" in s and "judge=1" in s
+    assert "connection refused" in s  # sample from the dominant stage

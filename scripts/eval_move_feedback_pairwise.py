@@ -37,6 +37,7 @@ from chess_coach.eval import (  # noqa: E402
     load_move_feedback_scenarios,
     render_pairwise,
     run_move_feedback_pairwise,
+    summarize_skips,
 )
 from chess_coach.llm import create_provider  # noqa: E402
 from chess_coach.llm.ollama import OllamaProvider  # noqa: E402
@@ -144,7 +145,7 @@ def main() -> None:
     rng = random.Random(args.seed)
     print(f"Move-feedback pairwise: {args.model}, guidance off vs on (max {args.guidance_max})\n")
     try:
-        summary, records = run_move_feedback_pairwise(
+        summary, records, skips = run_move_feedback_pairwise(
             scenarios,
             engine,
             model,
@@ -161,6 +162,8 @@ def main() -> None:
     finally:
         engine.stop()
 
+    if skips:
+        print(f"\n{len(skips)} scenario(s) skipped: {summarize_skips(skips)}")
     if summary is None:
         print("\nNo comparisons produced — nothing to summarize.")
         sys.exit(1)

@@ -53,6 +53,7 @@ from .move_feedback import (
     default_move_feedback_path,
     load_move_feedback_scenarios,
     run_move_feedback_pairwise,
+    summarize_skips,
 )
 from .objective import ObjectiveResult, evaluate_objective
 from .profile import (
@@ -123,4 +124,5 @@ __all__ = [
     "render_recommendation",
     "run_move_feedback_pairwise",
     "summarize_pairwise",
+    "summarize_skips",
 ]

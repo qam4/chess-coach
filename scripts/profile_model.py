@@ -44,6 +44,7 @@ from chess_coach.eval import (  # noqa: E402
     render_profile,
     render_recommendation,
     run_move_feedback_pairwise,
+    summarize_skips,
 )
 from chess_coach.eval.benchmark import default_benchmark_path, load_benchmark  # noqa: E402
 from chess_coach.eval.objective import evaluate_objective  # noqa: E402
@@ -155,7 +156,7 @@ def _dim_guidance(
 ) -> DimensionResult:
     """Guidance uptake via the move-feedback pairwise A/B (off vs on)."""
     scenarios = load_move_feedback_scenarios(default_move_feedback_path())
-    summary, _records = run_move_feedback_pairwise(
+    summary, _records, skips = run_move_feedback_pairwise(
         scenarios,
         engine,
         model,
@@ -169,10 +170,28 @@ def _dim_guidance(
         rng=rng,
         on_progress=lambda m: print(f"  guidance: {m}"),
     )
-    if summary is None:
-        return DimensionResult("guidance", "fail", notes="no decisive comparisons produced")
+    decisive = summary.n if summary else 0
+    total = len(scenarios)
+    # Don't trust a win-rate built on a handful of survivors: if too few
+    # comparisons completed, surface WHY (dead tunnel, unauthenticated judge,
+    # engine errors) instead of reporting a confident-looking result. A near-
+    # total infrastructure failure must not masquerade as a model verdict.
+    min_decisive = max(5, total // 2)
+    if decisive < min_decisive:
+        reason = summarize_skips(skips) or "no decisive comparisons produced"
+        return DimensionResult(
+            "guidance",
+            "fail",
+            metrics={"decisive": float(decisive), "scenarios": float(total)},
+            samples=decisive,
+            notes=f"insufficient comparisons ({decisive}/{total}) — {reason}",
+        )
+    assert summary is not None
     wr = summary.win_rate_b
     status = "pass" if wr >= win_rate_min else "info"
+    note = summary.verdict
+    if skips:
+        note += f"  ({summarize_skips(skips)})"
     return DimensionResult(
         "guidance",
         status,
@@ -184,7 +203,7 @@ def _dim_guidance(
             "p_value": round(summary.p_value, 4),
         },
         samples=summary.n,
-        notes=summary.verdict,
+        notes=note,
     )
 
 
