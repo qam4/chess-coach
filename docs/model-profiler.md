@@ -55,6 +55,17 @@ Useful flags: `--factual-min` (default 0.50; below → suggest `template_only`),
 `--judge-repeats` (default 5; majority-voted to denoise the judge),
 `--out` (default `output/profile_<model>.json`).
 
+### Tunnel stability
+
+If the model is reached over an SSM port-forward, the connection gets
+**idle-reset** by the network path during the judge phase (which doesn't touch
+the tunnel) — the EC2 box stays healthy but receives zero requests once the
+tunnel drops. The `run_profile.ps1` / `run_move_feedback_pairwise.ps1` runners
+start a background **heartbeat** (`scripts/tunnel_heartbeat.ps1`) that pings the
+endpoint every ~15s to keep the connection warm for the whole run; it's stopped
+automatically when the run ends. For ad-hoc work you can run the heartbeat
+standalone alongside a session.
+
 ## Reading the output
 
 Two parts to stdout (and the full profile is written to
