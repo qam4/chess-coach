@@ -183,6 +183,25 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   test capability threshold; revisit whether guidance content can help a
   non-reasoning model; consider the default coaching model bump.
 
+- **Model-capability profiler — SHIPPED (lean).** The manual model-vetting
+  this session (gemma can't use guidance, qwen3:14b can, models misread UCI,
+  some hallucinate) is now an automated tool:
+  `.kiro/specs/model-capability-profiler/` + `scripts/profile_model.py` +
+  pure core `src/chess_coach/eval/profile.py` (see
+  [`docs/model-profiler.md`](docs/model-profiler.md)). Point it at a model; it
+  runs cheapest-first dimensions (reachability → factual → guidance uptake →
+  latency) reusing the existing eval harness, prints per-dimension facts, and
+  recommends a config block (`coaching.template_only`, `coaching.guidance`) —
+  advisory only, never auto-applied. Mirrors FITT's `capability_profile.py`
+  design (facts-not-verdicts, capability/cost separate, operator-in-the-loop,
+  dimensions-as-a-list) but deliberately drops the heavier machinery.
+  **Deferred (append-only when missed):** stored baselines + diffing on model
+  swap (the JSON output is written to seed it); a declared-facts catalog
+  dimension; an instruction-following dimension; a `chess-coach profile` CLI
+  wrapper. **Related cross-project:** the capability-profile concept overlaps
+  FITT's (and the "shared llm-access library" item below) — a future shared
+  component if the projects converge.
+
 - **`rubric.v2` — shipped (leniency defects fixed); teaching-bridge
   grounding still open.** `data/eval/rubric.v2.yaml` now exists: it adds
   the `teaches_principle` bridge criterion, ties `actionable` to the key

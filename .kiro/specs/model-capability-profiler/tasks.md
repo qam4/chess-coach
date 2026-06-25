@@ -77,11 +77,11 @@ scoring.
         reachability and reports unusable (no downstream dimensions).
   - _Requirements: 1.1, 1.3, 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 7. Docs + final checks
-  - [ ] 7.1 Document the profiler in `docs/` (what it measures, how to run it
+- [x] 7. Docs + final checks
+  - [x] 7.1 Document the profiler in `docs/` (what it measures, how to run it
         under kiro-monitor, how to read the report, that the recommendation is
         advisory). Note the deferred baseline/diff and declared-facts ideas.
-  - [ ] 7.2 Full green: `uv run pytest`, `uv run mypy src`, `uv run ruff check
+  - [x] 7.2 Full green: `uv run pytest`, `uv run mypy src`, `uv run ruff check
         src tests` + `ruff format --check`. Update BACKLOG (mark the profiler
         built; note deferrals).
   - _Requirements: all (validation)_
