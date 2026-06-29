@@ -68,6 +68,7 @@ from chess_coach.prompts import (  # noqa: E402
     _format_perspective,
     _uci_line_to_san,
     _uci_to_san,
+    build_engine_move_explanation_prompt,
     build_rich_coaching_prompt,
     build_rich_move_evaluation_prompt,
     build_socratic_prompt,
@@ -150,6 +151,17 @@ class TestPerspective:
 
     def test_move_evaluation_prompt_names_black_side_to_move(self) -> None:
         prompt = build_rich_move_evaluation_prompt(_comparison_report(BLACK_TO_MOVE_FEN), "beginner")
+        assert "Side to move: Black" in prompt
+        assert "Black pieces" in prompt
+
+    def test_engine_move_explanation_prompt_names_black_side_to_move(self) -> None:
+        # BUG-011's last unpatched path: web play-mode engine-move explanation.
+        prompt = build_engine_move_explanation_prompt(
+            fen_before=BLACK_TO_MOVE_FEN,
+            engine_move="Be7",
+            analysis_text="(analysis)",
+            level="beginner",
+        )
         assert "Side to move: Black" in prompt
         assert "Black pieces" in prompt
 

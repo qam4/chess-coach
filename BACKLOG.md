@@ -533,11 +533,49 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   misidentification** — during BUG-011 verification, qwen3:8b described
   the hanging e5 *pawn* as a "queen" (and in another run contradicted
   itself about whose queen attacks it). The engine data was correct;
-  the model mislabeled it. The judge's `grounded` criterion is the
-  backstop; extending the objective check to catch development/possession
-  and piece-type claims is a future improvement. These are LLM-output
-  quality issues (not code bugs) — the value is in the eval harness
-  measuring their *rate*, not in chasing single anecdotes.
+  the model mislabeled it. A third live instance (2026-06-19, qwen3:14b,
+  guidance on / template_only off): after `1.e4 e6 2.Nf3 Nf6 3.Nc3 Nc6
+  4.Bb5 Be7`, the coach narrated Black's `...Be7` as a **White** move
+  ("supports White's e4 pawn", "White's kingside castle") and claimed the
+  e7 bishop pressures "the long diagonal" (it doesn't) — a wrong-side /
+  perspective falsehood plus an invented geometric claim. The engine data
+  was correct; the model's prose got the color and geometry wrong. Notably
+  this is exactly the weakness the **profiler flagged for qwen3:14b before
+  it was seen live** (factual 0.26, hallucinations>0 → it recommended
+  `template_only: true`) — a clean validation that the capability profile
+  predicts real runtime behavior. **Partial root-cause + fix (same day):**
+  the wrong-side flip traced to the one prompt that never got the BUG-011
+  perspective fix — `ENGINE_MOVE_EXPLANATION_PROMPT` (web play-mode
+  engine-move explanation) handed the model only a FEN, no plain-language
+  side-to-move line. Added `_format_perspective(fen_before)` to that prompt
+  (+ regression test); so the *wrong-side* class from this path is now
+  prompt-fixed. The *residual* factual rate (0.26) was measured on the
+  already-perspective-fixed rich prompt, so it's the model's floor, not a
+  prompt gap — the honest split is: side-flip = prompt-induced (fixed),
+  general factual shakiness = inherent to qwen3:14b. The judge's `grounded`
+  criterion is the backstop; extending the objective check to catch
+  development/possession and piece-type claims is a future improvement.
+  These are LLM-output quality issues (not code bugs) — the value is in the
+  eval harness measuring their *rate*, not in chasing single anecdotes.
+
+- **Prompt ablation (separate model-capability from prompt-quality) —
+  PROPOSED.** A benchmark score is always model×prompt, never the model
+  alone, so a single factual number can't say whether a weakness is the
+  model or the prompt. Lean addition to the profiler's `factual` dimension:
+  run the same model + same positions through a small named set of prompt
+  variants (`baseline` FEN-only, `perspective`, `strict-grounding`, and the
+  mandatory `production` prompt the live app actually ships), score each,
+  and report the **spread** (best−worst). Big spread → prompt-sensitive,
+  invest in prompting before swapping the model; flat spread → model floor,
+  swap it. Keep N at 2-3 (judge cost multiplies). Crucial discipline this
+  surfaces: **the benchmark must exercise the same prompts production uses**
+  — the Be7 flip happened because the live engine-explanation path ran an
+  unpatched prompt the profiler never tested (it measured the fixed rich
+  prompt). Bigger sibling idea: a **validation/repair loop** (let the model
+  write → machine-check claims against the engine/board ground truth →
+  repair once if wrong) is the model-agnostic alternative to per-model
+  prompt tuning, and reframes `template_only` as the crudest loop and the
+  hallucination detector (above) as the verifier it would reuse.
 
 - **Engine-as-oracle quality at depth 8.** Ground truth is the engine
   report; at depth 8 it can disagree with opening theory (e.g. it

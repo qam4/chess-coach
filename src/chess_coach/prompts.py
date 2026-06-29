@@ -96,6 +96,7 @@ Student level: {level}
 The engine played a move. Explain the idea behind it.
 
 Position before the move (FEN): {fen_before}
+{perspective}
 Engine's move: {engine_move}
 
 {analysis}
@@ -142,6 +143,7 @@ def build_engine_move_explanation_prompt(
         system=SYSTEM_PROMPT,
         level=level,
         fen_before=fen_before,
+        perspective=_format_perspective(fen_before),
         engine_move=engine_move,
         analysis=analysis_text,
     )
