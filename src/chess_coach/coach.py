@@ -107,6 +107,8 @@ class Coach:
         play_elo: int = 0,
         book_path: str = "",
         template_only: bool = False,
+        guidance: bool = False,
+        guidance_max: int = 3,
     ):
         self.engine = engine
         self.llm = llm
@@ -119,13 +121,57 @@ class Coach:
         self.play_elo = play_elo
         self.book_path = book_path
         self.template_only = template_only
+        self.guidance = guidance
+        self.guidance_max = guidance_max
         self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
         self._last_position_report: PositionReport | None = None  # for breakdown diffs
+
+        # Pedagogy guidance resource (loaded once, guarded) when the knob is on.
+        # The profiler recommends turning this on per model; default off = no
+        # change to behaviour. If the resource can't load, disable gracefully.
+        self._resource = None
+        if guidance:
+            try:
+                from chess_coach.pedagogy.guard import guard_entries
+                from chess_coach.pedagogy.resource import (
+                    KnowledgeResource,
+                    default_resource_path,
+                    load_resource,
+                )
+
+                res = load_resource(default_resource_path())
+                admitted, _ = guard_entries(res.entries, engine=None)
+                self._resource = KnowledgeResource(
+                    entries=tuple(admitted),
+                    feature_vocab=res.feature_vocab,
+                    eco_vocab=res.eco_vocab,
+                    levels=res.levels,
+                )
+            except Exception as e:
+                logger.warning("guidance enabled but knowledge resource unavailable: %s — guidance disabled", e)
+                self.guidance = False
 
         # Load opening book via UCI option if path is configured
         if book_path and hasattr(engine, "set_option"):
             engine.set_option("BookFile", book_path)
             engine.set_option("Book", True)
+
+    def _select_guidance(self, pos_report: PositionReport, level: str) -> list | None:  # type: ignore[type-arg]
+        """Select pedagogy guidance for a position when the guidance knob is on.
+
+        Returns ``None`` when guidance is disabled or the resource is
+        unavailable, so the prompt builders fall back to their no-guidance
+        behaviour (no change vs. guidance off).
+        """
+        if not self.guidance or self._resource is None:
+            return None
+        try:
+            from chess_coach.pedagogy.selector import guidance_for_position
+
+            return guidance_for_position(self._resource, pos_report, level, self.guidance_max)
+        except Exception as e:
+            logger.warning("guidance selection failed: %s — proceeding without guidance", e)
+            return None
 
     def _set_play_skill(self) -> None:
         """Set engine to reduced strength for play moves."""
@@ -250,7 +296,10 @@ class Coach:
             if socratic:
                 prompt = build_socratic_prompt(report, level=use_level, opening_name=opening_label)
             else:
-                prompt = build_rich_coaching_prompt(report, level=use_level, opening_name=opening_label)
+                guidance = self._select_guidance(report, use_level)
+                prompt = build_rich_coaching_prompt(
+                    report, level=use_level, opening_name=opening_label, guidance=guidance
+                )
             logger.debug("Rich coaching prompt length: %d chars", len(prompt))
 
             _trace(
@@ -262,26 +311,31 @@ class Coach:
                 llm_prompt=prompt,
             )
             t2 = time.perf_counter()
-            _progress(f"LLM generating (prompt {len(prompt)} chars)...")
-            try:
-                coaching_text = self.llm.generate(
-                    prompt,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                )
-                if not coaching_text.strip():
-                    raise ValueError("Empty LLM response")
-            except Exception as e:
-                logger.warning("LLM failed for position coaching: %s — falling back to templates", e)
-                if socratic:
-                    coaching_text = (
-                        "Before you choose a move, ask yourself: Are any of my "
-                        "pieces undefended? What is my opponent threatening right "
-                        "now? Which of my pieces is doing the least, and could it "
-                        "do more? Take a look and see what stands out."
+            if self.template_only and not socratic:
+                # Profiler-recommended for models that hallucinate: skip the LLM
+                # and use the deterministic template coaching instead.
+                coaching_text = generate_position_coaching(report, level=use_level)
+            else:
+                _progress(f"LLM generating (prompt {len(prompt)} chars)...")
+                try:
+                    coaching_text = self.llm.generate(
+                        prompt,
+                        max_tokens=self.max_tokens,
+                        temperature=self.temperature,
                     )
-                else:
-                    coaching_text = generate_position_coaching(report, level=use_level)
+                    if not coaching_text.strip():
+                        raise ValueError("Empty LLM response")
+                except Exception as e:
+                    logger.warning("LLM failed for position coaching: %s — falling back to templates", e)
+                    if socratic:
+                        coaching_text = (
+                            "Before you choose a move, ask yourself: Are any of my "
+                            "pieces undefended? What is my opponent threatening right "
+                            "now? Which of my pieces is doing the least, and could it "
+                            "do more? Take a look and see what stands out."
+                        )
+                    else:
+                        coaching_text = generate_position_coaching(report, level=use_level)
             t3 = time.perf_counter()
             logger.info("LLM generation took %.1fs", t3 - t2)
             logger.info("Total explain took %.1fs", t3 - t0)
@@ -489,7 +543,14 @@ class Coach:
                     feedback="",
                 )
 
-            prompt = build_rich_move_evaluation_prompt(report, level=self.level)
+            guidance = None
+            if self.guidance and self._resource is not None:
+                try:
+                    pos_report = self.engine.get_position_report(fen_before, multipv=self.top_moves)
+                    guidance = self._select_guidance(pos_report, self.level)
+                except Exception as e:
+                    logger.warning("evaluate_move: guidance position report failed: %s", e)
+            prompt = build_rich_move_evaluation_prompt(report, level=self.level, guidance=guidance)
 
             if self.template_only:
                 from chess_coach.coaching_templates import generate_move_coaching as _gen_move_coaching_tmpl

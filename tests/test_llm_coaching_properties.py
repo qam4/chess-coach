@@ -234,8 +234,9 @@ def test_coaching_path_routing(llm_available: bool, template_only: bool) -> None
     """Coaching routes to LLM when available, falls back to templates on failure.
 
     The Coach architecture:
-    - explain(): always attempts LLM when coaching_available is True, with
-      fallback to templates on failure (timeout, empty response, error).
+    - explain(): attempts the LLM when coaching_available is True, with
+      fallback to templates on failure — UNLESS template_only is set, which
+      skips the LLM and uses deterministic templates.
     - evaluate_move() / play_move(): check template_only to skip LLM entirely.
 
     This test verifies:
@@ -281,16 +282,20 @@ def test_coaching_path_routing(llm_available: bool, template_only: bool) -> None
     coach = Coach(engine=mock_engine, llm=mock_llm, template_only=template_only)
     result = coach.explain(STARTING_FEN)
 
-    # explain() always attempts LLM in the coaching protocol path
-    mock_llm.generate.assert_called()
-
-    if llm_available:
-        # LLM succeeded — its text is used
-        assert result.coaching_text == llm_text
+    # explain() honors template_only: skips the LLM and uses templates; else
+    # it attempts the LLM (with template fallback on failure).
+    if template_only:
+        mock_llm.generate.assert_not_called()
+        assert result.coaching_text, "template_only must still produce text"
     else:
-        # LLM failed — template fallback produces non-empty output
-        assert result.coaching_text, "Template fallback must produce non-empty text"
-        assert result.coaching_text != llm_text
+        mock_llm.generate.assert_called()
+        if llm_available:
+            # LLM succeeded — its text is used
+            assert result.coaching_text == llm_text
+        else:
+            # LLM failed — template fallback produces non-empty output
+            assert result.coaching_text, "Template fallback must produce non-empty text"
+            assert result.coaching_text != llm_text
 
     # Verify template_only gates LLM in evaluate_move for non-good moves
     from chess_coach.models import ComparisonReport

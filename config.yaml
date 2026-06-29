@@ -29,7 +29,7 @@ llm:
   # Model name (as known by the provider)
   model: "qwen3:8b"
   # Base URL for the LLM API
-  base_url: "http://localhost:11434"
+  base_url: "http://localhost:11435"
   # Max tokens for the coaching response
   max_tokens: 512
   # Temperature (lower = more focused, higher = more creative)
@@ -42,3 +42,12 @@ coaching:
   top_moves: 3
   # Coaching style: "beginner", "intermediate", "advanced"
   level: "intermediate"
+  # Inject pedagogy guidance (named principles/plans) into coaching prompts.
+  # Helps capable reasoning models; profiler-recommended PER MODEL. Default off
+  # = no change. (YAML: on/off load as booleans.)
+  guidance: off
+  # Max guidance entries injected per position.
+  guidance_max: 3
+  # Skip the LLM and use deterministic templates — recommended for models the
+  # profiler finds hallucinate (low factual score / hard errors).
+  template_only: false

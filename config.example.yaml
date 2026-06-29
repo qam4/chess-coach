@@ -40,3 +40,13 @@ coaching:
   top_moves: 3
   # Coaching style: "beginner", "intermediate", "advanced"
   level: "intermediate"
+  # Inject pedagogy guidance (named principles/plans) into coaching prompts.
+  # Helps capable reasoning models; the model-capability profiler recommends a
+  # value PER MODEL (see docs/model-profiler.md). Default off = no change.
+  # (YAML loads on/off as booleans.)
+  guidance: off
+  # Max guidance entries injected per position.
+  guidance_max: 3
+  # Skip the LLM and use deterministic templates — recommended for models the
+  # profiler finds hallucinate (low factual score / hard errors).
+  template_only: false

@@ -176,3 +176,41 @@ class TestCoachSocratic:
         resp = coach.explain(STARTING_FEN, socratic=False)
         assert "COACHING INSTRUCTIONS" in resp.llm_prompt
         assert "SOCRATIC INSTRUCTIONS" not in resp.llm_prompt
+
+
+# --------------------------------------------------------------------------
+# Config knobs: guidance + template_only wired into the live Coach
+# --------------------------------------------------------------------------
+
+
+class TestCoachKnobs:
+    """The live Coach honors the coaching.guidance / coaching.template_only knobs."""
+
+    def test_guidance_off_is_default_and_injects_no_block(self):
+        from chess_coach.pedagogy.inject import GUIDANCE_BLOCK_HEADER
+
+        coach = Coach(engine=_mock_coaching_engine(), llm=_mock_llm())  # guidance defaults off
+        resp = coach.explain(STARTING_FEN)
+        assert GUIDANCE_BLOCK_HEADER not in resp.llm_prompt
+
+    def test_guidance_on_injects_guidance_block(self):
+        from chess_coach.pedagogy.inject import GUIDANCE_BLOCK_HEADER
+
+        coach = Coach(engine=_mock_coaching_engine(), llm=_mock_llm(), guidance=True)
+        # Resource loaded at construction; explain should inject guidance.
+        assert coach.guidance is True
+        resp = coach.explain(STARTING_FEN)
+        assert GUIDANCE_BLOCK_HEADER in resp.llm_prompt
+
+    def test_template_only_skips_the_llm(self):
+        llm = _mock_llm()
+        coach = Coach(engine=_mock_coaching_engine(), llm=llm, template_only=True)
+        resp = coach.explain(STARTING_FEN)
+        llm.generate.assert_not_called()
+        assert resp.coaching_text  # deterministic template still produced text
+
+    def test_default_does_use_the_llm(self):
+        llm = _mock_llm()
+        coach = Coach(engine=_mock_coaching_engine(), llm=llm)
+        coach.explain(STARTING_FEN)
+        llm.generate.assert_called_once()

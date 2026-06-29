@@ -226,6 +226,9 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, 
             max_tokens=llm_cfg.get("max_tokens", 512),
             temperature=llm_cfg.get("temperature", 0.7),
             book_path=_resolve_book_path(engine_cfg),
+            template_only=coaching_cfg.get("template_only", False),
+            guidance=coaching_cfg.get("guidance", False),
+            guidance_max=coaching_cfg.get("guidance_max", 3),
         )
 
         t_check = time.perf_counter()
@@ -454,6 +457,9 @@ def serve(ctx: click.Context, port: int) -> None:
         temperature=llm_cfg.get("temperature", 0.7),
         play_elo=play_elo,
         book_path=_resolve_book_path(engine_cfg),
+        template_only=coaching_cfg.get("template_only", False),
+        guidance=coaching_cfg.get("guidance", False),
+        guidance_max=coaching_cfg.get("guidance_max", 3),
     )
 
     app = create_app(coach)
