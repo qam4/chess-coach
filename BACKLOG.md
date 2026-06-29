@@ -202,6 +202,31 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   FITT's (and the "shared llm-access library" item below) — a future shared
   component if the projects converge.
 
+- **Knobs wired into the live Coach + durable scorecard — DONE
+  (2026-06-19).** Closed the last mile of the profile→config→live-app loop.
+  The profiler used to recommend config knobs (`coaching.template_only`,
+  `coaching.guidance`) that did not exist in the live app, and guidance was
+  never wired into the runtime `Coach`. Now: `config.yaml` /
+  `config.example.yaml` have a `coaching:` block with `guidance` (default
+  off), `guidance_max` (3), `template_only` (false). `Coach.__init__` honors
+  them — loads a guarded `KnowledgeResource` only when guidance is on,
+  `_select_guidance()` injects a named principle into the rich
+  position-coaching and move-evaluation prompts, and `template_only` skips the
+  LLM in favour of deterministic templates. `cli.py` (serve + explain) passes
+  the knobs through from config. So profiling a model now produces a config
+  block you can paste in and the live app actually obeys it — no code changes
+  per model. The validated findings are made durable in
+  [`docs/model-scorecard.md`](docs/model-scorecard.md) (the raw
+  `output/profile_*.json` are gitignored/local-only): hermes3:8b
+  (template_only), gemma4:12b (grounded but no guidance benefit), qwen3:8b
+  (guidance borderline), qwen3:14b (guidance significant 80% p=0.012 →
+  guidance on, template_only on for raw facts). **Deferred (append-only when
+  missed):** `play_move`'s two rich-prompt call sites (user-move feedback +
+  engine-move explanation) are not yet guidance-wired (only `explain` +
+  `evaluate_move` are); and path-scoped recommendations (template_only for the
+  explanation path vs guidance for the move-feedback path can pull in
+  different directions for the same model — qwen3:14b is the live example).
+
 - **`rubric.v2` — shipped (leniency defects fixed); teaching-bridge
   grounding still open.** `data/eval/rubric.v2.yaml` now exists: it adds
   the `teaches_principle` bridge criterion, ties `actionable` to the key
