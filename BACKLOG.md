@@ -558,24 +558,49 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   These are LLM-output quality issues (not code bugs) — the value is in the
   eval harness measuring their *rate*, not in chasing single anecdotes.
 
-- **Prompt ablation (separate model-capability from prompt-quality) —
-  PROPOSED.** A benchmark score is always model×prompt, never the model
-  alone, so a single factual number can't say whether a weakness is the
-  model or the prompt. Lean addition to the profiler's `factual` dimension:
-  run the same model + same positions through a small named set of prompt
-  variants (`baseline` FEN-only, `perspective`, `strict-grounding`, and the
-  mandatory `production` prompt the live app actually ships), score each,
-  and report the **spread** (best−worst). Big spread → prompt-sensitive,
-  invest in prompting before swapping the model; flat spread → model floor,
-  swap it. Keep N at 2-3 (judge cost multiplies). Crucial discipline this
-  surfaces: **the benchmark must exercise the same prompts production uses**
-  — the Be7 flip happened because the live engine-explanation path ran an
-  unpatched prompt the profiler never tested (it measured the fixed rich
-  prompt). Bigger sibling idea: a **validation/repair loop** (let the model
-  write → machine-check claims against the engine/board ground truth →
-  repair once if wrong) is the model-agnostic alternative to per-model
-  prompt tuning, and reframes `template_only` as the crudest loop and the
-  hallucination detector (above) as the verifier it would reuse.
+- **The engine as verifier — grounding strategy (consolidated).** One
+  asset ties together several scattered ideas: the engine + python-chess are
+  a **deterministic verifier** of factual claims (whose move it is, what's on
+  each square, what's legal, the eval). Most domains lack this and must pay a
+  second LLM to critique; chess hands it to us almost free. The strategy is
+  to spend that one verifier in three places:
+
+  1. **Measure (today).** The hallucination detector + judge `grounded`
+     criterion already check claims against ground truth — but only as
+     measurement, and with gaps (see "Hallucination detector misses
+     relational falsehoods" above: it misses development/possession and
+     piece-type claims).
+  2. **Offline — prompt ablation (PROPOSED).** A benchmark score is always
+     model×prompt, never the model alone, so one factual number can't say
+     whether a weakness is the model or the prompt. Lean addition to the
+     profiler's `factual` dimension: run the same model + same positions
+     through a small named set of prompt variants (`baseline` FEN-only,
+     `perspective`, `strict-grounding`, and the mandatory `production` prompt
+     the live app actually ships), score each with the verifier, and report
+     the **spread** (best−worst). Big spread → prompt-sensitive, invest in
+     prompting before swapping the model; flat spread → model floor, swap it.
+     Keep N at 2-3 (judge cost multiplies). Discipline this enforces: **the
+     benchmark must exercise the same prompts production uses** — the Be7
+     flip happened because the live engine-explanation path ran an unpatched
+     prompt the profiler never tested (it measured the fixed rich prompt).
+  3. **Online — validation/repair loop (PROPOSED).** Let the model write →
+     machine-check its claims against the verifier → repair once if wrong.
+     This is **model-agnostic** (no per-model prompt matrix to maintain),
+     which fits the project's swappable-model premise better than prompt
+     tuning. It reframes the existing knobs as a spectrum: `template_only`
+     = the crudest loop (don't trust the model, bypass it); prompt
+     engineering = get it right in one shot; the repair loop = the
+     sophisticated middle. Cost: extra inferences per answer.
+
+  **How offline and online connect:** ablation and the loop are the
+  design-time and run-time spend of the *same* verifier. A loop is also a
+  data generator — its repair logs show what the prompt keeps getting wrong
+  (e.g. repeated wrong-side catches → "add the side-to-move line", exactly
+  the fix already made by hand), which feeds offline prompt improvement. So
+  the **hybrid** is the endgame: mine loop failures offline to tighten the
+  static prompt so the loop fires less often — one-shot handles the common
+  case, the loop only mops up the residue. Loops can't *directly* improve a
+  prompt, but their output is the richest raw material for doing so.
 
 - **Engine-as-oracle quality at depth 8.** Ground truth is the engine
   report; at depth 8 it can disagree with opening theory (e.g. it
