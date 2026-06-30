@@ -617,6 +617,41 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   filter is not applied to `ComparisonReport` (it has no `threats` dict
   today, so no gap, but watch it if that changes).
 
+- **Investigate Blunder coaching threat/tactic detection (root-cause) —
+  NEXT.** The defensive filter (above) only hides the symptom on the
+  chess-coach side; the engine still computes and emits bad coaching data,
+  and some of it the filter can't touch. Open the Blunder repo
+  (`C:/src/blunder`), find the coaching-protocol threat/tactic detector, and
+  scope fixes for:
+  1. **Legality-unaware threats.** Emits captures that ignore pins and the
+     in-check constraint (live: pinned `Nc3` "capturing" the checking queen;
+     `f6` "capturing" while White is in check). Likely a "filter by legal
+     moves before emitting" pass at the source.
+  2. **Malformed tactic descriptions.** Discovered-attack text names the same
+     square/piece twice — "Discovered attack: d2 moves to reveal Bc1
+     attacking Qg5" is right, but other runs produce "Bc3 moves to reveal
+     Bc3 attacking Ke1" (mover == revealed piece). The filter does NOT touch
+     tactics, so these reach the user.
+  3. **Mislabeled motifs.** A diagonal check (c3-d2-e1) reported as a "back
+     rank check"; "pins" that are really discovered-attack setups for the
+     other side (`Qg5 pins d2 to Bc1` — moving d2 attacks the queen *with
+     tempo*, so it isn't a real pin) or are practically meaningless
+     (`Qg5 pins g2 to Ng1` — g2 can't leave the file anyway).
+  4. **`squares`-list ordering / semantics drive wrong board arrows.**
+     chess-coach's `coaching_templates._extract_arrows` draws `squares[0] →
+     each other square`. For a discovered attack that's wrong: after
+     `1.e4 e6 2.Nc3 Qg5`, the correct overlay is the *mover* `d2→d4` and the
+     *revealed attack* `c1→g5`, but with `squares=[c1, d4, g5]` the code
+     draws `c1→d4` and `c1→d2` (bishop arrows the bishop never makes). Fix
+     needs the per-tactic-type meaning of `squares` pinned down in the
+     protocol contract; then either Blunder emits mover/target roles
+     explicitly, or `_extract_arrows` interprets them per type. (This part
+     has a chess-coach-side fix too, once the contract is known.)
+
+  Verified the discovered-attack geometry with python-chess: d2 sits on the
+  c1-g5 diagonal, and after `d2d4` the c1 bishop attacks g5 — so the *chess*
+  is right; it's the description text, labels, and arrow roles that are off.
+
 - **Engine-as-oracle quality at depth 8.** Ground truth is the engine
   report; at depth 8 it can disagree with opening theory (e.g. it
   judged the four-knights Italian as Black-better by grabbing e4).
