@@ -700,10 +700,11 @@ class CoachingEngine(EngineProtocol):
             format_coaching_command,
             validate_position_report,
         )
+        from chess_coach.verify import filter_illegal_threats
 
         cmd = format_coaching_command("eval", fen=fen, multipv=multipv, depth=depth, movetime=movetime)
         data = self._send_coaching_command(cmd)
-        return validate_position_report(data)
+        return filter_illegal_threats(validate_position_report(data))
 
     def get_comparison_report(
         self,

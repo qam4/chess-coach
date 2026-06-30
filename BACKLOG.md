@@ -602,6 +602,21 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   case, the loop only mops up the residue. Loops can't *directly* improve a
   prompt, but their output is the richest raw material for doing so.
 
+  **Shipped (2026-06-19) — first concrete application:**
+  `src/chess_coach/verify.py` `filter_illegal_threats(report)` drops
+  engine-supplied `Threat`s whose move is illegal for the owning side
+  (pins / in-check ignored), validated with python-chess; wired into
+  `CoachingEngine.get_position_report` so quick-mode templates and the LLM
+  both get cleaned data. This is the rules-tier verifier checking the
+  *engine* (not just the LLM). Caught the live `Nc3 can capture Qe4` /
+  `f6 can capture g7` bug from the Qe4+ position. **Still open:** (a) the
+  proper root-cause fix is in the Blunder repo (its threat detector should
+  be legality-aware); (b) tactics (`TacticalMotif`: discovered-attack /
+  back-rank lines) are NOT filtered — they carry no single move and the
+  "in-PV" ones describe the variation, not the current position; (c) the
+  filter is not applied to `ComparisonReport` (it has no `threats` dict
+  today, so no gap, but watch it if that changes).
+
 - **Engine-as-oracle quality at depth 8.** Ground truth is the engine
   report; at depth 8 it can disagree with opening theory (e.g. it
   judged the four-knights Italian as Black-better by grabbing e4).
