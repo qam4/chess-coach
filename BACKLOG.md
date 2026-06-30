@@ -617,40 +617,30 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   filter is not applied to `ComparisonReport` (it has no `threats` dict
   today, so no gap, but watch it if that changes).
 
-- **Investigate Blunder coaching threat/tactic detection (root-cause) —
-  NEXT.** The defensive filter (above) only hides the symptom on the
-  chess-coach side; the engine still computes and emits bad coaching data,
-  and some of it the filter can't touch. Open the Blunder repo
-  (`C:/src/blunder`), find the coaching-protocol threat/tactic detector, and
-  scope fixes for:
-  1. **Legality-unaware threats.** Emits captures that ignore pins and the
-     in-check constraint (live: pinned `Nc3` "capturing" the checking queen;
-     `f6` "capturing" while White is in check). Likely a "filter by legal
-     moves before emitting" pass at the source.
-  2. **Malformed tactic descriptions.** Discovered-attack text names the same
-     square/piece twice — "Discovered attack: d2 moves to reveal Bc1
-     attacking Qg5" is right, but other runs produce "Bc3 moves to reveal
-     Bc3 attacking Ke1" (mover == revealed piece). The filter does NOT touch
-     tactics, so these reach the user.
-  3. **Mislabeled motifs.** A diagonal check (c3-d2-e1) reported as a "back
-     rank check"; "pins" that are really discovered-attack setups for the
-     other side (`Qg5 pins d2 to Bc1` — moving d2 attacks the queen *with
-     tempo*, so it isn't a real pin) or are practically meaningless
-     (`Qg5 pins g2 to Ng1` — g2 can't leave the file anyway).
-  4. **`squares`-list ordering / semantics drive wrong board arrows.**
-     chess-coach's `coaching_templates._extract_arrows` draws `squares[0] →
-     each other square`. For a discovered attack that's wrong: after
-     `1.e4 e6 2.Nc3 Qg5`, the correct overlay is the *mover* `d2→d4` and the
-     *revealed attack* `c1→g5`, but with `squares=[c1, d4, g5]` the code
-     draws `c1→d4` and `c1→d2` (bishop arrows the bishop never makes). Fix
-     needs the per-tactic-type meaning of `squares` pinned down in the
-     protocol contract; then either Blunder emits mover/target roles
-     explicitly, or `_extract_arrows` interprets them per type. (This part
-     has a chess-coach-side fix too, once the contract is known.)
+- **Blunder coaching threat/tactic detection (root-cause) — DONE
+  (2026-06-19, blunder@491ec6c).** The defensive filter only hid the symptom
+  on the chess-coach side; these are now fixed at the source in
+  `PositionAnalyzer.cpp` (with `TestPositionAnalyzer.cpp`, 5 cases):
+  1. **Legality-unaware threats — fixed.** `find_threats` now builds the legal
+     move set via `MoveGenerator::add_all_moves(board, side)` and only emits
+     capture/check threats whose move is legal, so pinned-piece captures and
+     captures that ignore an existing check are dropped at the source.
+  2. **Malformed discovered-attack text — fixed.** The PV scan skipped the
+     just-moved slider as its own "revealer" (`s_sq == to_sq` guard), killing
+     "Bc3 moves to reveal Bc3".
+  3. **Mislabeled motifs — fixed.** Back-rank is only labeled when a
+     rook/queen actually lands on the king's back rank (diagonal checks no
+     longer mislabeled); pawn pins to a non-king piece and pawn-backed skewers
+     are filtered as noise (kills `Qg5 pins d2 to Bc1` / `pins g2 to Ng1`).
+  4. **`squares` contract — fixed both sides.** `discovered_attack` now emits
+     `squares = [revealed_attacker, target, mover]` (documented per-type in
+     `docs/coaching-protocol.md`), and chess-coach `_extract_arrows` draws the
+     revealed attack line `attacker → target` only (no bogus `attacker → mover`
+     arrow). So the live overlay after `1.e4 e6 2.Nc3 Qg5` is `c1 → g5`, not
+     `c1 → d2` / `c1 → d4`.
 
-  Verified the discovered-attack geometry with python-chess: d2 sits on the
-  c1-g5 diagonal, and after `d2d4` the c1 bishop attacks g5 — so the *chess*
-  is right; it's the description text, labels, and arrow roles that are off.
+  The chess-coach defensive filter (`verify.filter_illegal_threats`) stays as
+  belt-and-suspenders for any engine that doesn't speak the fixed protocol.
 
 - **Engine-as-oracle quality at depth 8.** Ground truth is the engine
   report; at depth 8 it can disagree with opening theory (e.g. it

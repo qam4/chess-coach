@@ -302,8 +302,16 @@ def _extract_arrows(report: PositionReport) -> list[CoachingArrow]:
 
     # Tactics: source → targets
     for t in report.tactics:
-        if t.squares and len(t.squares) >= 2:
-            src = t.squares[0]
+        if not t.squares or len(t.squares) < 2:
+            continue
+        src = t.squares[0]
+        if t.type == "discovered_attack":
+            # Contract: squares = [revealed_attacker, target, mover]. The only
+            # reliable overlay is the revealed attack line (attacker → target);
+            # the mover's square is not a target of the attacker, so drawing
+            # attacker → mover (the old behaviour) produced a bogus arrow.
+            arrows.append(CoachingArrow(src, t.squares[1], "#f59e0b"))
+        else:
             for tgt in t.squares[1:]:
                 arrows.append(CoachingArrow(src, tgt, "#f59e0b"))
 

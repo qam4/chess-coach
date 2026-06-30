@@ -256,8 +256,8 @@ limit — the search stops when the depth or time is reached.
 | `top_lines.*.theme` | string | yes | Short label for the line's idea (e.g. `"kingside attack"`, `"central pawn break"`) |
 | `tactics` | array | yes | Detected tactical motifs (may be empty `[]`) |
 | `tactics.*.type` | string | yes | One of: `"fork"`, `"pin"`, `"skewer"`, `"discovered_attack"`, `"back_rank_threat"`, `"overloaded_piece"` |
-| `tactics.*.squares` | array | yes | Squares involved in the tactic |
-| `tactics.*.pieces` | array | yes | Pieces involved (e.g. `["Nc7", "Ra8", "Ke8"]`) |
+| `tactics.*.squares` | array | yes | Squares involved, **ordered by role per type** (see "Tactic `squares` ordering" below) |
+| `tactics.*.pieces` | array | yes | Pieces involved, in the same order as `squares` (e.g. `["Nc7", "Ra8", "Ke8"]`) |
 | `tactics.*.in_pv` | boolean | yes | `true` if motif appears in a PV line, `false` if on the board now |
 | `tactics.*.description` | string | yes | Human-readable description (e.g. `"Fork: Nc7 attacks Ra8 and Ke8"`) |
 | `threat_map` | array | yes | Per-square attack/defense counts (only squares that are attacked or contain pieces) |
@@ -270,6 +270,19 @@ limit — the search stops when the depth or time is reached.
 | `threat_map.*.net_attacked` | boolean | yes | `true` if the piece on this square is attacked more times than defended by its own side |
 | `critical_moment` | boolean | yes | `true` when eval spread between best and 3rd-best move exceeds 100cp |
 | `critical_reason` | string/null | yes | Reason string when `critical_moment` is `true`, `null` otherwise |
+
+**Tactic `squares` ordering (by `type`):**
+
+The `squares` array is role-ordered so a consumer can draw board overlays
+without re-deriving the geometry. `pieces` follows the same order.
+
+| `type` | `squares` ordering | suggested arrow(s) |
+| --- | --- | --- |
+| `fork` | `[forker, target1, target2, ...]` | `forker → each target` |
+| `pin` | `[pinning_slider, pinned_piece, shielded_piece]` | `slider → pinned`, `slider → shielded` |
+| `skewer` | `[skewering_slider, front_piece, back_piece]` | `slider → front`, `slider → back` |
+| `discovered_attack` | `[revealed_attacker, attacked_target, moving_piece]` | `revealed_attacker → attacked_target` only (the moving piece is **not** a target of the attacker — do not draw `attacker → mover`) |
+| `back_rank_threat` | `[attacker, king]` | `attacker → king` |
 
 **Error handling:**
 - If the FEN is invalid, the engine SHOULD respond with an error envelope (see Section 4)
