@@ -115,6 +115,6 @@
 
 - [x] 13. Migrate from Xboard to UCI protocol
   - [x] 13.1 Implement `UciEngine(EngineProtocol)` using Blunder's UCI support
-  - [ ] 13.2 Add MultiPV support to retrieve top N candidate moves per position (blocked: Blunder does not support MultiPV yet)
+  - [x] 13.2 Add MultiPV support to retrieve top N candidate moves per position (Blunder shipped UCI MultiPV — blunder@a005ae6/badbfcb; the coaching protocol's `coach eval ... multipv N` returns N `top_lines`, consumed via `get_position_report(multipv=3)` and rendered as alternative moves)
   - [x] 13.3 Update config to default to `protocol: uci`
   - [x] 13.4 Update README and config examples to reflect UCI as the default
