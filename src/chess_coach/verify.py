@@ -14,9 +14,10 @@ It does **not** check *evaluation* truth (whether a move is actually best or a
 position is really winning); the engine remains the sole oracle for that.
 
 Scope: only :class:`~chess_coach.models.Threat` entries are filtered, and only
-when a concrete move can be identified for them (an explicit ``uci_move`` or a
-``via <uci>`` token in the description). Relational facts with no move (a pin or
-skewer description) carry no UCI token and are kept. Tactics
+when the engine supplies a concrete move for them (the structured ``uci_move``
+field). Move-bearing threats (check, capture) carry ``uci_move``; relational
+facts with no move (fork, pin, skewer describing an existing board
+relationship) carry none and are always kept. Tactics
 (:class:`~chess_coach.models.TacticalMotif`) are left untouched — they carry no
 single move to validate, and "in-PV" motifs describe the principal variation
 rather than the current position.
@@ -25,7 +26,6 @@ rather than the current position.
 from __future__ import annotations
 
 import dataclasses
-import re
 
 import chess
 
@@ -33,28 +33,16 @@ from chess_coach.models import PositionReport, Threat
 
 _SIDE_COLOR = {"white": chess.WHITE, "black": chess.BLACK}
 
-# A UCI move token: from-square, to-square, optional promotion piece.
-_UCI_RE = re.compile(r"\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b")
-# Prefer the move named after "via" (the engine's own "... via c3e4" convention).
-_VIA_RE = re.compile(r"via\s+([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b", re.IGNORECASE)
-
 
 def _candidate_move(threat: Threat) -> str | None:
     """Return the UCI move a threat asserts, or None if it asserts no move.
 
-    Priority: the structured ``uci_move`` field, then a ``via <uci>`` token in
-    the description, then any UCI-looking token. Relational descriptions (pins,
-    skewers) contain no such token and yield None.
+    Read only from the structured ``uci_move`` field — never parsed from the
+    engine's prose ``description``. Relational threats (pins, skewers, forks
+    describing an existing relationship) carry no ``uci_move`` and yield None,
+    so they are kept (there is nothing to prove illegal).
     """
-    if threat.uci_move:
-        return threat.uci_move
-    via = _VIA_RE.search(threat.description)
-    if via:
-        return via.group(1)
-    token = _UCI_RE.search(threat.description)
-    if token:
-        return token.group(1)
-    return None
+    return threat.uci_move or None
 
 
 def _is_legal_for(board: chess.Board, uci_move: str, color: chess.Color) -> bool:

@@ -159,6 +159,13 @@ Tracked issues discovered during development and testing.
 - **Status**: FIXED — suppress king safety warnings when ≤6 pieces
   remain on the board. Added piece-count guard at the top of
   `_king_safety_text()` in `coaching_templates.py`.
+  **Update (2026-07-02, client-side-coaching-text):** the piece-count
+  guard is now the shared `coaching_phrases.king_safety_relevant()`, so
+  BOTH the template and the LLM-prompt king-safety sections suppress
+  endgame king-safety noise consistently. King-safety commentary is also
+  now composed from the engine's structured fields (`king_square`,
+  `castling_status`, `missing_shield_files`, `open_file_near_king`,
+  `pawn_storm`) rather than the prose `description`.
 
 
 ### BUG-010: Eval summary reports contradictory factor

@@ -22,6 +22,13 @@ from pathlib import Path
 import chess
 import yaml
 
+from ..coaching_phrases import (
+    describe_hanging,
+    describe_tactic,
+    describe_threat,
+    select_tactics,
+    suppress_threats_echoing_tactics,
+)
 from ..models import ComparisonReport, PositionReport
 from ..pedagogy.inject import format_judge_guidance_block
 from ..pedagogy.resource import GuidanceEntry
@@ -190,20 +197,30 @@ def format_engine_report(report: PositionReport) -> str:
         f"king safety {eb.king_safety}cp, pawn structure {eb.pawn_structure}cp"
     )
 
-    hanging = [
-        f"{side.title()}'s {hp.piece} on {hp.square}"
-        for side in ("white", "black")
-        for hp in report.hanging_pieces.get(side, [])
-    ]
+    # All fact sentences come from the shared composer (never the engine's
+    # prose `description`), with the same dedup / threat-echo suppression the
+    # coach uses — so the judge grounds on exactly what the coach did.
+    try:
+        board: chess.Board | None = chess.Board(report.fen)
+    except ValueError:
+        board = None
+
+    hanging = [describe_hanging(hp) for side in ("white", "black") for hp in report.hanging_pieces.get(side, [])]
     if hanging:
         sections.append("--- Hanging pieces ---\n" + "\n".join(hanging))
 
-    threats = [f"{side.title()}: {t.description}" for side in ("white", "black") for t in report.threats.get(side, [])]
-    if threats:
-        sections.append("--- Threats ---\n" + "\n".join(threats))
+    tactics = select_tactics(report.tactics)
 
-    if report.tactics:
-        sections.append("--- Tactics ---\n" + "\n".join(f"{t.type}: {t.description}" for t in report.tactics))
+    threat_lines = [
+        describe_threat(th, board)
+        for side in ("white", "black")
+        for th in suppress_threats_echoing_tactics(report.threats.get(side, []), tactics)
+    ]
+    if threat_lines:
+        sections.append("--- Threats ---\n" + "\n".join(threat_lines))
+
+    if tactics:
+        sections.append("--- Tactics ---\n" + "\n".join(describe_tactic(t, board) for t in tactics))
 
     if report.top_lines:
         lines = []

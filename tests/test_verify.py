@@ -46,9 +46,9 @@ def _descriptions(report: PositionReport, side: str) -> list[str]:
     return [t.description for t in report.threats[side]]
 
 
-def test_drops_pinned_in_check_capture_from_description() -> None:
-    # White's pinned knight cannot capture the checking queen; uci read from
-    # the "via c3e4" token in the description (no structured uci_move).
+def test_drops_pinned_in_check_capture() -> None:
+    # White's pinned knight cannot capture the checking queen; the move is
+    # read from the structured uci_move field (prose is never parsed).
     report = _report(
         QE4_CHECK_FEN,
         {
@@ -57,7 +57,8 @@ def test_drops_pinned_in_check_capture_from_description() -> None:
                     type="capture",
                     source_square="c3",
                     target_squares=["e4"],
-                    description="Nc3 can capture undefended Qe4 via c3e4",
+                    description="__PROSE_MUST_NOT_BE_READ__",
+                    uci_move="c3e4",
                 )
             ],
             "black": [],
@@ -77,7 +78,8 @@ def test_drops_capture_that_ignores_check() -> None:
                     type="capture",
                     source_square="f6",
                     target_squares=["g7"],
-                    description="f6 can capture undefended g7 via f6g7",
+                    description="__PROSE_MUST_NOT_BE_READ__",
+                    uci_move="f6g7",
                 )
             ],
             "black": [],
@@ -109,18 +111,9 @@ def test_keeps_legal_opponent_threats() -> None:
         {
             "white": [],
             "black": [
-                Threat(
-                    type="check", source_square="b4", target_squares=["c3"], description="Bb4 can give check via b4c3"
-                ),
-                Threat(
-                    type="capture",
-                    source_square="g7",
-                    target_squares=["f6"],
-                    description="g7 can capture undefended f6 via g7f6",
-                ),
-                Threat(
-                    type="check", source_square="e4", target_squares=["e2"], description="Qe4 can give check via e4e2"
-                ),
+                Threat(type="check", source_square="b4", target_squares=["c3"], description="", uci_move="b4c3"),
+                Threat(type="capture", source_square="g7", target_squares=["f6"], description="", uci_move="g7f6"),
+                Threat(type="check", source_square="e4", target_squares=["e2"], description="", uci_move="e4e2"),
             ],
         },
     )
@@ -156,7 +149,9 @@ def test_malformed_fen_returns_report_unchanged() -> None:
     report = _report(
         "not-a-fen",
         {
-            "white": [Threat(type="capture", source_square="c3", target_squares=["e4"], description="via c3e4")],
+            "white": [
+                Threat(type="capture", source_square="c3", target_squares=["e4"], description="", uci_move="c3e4")
+            ],
             "black": [],
         },
     )
@@ -175,19 +170,19 @@ def test_mixed_drops_only_the_illegal_white_threats() -> None:
                     type="capture",
                     source_square="c3",
                     target_squares=["e4"],
-                    description="Nc3 can capture undefended Qe4 via c3e4",
+                    description="__PROSE_MUST_NOT_BE_READ__",
+                    uci_move="c3e4",
                 ),
                 Threat(
                     type="capture",
                     source_square="f6",
                     target_squares=["g7"],
-                    description="f6 can capture undefended g7 via f6g7",
+                    description="__PROSE_MUST_NOT_BE_READ__",
+                    uci_move="f6g7",
                 ),
             ],
             "black": [
-                Threat(
-                    type="check", source_square="b4", target_squares=["c3"], description="Bb4 can give check via b4c3"
-                ),
+                Threat(type="check", source_square="b4", target_squares=["c3"], description="", uci_move="b4c3"),
                 Threat(type="pin", source_square="b4", target_squares=["c3"], description="Bb4 pins Nc3 to Ke1"),
             ],
         },

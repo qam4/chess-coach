@@ -10,6 +10,30 @@ context to pick up later. Distinct from:
 
 This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
+## Recently shipped
+
+- **Client-side coaching-text composition — SHIPPED (2026-07-02).**
+  Spec `.kiro/specs/client-side-coaching-text/`. The engine's prose
+  `description` fields (tactics / threats / king-safety) are no longer
+  rendered or fed to any LLM; all coaching sentences are composed from
+  the engine's *structured* facts by a single source of truth,
+  `src/chess_coach/coaching_phrases.py`, consumed identically by the
+  coaching prompt, the templates, `insights`, and — by scope extension —
+  the eval judge's `format_engine_report`. Proven by a sentinel test
+  (`tests/test_no_prose_leak.py`: every `description` = a marker ⇒ absent
+  from every rendered surface) plus a coach/judge parity test. Along the
+  way: `verify.filter_illegal_threats` now reads the structured
+  `uci_move` (regex over prose deleted); Blunder gained structured
+  king-safety fields (`king_square`, `castling_status`,
+  `missing_shield_files`, `open_file_near_king`, `pawn_storm`) so the
+  client composes king-safety without reading prose or re-deriving engine
+  logic; the on-board vs in-PV distinction is now a clear phrase, not the
+  "in PV" token. `description` is retained as engine debug output only.
+  **Deferred / none outstanding:** the threat-map stays a per-medium
+  structured table (LLM counts vs UI tensions) by design — not a prose
+  category. Short labels (`theme`, `best_move_idea`, `critical_reason`)
+  remain engine-owned.
+
 ## Coaching-eval harness
 
 - **Eval sensitivity & validity — THE next investment (decided 2026-06-18).**
@@ -638,6 +662,16 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
      revealed attack line `attacker → target` only (no bogus `attacker → mover`
      arrow). So the live overlay after `1.e4 e6 2.Nc3 Qg5` is `c1 → g5`, not
      `c1 → d2` / `c1 → d4`.
+
+  **Input-side precondition now specced (2026-07-01):** the client-side
+  composition of coaching sentences from structured facts — which makes
+  the *inputs* to the LLM ground-truth by construction — is captured in
+  `.kiro/specs/client-side-coaching-text/`. That spec owns the rules-tier
+  verifier on the engine's own facts (keeping `filter_illegal_threats`,
+  dropping its regex for `uci_move`) and explicitly EXCLUDES the
+  output-side verifier (prompt ablation + write→check→repair loop), which
+  remains this item. The two are complementary: correct inputs shrink what
+  the repair loop must catch; they do not replace it.
 
   The chess-coach defensive filter (`verify.filter_illegal_threats`) stays as
   belt-and-suspenders for any engine that doesn't speak the fixed protocol.

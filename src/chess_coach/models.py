@@ -2,12 +2,22 @@
 
 Frozen dataclasses for structured engine evaluation data, with JSON
 round-trip support via to_dict() / from_dict() class methods.
+
+Note on ``description`` fields: the ``description`` strings on ``Threat``,
+``TacticalMotif``, and ``KingSafety`` are the engine's own prose and are
+**debug/non-authoritative** — the client never renders them. All
+student-facing sentences are composed from the structured fields (squares,
+pieces, ``in_pv``, ``uci_move``, king-safety fields, …) by
+``chess_coach.coaching_phrases``, so wording lives in one place and cannot
+drift with the engine. Short labels (``theme``, ``best_move_idea``,
+``critical_reason``) remain engine-owned and are passed through as-is.
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from dataclasses import field as dc_field
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -153,19 +163,47 @@ class PawnFeatures:
 
 @dataclass(frozen=True)
 class KingSafety:
-    """King-safety assessment for one side: a centipawn score and description."""
+    """King-safety assessment for one side.
+
+    Carries a centipawn ``score`` plus structured fields the client uses to
+    compose the coaching sentence (king square, castling status, missing
+    pawn-shield files, open-file-near-king, pawn-storm). ``description`` is
+    the engine's own prose and is retained for debugging only — the client
+    composes its sentence from the structured fields, never from this string.
+    """
 
     score: int
     description: str
+    king_square: str = ""
+    castling_status: str = ""
+    missing_shield_files: list[str] = dc_field(default_factory=list)
+    open_file_near_king: bool = False
+    pawn_storm: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dict."""
-        return {"score": self.score, "description": self.description}
+        return {
+            "score": self.score,
+            "description": self.description,
+            "king_square": self.king_square,
+            "castling_status": self.castling_status,
+            "missing_shield_files": list(self.missing_shield_files),
+            "open_file_near_king": self.open_file_near_king,
+            "pawn_storm": self.pawn_storm,
+        }
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> KingSafety:
-        """Build a KingSafety from its dict form."""
-        return cls(score=d["score"], description=d["description"])
+        """Build a KingSafety from its dict form (structured fields optional)."""
+        return cls(
+            score=d["score"],
+            description=d["description"],
+            king_square=d.get("king_square", ""),
+            castling_status=d.get("castling_status", ""),
+            missing_shield_files=list(d.get("missing_shield_files", [])),
+            open_file_near_king=d.get("open_file_near_king", False),
+            pawn_storm=d.get("pawn_storm", False),
+        )
 
 
 @dataclass(frozen=True)

@@ -19,9 +19,11 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import chess
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from chess_coach.coaching_phrases import describe_tactic, select_tactics
 from chess_coach.coaching_templates import (
     CAT_ASSESSMENT,
     CAT_PIECE_SAFETY,
@@ -494,12 +496,14 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     # 100-word limit (Req 7.3)
     assert "100 words" in prompt_lower or "100 word" in prompt_lower, "Prompt must contain 100-word limit instruction"
 
-    # Missed tactics present when non-empty (Req 3.4)
+    # Missed tactics present when non-empty (Req 3.4). They are composed from
+    # the structured fields (never the engine prose `description`) and
+    # de-duplicated by motif identity, so assert the composed sentences appear.
     if report.missed_tactics:
-        for tactic in report.missed_tactics:
-            assert tactic.description in prompt, (
-                f"Missed tactic description '{tactic.description}' must appear in prompt"
-            )
+        board = chess.Board(report.fen)
+        for tactic in select_tactics(report.missed_tactics):
+            expected = describe_tactic(tactic, board)
+            assert expected in prompt, f"Composed missed-tactic sentence must appear: {expected!r}"
 
     # Refutation line present when non-None (Req 3.4). Moves are rendered in
     # SAN (named piece) rather than raw UCI coordinates, so assert the section

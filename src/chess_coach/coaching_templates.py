@@ -14,10 +14,30 @@ from dataclasses import dataclass
 
 import chess
 
+from chess_coach.coaching_phrases import (
+    describe_eval,
+    describe_hanging,
+    describe_king_safety,
+    describe_pawn_structure,
+    describe_tactic,
+    describe_tactic_core,
+    describe_threat,
+    king_safety_relevant,
+    select_tactics,
+    suppress_threats_echoing_tactics,
+)
 from chess_coach.models import ComparisonReport, EvalBreakdown, PositionReport
 from chess_coach.openings import OpeningInfo
 from chess_coach.pedagogy.inject import render_guidance_entries
 from chess_coach.pedagogy.resource import GuidanceEntry
+
+
+def _safe_board(fen: str) -> chess.Board | None:
+    """Parse a FEN into a board, or None if it is malformed."""
+    try:
+        return chess.Board(fen)
+    except ValueError:
+        return None
 
 
 @dataclass
@@ -152,10 +172,10 @@ def generate_priority_coaching(
         for hp in report.hanging_pieces.get(side, []):
             parts.append(f"Your {hp.piece} on {hp.square} is undefended — protect it or move it.")
 
-    # 2. Real threats — only those backed by engine PV (from tactics)
-    for tactic in report.tactics:
-        if tactic.in_pv:
-            parts.append(f"Watch out: {tactic.description}")
+    # 2. Real tactical motifs — de-duplicated and composed from structured
+    #    data (never the engine prose description).
+    for tactic in select_tactics(report.tactics):
+        parts.append(f"Watch out for {describe_tactic_core(tactic)}")
 
     # 3. Weakest component — strategic direction
     if not parts:  # only if no immediate tactical concerns
@@ -256,7 +276,7 @@ def generate_position_coaching_structured(
 
     # Strategy — king safety + pawn structure
     strategy_parts: list[str] = []
-    king = _king_safety_text(report, level)
+    king = _king_safety_text(report)
     if king:
         strategy_parts.append(king)
     pawns = _pawn_structure_text(report, level)
@@ -412,10 +432,10 @@ def generate_move_coaching(
             best_san = report.best_move
         sections.append(f"{best_san} was stronger here.")
 
-    # Missed tactics
-    if report.missed_tactics:
-        for tactic in report.missed_tactics:
-            sections.append(f"You missed a {tactic.type.replace('_', ' ')}: {tactic.description}")
+    # Missed tactics — composed from structured data (never engine prose),
+    # de-duplicated by motif identity.
+    for tactic in select_tactics(report.missed_tactics):
+        sections.append(f"You missed {describe_tactic_core(tactic)}")
 
     # Refutation line
     if report.refutation_line and cls in ("mistake", "blunder"):
@@ -442,206 +462,73 @@ def generate_move_coaching(
 
 
 def _eval_summary(report: PositionReport) -> str:
-    """Summarize the overall evaluation in plain language."""
-    cp = report.eval_cp
-    abs_cp = abs(cp)
-
-    if abs_cp < 30:
-        assessment = "The position is roughly equal."
-    elif abs_cp < 100:
-        side = "White" if cp > 0 else "Black"
-        assessment = f"{side} has a slight edge ({cp / 100:+.2f} pawns)."
-    elif abs_cp < 300:
-        side = "White" if cp > 0 else "Black"
-        assessment = f"{side} has a clear advantage ({cp / 100:+.2f} pawns)."
-    else:
-        side = "White" if cp > 0 else "Black"
-        assessment = f"{side} is winning ({cp / 100:+.2f} pawns)."
-
-    # Add context from the eval breakdown factors.
-    # If the dominant factor aligns with the overall eval, present it as
-    # "the main factor."  If it contradicts (e.g. White is ahead but Black
-    # has better king safety), present both sides — that's actually more
-    # insightful coaching.
-    eb = report.eval_breakdown
-    factors = [
-        (abs(eb.mobility), eb.mobility, "piece activity"),
-        (abs(eb.king_safety), eb.king_safety, "king safety"),
-        (abs(eb.pawn_structure), eb.pawn_structure, "pawn structure"),
-    ]
-    factors.sort(reverse=True)
-    if abs_cp > 30:
-        top_abs, top_val, top_name = factors[0]
-        if top_abs > 30:
-            top_better = "White" if top_val > 0 else "Black"
-            eval_side = "White" if cp > 0 else "Black"
-            if top_better == eval_side:
-                assessment += f" The main factor is {top_name} ({top_better} is better)."
-            else:
-                # Dominant factor favours the other side — find what
-                # actually drives the advantage and present both.
-                for _, val, name in factors[1:]:
-                    aligned = "White" if val > 0 else "Black"
-                    if abs(val) > 20 and aligned == eval_side:
-                        assessment += f" {eval_side}'s {name} outweighs {top_better}'s {top_name} edge."
-                        break
-
-    return assessment
+    """Summarize the overall evaluation — delegated to the shared composer."""
+    return describe_eval(report)
 
 
 def _hanging_pieces_text(report: PositionReport) -> str | None:
-    """Describe hanging pieces."""
-    pieces = []
-    for hp in report.hanging_pieces.get("white", []):
-        pieces.append(f"White's {hp.piece} on {hp.square} is undefended")
-    for hp in report.hanging_pieces.get("black", []):
-        pieces.append(f"Black's {hp.piece} on {hp.square} is undefended")
-
+    """Describe hanging pieces via the shared composer."""
+    pieces = [describe_hanging(hp) for side in ("white", "black") for hp in report.hanging_pieces.get(side, [])]
     if not pieces:
         return None
-    return "Piece safety: " + ". ".join(pieces) + "."
-
-
-def _threats_text(report: PositionReport) -> str | None:
-    """Describe active threats using board state and structured data."""
-    items = []
-    try:
-        board = chess.Board(report.fen)
-    except ValueError:
-        return None
-
-    for side_key, side_name in [("white", "White"), ("black", "Black")]:
-        for t in report.threats.get(side_key, []):
-            piece_name = _piece_name_at(board, t.source_square)
-            source = f"{side_name}'s {piece_name} on {t.source_square}" if piece_name else side_name
-
-            # Build description from structured fields when possible
-            if t.type == "check" and t.target_squares:
-                via = ", ".join(t.target_squares)
-                items.append(f"{source} can give check on {via}.")
-            elif t.type == "capture" and t.target_squares:
-                targets = ", ".join(t.target_squares)
-                items.append(f"{source} threatens to capture on {targets}.")
-            elif t.description:
-                # Fallback to engine description for types we don't handle yet
-                items.append(f"{source}: {t.description}")
-            else:
-                items.append(f"{source} has a threat ({t.type.replace('_', ' ')}).")
-
-    if not items:
-        return None
-    return "Threats: " + "\n".join(items)
+    return "Piece safety: " + " ".join(pieces)
 
 
 def _threats_and_tactics_text(report: PositionReport) -> str | None:
-    """Present tactics and threats directly from engine data.
+    """Present tactics and threats as composed coaching sentences, or None.
 
-    Simple data formatter — no deduplication, no side-awareness logic.
-    The LLM handles nuance; this is just the fallback.
+    All wording comes from the single composer (:mod:`coaching_phrases`):
+    tactics are de-duplicated by motif identity (``select_tactics``) and
+    composed from structured fields; threats that merely restate a shown
+    tactic are suppressed, the rest composed. The engine's prose
+    ``description`` is never read here.
     """
-    items: list[str] = []
-
-    # Tactics
-    for t in report.tactics:
-        label = t.type.replace("_", " ").capitalize()
-        desc = t.description or ""
-        if desc:
-            items.append(f"{label}: {desc}")
-        else:
-            items.append(f"{label} detected.")
-
-    # Threats
-    for side_key, side_name in [("white", "White"), ("black", "Black")]:
-        for threat in report.threats.get(side_key, []):
-            if threat.description:
-                items.append(f"{side_name}: {threat.description}")
-            elif threat.target_squares:
-                targets = ", ".join(threat.target_squares)
-                items.append(f"{side_name} threatens {targets} ({threat.type.replace('_', ' ')}).")
-
+    board = _safe_board(report.fen)
+    tactics = select_tactics(report.tactics)
+    items: list[str] = [describe_tactic(t, board) for t in tactics]
+    for side_key in ("white", "black"):
+        for threat in suppress_threats_echoing_tactics(report.threats.get(side_key, []), tactics):
+            items.append(describe_threat(threat, board))
     if not items:
         return None
     return "\n".join(items)
 
 
-def _piece_name_at(board: chess.Board, square_name: str) -> str | None:
-    """Get the piece name at a square, or None."""
-    try:
-        sq = chess.parse_square(square_name)
-        piece = board.piece_at(sq)
-        if piece is None:
-            return None
-        names = {
-            chess.PAWN: "pawn",
-            chess.KNIGHT: "knight",
-            chess.BISHOP: "bishop",
-            chess.ROOK: "rook",
-            chess.QUEEN: "queen",
-            chess.KING: "king",
-        }
-        return names.get(piece.piece_type)
-    except ValueError:
-        return None
+def _king_safety_text(report: PositionReport) -> str | None:
+    """Compose the king-safety line from structured fields, or None.
 
-
-def _king_safety_text(report: PositionReport, level: str) -> str | None:
-    """Present engine king safety scores directly.
-
-    Simple data formatter — no move-number suppression, no board-state
-    inference. Only reports sides with significant scores (< -10).
+    Built by the composer from the engine's structured king-safety fields
+    (never the prose ``description``); suppressed wholesale in low-material
+    endgames (``king_safety_relevant``) and per side when there is nothing
+    coaching-worthy.
     """
-    parts: list[str] = []
-
-    for side_name in ("white", "black"):
-        ks = report.king_safety.get(side_name)
-        if not ks:
-            continue
-        if ks.score < -10:
-            display = side_name.capitalize()
-            if ks.description:
-                parts.append(f"{display}'s king safety: {ks.description} (score: {ks.score}).")
-            else:
-                parts.append(f"{display}'s king safety is concerning (score: {ks.score}).")
-
+    if not king_safety_relevant(report):
+        return None
+    parts = [
+        s for side in ("white", "black") if (s := describe_king_safety(report.king_safety[side], side)) is not None
+    ]
     if not parts:
         return None
     return " ".join(parts)
 
 
 def _pawn_structure_text(report: PositionReport, level: str) -> str | None:
-    """Describe notable pawn structure features."""
+    """Describe notable pawn structure features via the shared composer."""
     if level == "beginner":
         return None  # Too advanced for beginners
 
-    parts = []
-    for side_name, side_key in [("White", "white"), ("Black", "black")]:
-        features = report.pawn_structure.get(side_key)
-        if not features:
+    parts: list[str] = []
+    for side in ("white", "black"):
+        pf = report.pawn_structure.get(side)
+        if pf is None:
             continue
-        if features.isolated:
-            files = ", ".join(features.isolated)
-            parts.append(f"{side_name} has isolated pawns on the {files}-file(s)")
-        if features.doubled:
-            files = ", ".join(features.doubled)
-            parts.append(f"{side_name} has doubled pawns on the {files}-file")
-        if features.passed:
-            files = ", ".join(features.passed)
-            parts.append(f"{side_name} has a passed pawn on the {files}-file")
+        sentence = describe_pawn_structure(pf, side)
+        if sentence:
+            parts.append(sentence)
 
     if not parts:
         return None
-    return "Pawn structure: " + ". ".join(parts) + "."
-
-
-def _tactics_text(report: PositionReport) -> str | None:
-    """Describe detected tactical motifs."""
-    if not report.tactics:
-        return None
-    items = []
-    for t in report.tactics:
-        label = t.type.replace("_", " ").capitalize()
-        items.append(f"{label}: {t.description}")
-    return "Tactics: " + ". ".join(items) + "."
+    return "Pawn structure: " + " ".join(parts)
 
 
 def _best_move_text(report: PositionReport) -> str | None:

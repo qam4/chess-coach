@@ -4,12 +4,31 @@ from __future__ import annotations
 
 import chess
 
+from chess_coach.coaching_phrases import (
+    describe_hanging,
+    describe_king_safety,
+    describe_pawn_structure,
+    describe_tactic,
+    describe_threat,
+    king_safety_relevant,
+    select_tactics,
+    suppress_threats_echoing_tactics,
+)
 from chess_coach.models import (
     ComparisonReport,
     PositionReport,
 )
 from chess_coach.pedagogy.inject import format_guidance_block
 from chess_coach.pedagogy.resource import GuidanceEntry
+
+
+def _safe_board(fen: str) -> chess.Board | None:
+    """Parse a FEN into a board, or None if it is malformed."""
+    try:
+        return chess.Board(fen)
+    except ValueError:
+        return None
+
 
 SYSTEM_PROMPT = """\
 You are an experienced chess coach. You explain positions clearly and help \
@@ -379,67 +398,70 @@ def _format_eval_breakdown(report: PositionReport) -> str:
 
 
 def _format_pawn_structure(report: PositionReport) -> str:
-    """Format the pawn structure section."""
+    """Format the pawn structure section from composed sentences."""
     lines = ["--- Pawn Structure ---"]
     for side in ("white", "black"):
-        pf = report.pawn_structure[side]
-        parts: list[str] = []
-        if pf.isolated:
-            parts.append(f"isolated on {', '.join(pf.isolated)}")
-        if pf.doubled:
-            parts.append(f"doubled on {', '.join(pf.doubled)}")
-        if pf.passed:
-            parts.append(f"passed on {', '.join(pf.passed)}")
-        if parts:
-            lines.append(f"{side.capitalize()}: {'; '.join(parts)}")
-        else:
-            lines.append(f"{side.capitalize()}: no notable features")
+        sentence = describe_pawn_structure(report.pawn_structure[side], side)
+        lines.append(sentence if sentence else f"{side.capitalize()} has no notable features.")
     return "\n".join(lines)
 
 
-def _format_king_safety(report: PositionReport) -> str:
-    """Format the king safety section."""
-    lines = ["--- King Safety ---"]
-    for side in ("white", "black"):
-        ks = report.king_safety[side]
-        lines.append(f"{side.capitalize()}: {ks.description} ({ks.score} cp)")
-    return "\n".join(lines)
+def _format_king_safety(report: PositionReport) -> str | None:
+    """Format the king safety section from composed sentences, or None.
+
+    Composed entirely from the engine's structured king-safety fields (never
+    the prose ``description``). Suppressed wholesale in low-material endgames
+    (``king_safety_relevant``), and per side when there is nothing
+    coaching-worthy.
+    """
+    if not king_safety_relevant(report):
+        return None
+    lines = [
+        s for side in ("white", "black") if (s := describe_king_safety(report.king_safety[side], side)) is not None
+    ]
+    if not lines:
+        return None
+    return "--- King Safety ---\n" + "\n".join(lines)
 
 
 def _format_threats(report: PositionReport) -> str | None:
-    """Format the threats section, or return None if no threats."""
-    has_threats = any(len(report.threats.get(side, [])) > 0 for side in ("white", "black"))
-    if not has_threats:
-        return None
-    lines = ["--- Threats ---"]
+    """Format the threats section from composed sentences, or None if empty.
+
+    Threats that merely restate a shown tactic are suppressed; the rest are
+    composed from structured fields (never the prose ``description``).
+    """
+    board = _safe_board(report.fen)
+    tactics = select_tactics(report.tactics)
+    lines: list[str] = []
     for side in ("white", "black"):
-        for threat in report.threats.get(side, []):
-            lines.append(f"{side.capitalize()}: {threat.description}")
-    return "\n".join(lines)
+        for threat in suppress_threats_echoing_tactics(report.threats.get(side, []), tactics):
+            lines.append(describe_threat(threat, board))
+    if not lines:
+        return None
+    return "--- Threats ---\n" + "\n".join(lines)
 
 
 def _format_hanging_pieces(report: PositionReport) -> str | None:
-    """Format the hanging pieces section, or return None if none."""
-    has_hanging = any(len(report.hanging_pieces.get(side, [])) > 0 for side in ("white", "black"))
-    if not has_hanging:
+    """Format the hanging pieces section from composed sentences, or None."""
+    pieces = [describe_hanging(hp) for side in ("white", "black") for hp in report.hanging_pieces.get(side, [])]
+    if not pieces:
         return None
-    lines = ["--- Hanging Pieces ---"]
-    for side in ("white", "black"):
-        for hp in report.hanging_pieces.get(side, []):
-            lines.append(f"{side.capitalize()}: {hp.piece} on {hp.square} is hanging")
-    return "\n".join(lines)
+    return "--- Hanging Pieces ---\n" + "\n".join(pieces)
 
 
 def _format_tactics(report: PositionReport) -> str | None:
-    """Format the tactical motifs section, or return None if empty."""
-    if not report.tactics:
+    """Format the tactical motifs section from composed sentences, or None.
+
+    De-duplicated by motif identity (``select_tactics``) and composed from
+    structured fields; the on-board vs in-PV distinction is carried in the
+    composed sentence, never as a raw "(in PV)" token.
+    """
+    tactics = select_tactics(report.tactics)
+    if not tactics:
         return None
-    lines = ["--- Tactical Motifs ---"]
-    for tactic in report.tactics:
-        pv_note = " (in PV)" if tactic.in_pv else " (on board)"
-        label = tactic.type.replace("_", " ")
-        lines.append(f"{label}: {tactic.description}{pv_note}")
-    return "\n".join(lines)
+    board = _safe_board(report.fen)
+    lines = [describe_tactic(t, board) for t in tactics]
+    return "--- Tactical Motifs ---\n" + "\n".join(lines)
 
 
 def _format_threat_map(report: PositionReport) -> str | None:
@@ -595,9 +617,12 @@ def build_rich_coaching_prompt(
     # Always-present sections
     sections.append(_format_eval_breakdown(report))
     sections.append(_format_pawn_structure(report))
-    sections.append(_format_king_safety(report))
 
     # Conditionally-present sections
+    king_safety_section = _format_king_safety(report)
+    if king_safety_section is not None:
+        sections.append(king_safety_section)
+
     threats_section = _format_threats(report)
     if threats_section is not None:
         sections.append(threats_section)
@@ -731,7 +756,9 @@ def build_socratic_prompt(
     threat_map = _format_threat_map(report)
     if threat_map is not None:
         sections.append(threat_map)
-    sections.append(_format_king_safety(report))
+    king_safety_section = _format_king_safety(report)
+    if king_safety_section is not None:
+        sections.append(king_safety_section)
     sections.append(_format_pawn_structure(report))
 
     return SOCRATIC_COACHING_PROMPT_V2.format(
@@ -745,15 +772,13 @@ def build_socratic_prompt(
 
 
 def _format_missed_tactics(report: ComparisonReport) -> str | None:
-    """Format missed tactics section, or return None if empty."""
-    if not report.missed_tactics:
+    """Format missed tactics from composed sentences, or None if empty."""
+    tactics = select_tactics(report.missed_tactics)
+    if not tactics:
         return None
-    lines = ["--- Missed Tactics ---"]
-    for tactic in report.missed_tactics:
-        pv_note = " (in PV)" if tactic.in_pv else " (on board)"
-        label = tactic.type.replace("_", " ")
-        lines.append(f"{label}: {tactic.description}{pv_note}")
-    return "\n".join(lines)
+    board = _safe_board(report.fen)
+    lines = [describe_tactic(t, board) for t in tactics]
+    return "--- Missed Tactics ---\n" + "\n".join(lines)
 
 
 def _format_refutation_line(report: ComparisonReport) -> str | None:

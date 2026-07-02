@@ -14,7 +14,17 @@ from dataclasses import dataclass, field
 
 import chess
 
+from chess_coach.coaching_phrases import describe_threat
 from chess_coach.models import EvalBreakdown, PositionReport
+
+
+def _safe_board(fen: str) -> chess.Board | None:
+    """Parse a FEN into a board, or None if it is malformed."""
+    try:
+        return chess.Board(fen)
+    except ValueError:
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Data structures for move insights
@@ -148,7 +158,12 @@ def extract_factor_changes(before: EvalBreakdown, after: EvalBreakdown, min_delt
 
 
 def extract_threats(report: PositionReport, side_to_move: bool) -> list[ThreatInfo]:
-    """Extract threats from a position report, tagged by whose threat it is."""
+    """Extract threats from a position report, tagged by whose threat it is.
+
+    The threat sentence is composed from the structured fields by the shared
+    composer (never the engine's prose ``description``).
+    """
+    board = _safe_board(report.fen)
     threats: list[ThreatInfo] = []
     for side_key in ("white", "black"):
         is_opponent = (side_key == "white") != side_to_move
@@ -156,7 +171,7 @@ def extract_threats(report: PositionReport, side_to_move: bool) -> list[ThreatIn
             threats.append(
                 ThreatInfo(
                     type=t.type,
-                    description=t.description,
+                    description=describe_threat(t, board),
                     source_square=t.source_square,
                     target_squares=list(t.target_squares),
                     is_opponent_threat=is_opponent,
