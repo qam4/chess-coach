@@ -34,6 +34,79 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   category. Short labels (`theme`, `best_move_idea`, `critical_reason`)
   remain engine-owned.
 
+## Grounded position description for the coach (decided 2026-07-02)
+
+- **The coach MUST be given an explicit piece-placement description — a
+  required input, not optional.** Live finding: `chess-coach explain` on
+  the Italian (1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.d3 Nf6 5.Nc3), qwen3:14b,
+  guidance on, produced warm, correctly-toned coaching that was
+  **factually wrong about the board**: it told Black "your knights and
+  bishops are still on the back rank — move your knight from b8 to a6 or
+  c5", when Black's minors are already developed (Nc6, Nf6, Bc5), b8 is
+  empty, c5 is Black's own bishop, and a6 is the rim.
+
+  **Root cause:** the *only* complete piece-placement in the prompt is the
+  FEN string, and LLMs — especially small ones — do not reliably decode
+  FEN into a board (supported by LM chess state-tracking work, e.g.
+  arXiv:2102.13249: explicit board state helps most at smaller scale;
+  arXiv:2411.06655 on LLM chess reasoning limits). So the model does not
+  actually know where the pieces are; it pattern-matches on the opening
+  name + the injected "development" theme and invents pieces. The strict
+  "never place a piece unless the data confirms it" rule can't help — there
+  is no positive placement data to obey.
+
+  **Decision:** render placement ourselves from `python-chess` (we already
+  hold the `chess.Board`) as a compact, explicit, plain-language block —
+  never rely on the model reading FEN. A verified concreteness check
+  produced ~5 lines per position, e.g.:
+  `Black: K e8, Q d8, R a8 h8, B c5 c8, N c6 f6, P a7 b7 c7 d7 e5 f7 g7 h7`
+  + `developed: Nf6 Nc6 Bc5 | still home: Bc8`. Cheap and complete, so
+  completeness is nearly free; keep the prompt lean by trimming
+  lower-value bulk (the ~36-half-move deep top-lines) rather than
+  withholding placement.
+
+  **What the block includes (agreed):** piece locations + developed/home
+  summary is the core. Side-to-move is already stated. Castling comes
+  through `king_safety.castling_status` (don't duplicate raw `KQkq`).
+  En passant only when a real e.p. capture exists. Halfmove clock only for
+  future endgame-technique coaching; fullmove number optional (phase is
+  better derived from material/ECO). The coach never needs to *compute*
+  legality — the engine already supplies legal/best moves and threats.
+
+  **Open (decide by measurement, not decree):**
+  1. **Format** — piece-list vs ASCII 8×8 grid vs rank-by-rank. Piece-list
+     favoured on compactness; pick via A/B.
+  2. **Who reasons** — LLM reasons from the grounded block, OR the
+     deterministic layer (composer, which already has the board) selects
+     the 1–2 correct points and the LLM only *voices* them (IDEAS "Layer 1
+     facts → Layer 2 voice"). The latter fits small models best.
+
+  **How to measure the effect (objective — no judge needed for this
+  defect):** placement/legality is deterministically checkable against
+  `python-chess`. Metric = *placement-fidelity violations* per response:
+  claims that contradict the real board or rules (piece not on the claimed
+  square; "undeveloped" when developed; a suggested move that is illegal /
+  from an empty square / onto one's own piece). A/B on one variable —
+  {FEN-only baseline} vs {+ placement block} (× small model and qwen3:14b),
+  same benchmark positions, compare violation counts. This is the
+  prompt-ablation lever + the output-side of "engine as verifier"; extends
+  the existing hallucination detector (which today catches "piece on X" but
+  misses development/possession — see that item below). Overall *teaching*
+  quality stays the pairwise-judge job. First read: re-run the Italian
+  position above with the block added and confirm the Nb8-class errors drop
+  to zero.
+
+  **Also captured (product-owner's example teaching moments, not to lose)
+  — concrete contextual advice the current resource does NOT cover:**
+  capturing the most valuable piece with the least valuable one
+  (recapture / exchange value), *when to exchange* (trade down when ahead,
+  keep pieces when attacking), and *when to push a pawn and which one*
+  (create/advance a passer, use a majority — beyond the existing
+  endgame "square of the pawn" entry). These need (a) knowledge entries
+  from the canon and (b) engine-computed features to key them (material
+  lead + trade-available, pawn majority, recapture choice) — part of the
+  "grow the resource" + "richer engine features" levers.
+
 ## Coaching-eval harness
 
 - **Eval sensitivity & validity — THE next investment (decided 2026-06-18).**
