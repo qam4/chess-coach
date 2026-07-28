@@ -236,6 +236,60 @@ def describe_pawn_structure(pf: PawnFeatures, side: str) -> str | None:
     return _cap(f"{label} has {'; '.join(parts)}.")
 
 
+_MINOR_START_SQUARES = {
+    (chess.WHITE, chess.KNIGHT): {chess.B1, chess.G1},
+    (chess.WHITE, chess.BISHOP): {chess.C1, chess.F1},
+    (chess.BLACK, chess.KNIGHT): {chess.B8, chess.G8},
+    (chess.BLACK, chess.BISHOP): {chess.C8, chess.F8},
+}
+_PIECE_LETTER = {
+    chess.KING: "K",
+    chess.QUEEN: "Q",
+    chess.ROOK: "R",
+    chess.BISHOP: "B",
+    chess.KNIGHT: "N",
+    chess.PAWN: "P",
+}
+_PIECE_ORDER = [chess.KING, chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN]
+
+
+def describe_placement(board: chess.Board | None) -> str:
+    """Render an explicit, plain-language piece placement for both sides.
+
+    The engine's only complete placement is the FEN, which LLMs (especially
+    small ones) cannot reliably decode — so the coach was inventing pieces.
+    This gives the model the board as text it can actually use: a compact
+    per-side piece list plus a developed / still-home summary of the minor
+    pieces (the signal that stops "your knight is undeveloped" errors when it
+    is not). Deterministic, so it never hallucinates.
+
+    Returns an empty string for a missing/invalid board (caller omits the
+    section).
+    """
+    if board is None:
+        return ""
+    lines = [f"{'White' if board.turn == chess.WHITE else 'Black'} to move."]
+    piece_map = board.piece_map()
+    for color in (chess.WHITE, chess.BLACK):
+        by_type: dict[int, list[str]] = {pt: [] for pt in _PIECE_ORDER}
+        for sq, piece in piece_map.items():
+            if piece.color == color:
+                by_type[piece.piece_type].append(chess.square_name(sq))
+        parts = [f"{_PIECE_LETTER[pt]} {' '.join(sorted(by_type[pt]))}" for pt in _PIECE_ORDER if by_type[pt]]
+        developed: list[str] = []
+        home: list[str] = []
+        for pt in (chess.KNIGHT, chess.BISHOP):
+            start = _MINOR_START_SQUARES[(color, pt)]
+            squares = sorted(sq for sq, piece in piece_map.items() if piece.color == color and piece.piece_type == pt)
+            for sq in squares:
+                tag = f"{_PIECE_LETTER[pt]}{chess.square_name(sq)}"
+                (home if sq in start else developed).append(tag)
+        label = "White" if color == chess.WHITE else "Black"
+        lines.append(f"{label}: {', '.join(parts)}")
+        lines.append(f"  developed minors: {', '.join(developed) or 'none'}; still home: {', '.join(home) or 'none'}")
+    return "\n".join(lines)
+
+
 def describe_king_safety(ks: KingSafety, side: str) -> str | None:
     """Compose a king-safety sentence from the structured fields, or None.
 

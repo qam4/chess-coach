@@ -16,6 +16,7 @@ from chess_coach.coaching_phrases import (
     describe_hanging,
     describe_king_safety,
     describe_pawn_structure,
+    describe_placement,
     describe_tactic,
     describe_threat,
     king_safety_relevant,
@@ -111,6 +112,31 @@ def test_threat_without_uci_move_degrades_gracefully() -> None:
 
 
 # --------------------------------------------------- unit: hanging / pawns / eval
+
+
+def test_placement_lists_pieces_and_development_from_the_board() -> None:
+    # The Italian position that produced the Nb8 hallucination: Black's minors
+    # are all developed (Nc6, Nf6, Bc5); only the c8 bishop is still home.
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 5")
+    text = describe_placement(board)
+    assert "Black to move." in text
+    # Actual pieces are listed on their real squares.
+    assert "N c6 f6" in text
+    assert "B c5 c8" in text
+    # Development is stated correctly — the anti-hallucination signal: Black's
+    # minors are developed, only the c8 bishop is home.
+    assert "developed minors: Nc6, Nf6, Bc5; still home: Bc8" in text
+    # No phantom knight on b8 (it left c6/f6 are its squares now).
+    assert "b8" not in text
+
+
+def test_placement_empty_board_is_safe() -> None:
+    assert describe_placement(None) == ""
+
+
+def test_placement_starting_position_all_minors_home() -> None:
+    text = describe_placement(chess.Board(chess.STARTING_FEN))
+    assert "developed minors: none" in text
 
 
 def test_hanging_piece_sentence() -> None:

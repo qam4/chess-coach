@@ -163,6 +163,17 @@ def test_surfaces_are_non_trivial() -> None:
         assert len(surfaces[name]) > 50, f"{name} unexpectedly empty/short"
 
 
+def test_prompt_includes_explicit_placement_not_just_fen() -> None:
+    # The rich coaching prompt must carry the explicit piece placement so the
+    # model isn't forced to decode the FEN (the Nb8-hallucination root cause).
+    report = _report()
+    prompt = build_rich_coaching_prompt(report)
+    assert "--- Board (piece placement) ---" in prompt
+    # Real squares from the FEN appear in plain form (kings on e1/e8 here).
+    assert "K e1" in prompt and "K e8" in prompt
+    assert "developed minors:" in prompt
+
+
 def test_prompt_and_template_render_the_same_tactic_sentence() -> None:
     # Req 9.3 / Property 4: both consumers emit the composer's sentence.
     tactic = TacticalMotif("fork", ["e5", "c6", "g6"], ["Ne5", "Nc6", "Qg6"], False, SENTINEL)

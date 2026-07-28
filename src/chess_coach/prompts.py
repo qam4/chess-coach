@@ -8,6 +8,7 @@ from chess_coach.coaching_phrases import (
     describe_hanging,
     describe_king_safety,
     describe_pawn_structure,
+    describe_placement,
     describe_tactic,
     describe_threat,
     king_safety_relevant,
@@ -397,6 +398,18 @@ def _format_eval_breakdown(report: PositionReport) -> str:
     )
 
 
+def _format_placement(fen: str) -> str | None:
+    """Format the explicit piece-placement section, or None if FEN is bad.
+
+    Gives the model the board as plain text (it can't reliably read the FEN),
+    so it stops inventing pieces / mis-stating what's developed.
+    """
+    text = describe_placement(_safe_board(fen))
+    if not text:
+        return None
+    return "--- Board (piece placement) ---\n" + text
+
+
 def _format_pawn_structure(report: PositionReport) -> str:
     """Format the pawn structure section from composed sentences."""
     lines = ["--- Pawn Structure ---"]
@@ -614,6 +627,12 @@ def build_rich_coaching_prompt(
     if opening_name:
         sections.append(f"--- Opening ---\n{opening_name}")
 
+    # Explicit board placement first — the model cannot reliably read FEN,
+    # so give it the pieces as plain text before any analysis.
+    placement_section = _format_placement(report.fen)
+    if placement_section is not None:
+        sections.append(placement_section)
+
     # Always-present sections
     sections.append(_format_eval_breakdown(report))
     sections.append(_format_pawn_structure(report))
@@ -742,6 +761,10 @@ def build_socratic_prompt(
     if opening_name:
         sections.append(f"--- Opening ---\n{opening_name}")
 
+    placement_section = _format_placement(report.fen)
+    if placement_section is not None:
+        sections.append(placement_section)
+
     # Qualitative, answer-free feature sections only — no top lines, no eval
     # breakdown numbers, no overall evaluation.
     threats = _format_threats(report)
@@ -844,6 +867,10 @@ def build_rich_move_evaluation_prompt(
     guidance_block = format_guidance_block(guidance or [], level=level)
     if guidance_block:
         sections.append(guidance_block)
+
+    placement_section = _format_placement(report.fen)
+    if placement_section is not None:
+        sections.append(placement_section)
 
     # Conditionally-present sections
     missed_section = _format_missed_tactics(report)
