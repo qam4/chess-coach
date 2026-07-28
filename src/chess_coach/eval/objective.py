@@ -28,9 +28,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-import chess
-
 from ..models import PositionReport
+from ..verify import check_text_fidelity
 from .benchmark import BenchmarkPosition, GroundTruthPoint
 
 # Coaching on a position within this many centipawns of zero is treated
@@ -46,15 +45,6 @@ _HARD_ERROR_PENALTY = 0.3
 
 PASS_THRESHOLD = 0.8
 
-_PIECE_NAMES = {
-    "pawn": chess.PAWN,
-    "knight": chess.KNIGHT,
-    "bishop": chess.BISHOP,
-    "rook": chess.ROOK,
-    "queen": chess.QUEEN,
-    "king": chess.KING,
-}
-
 # Coverage is measured over points that name a concrete thing the
 # response can *reference*. eval_direction has its own check; phase
 # drives appropriateness, not reference, so neither counts toward
@@ -68,53 +58,13 @@ _REFERENCEABLE_KINDS = frozenset({"hanging_piece", "tactic", "free"})
 def check_piece_hallucinations(fen: str, response: str) -> list[str]:
     """Flag "piece on square" claims that don't match the board.
 
-    Only placement claims are checked. Skips:
-    - influence verbs ("controlling/targeting/attacking/defending X")
-    - square assessments ("weak square X", "strong square X")
-
-    Moved here from scripts/probe_llm_chess.py (Task 2) so the scored
-    harness and the probe share one implementation.
+    Delegates to the single rules-tier checker (``verify.check_text_fidelity``)
+    and surfaces its placement violations, so the probe, the scored harness,
+    and the runtime coach all share one implementation (grounded-move-advice
+    Req 5.4). Influence verbs and "weak/strong square X" assessments are
+    skipped by the shared checker.
     """
-    board = chess.Board(fen)
-    issues: list[str] = []
-    response_lower = response.lower()
-
-    square_assessment_pattern = r"(?:weak|strong)\s+square\s+([a-h][1-8])"
-    assessment_spans: set[tuple[int, int]] = set()
-    for m in re.finditer(square_assessment_pattern, response_lower):
-        assessment_spans.add((m.start(), m.end()))
-
-    influence_verbs = ("controlling", "targeting", "attacking", "defending")
-
-    for piece_name, piece_type in _PIECE_NAMES.items():
-        pattern = rf"{piece_name}\s+on\s+([a-h][1-8])"
-        for match in re.finditer(pattern, response_lower):
-            square_name = match.group(1)
-
-            overlaps_assessment = any(
-                a_start <= match.start() <= a_end or a_start <= match.end() <= a_end
-                for a_start, a_end in assessment_spans
-            )
-            if overlaps_assessment:
-                continue
-
-            context_start = max(0, match.start() - 30)
-            preceding = response_lower[context_start : match.start()]
-            if any(verb in preceding for verb in influence_verbs):
-                continue
-
-            try:
-                sq = chess.parse_square(square_name)
-            except ValueError:
-                continue
-            actual = board.piece_at(sq)
-            if actual is None:
-                issues.append(f"claims {piece_name} on {square_name} — square is empty")
-            elif actual.piece_type != piece_type:
-                actual_name = chess.piece_name(actual.piece_type)
-                issues.append(f"claims {piece_name} on {square_name} — actually a {actual_name}")
-
-    return issues
+    return [f"{v.text} — {v.detail}" for v in check_text_fidelity(response, fen) if v.kind == "placement"]
 
 
 # --------------------------------------------------------------- move legality
@@ -123,38 +73,12 @@ def check_piece_hallucinations(fen: str, response: str) -> list[str]:
 def check_move_validity(fen: str, response: str) -> list[str]:
     """Flag clearly-illegal moves mentioned in the response.
 
-    Tension: a bare pawn token like "e5" is indistinguishable from a
-    *square reference* ("the e5 square is weak"), so flagging it as an
-    illegal move would produce false positives that erode trust. We
-    therefore only flag tokens that are unambiguously move notation —
-    a piece letter (K/Q/R/B/N), a capture (x), or castling (O-O) — when
-    python-chess reports them illegal. Bare pawn-square tokens are left
-    alone (the hallucination check and the judge cover the rest).
-
-    Moved here from scripts/probe_llm_chess.py and tightened (Task 2).
+    Delegates to the shared checker (Req 5.4). A bare pawn token like "e5" is
+    a square reference, not a move, so the shared checker only flags tokens
+    that are unambiguously move notation (piece letter, capture, castling, or
+    a coordinate "from-to").
     """
-    board = chess.Board(fen)
-    issues: list[str] = []
-
-    san_pattern = r"\b([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?)\b"
-    for match in re.finditer(san_pattern, response):
-        move_str = match.group(1)
-        clearly_a_move = move_str[0] in "KQRBNO" or "x" in move_str
-        try:
-            move = board.parse_san(move_str)
-        except chess.IllegalMoveError:
-            # Parsed as well-formed notation but not legal here. Only
-            # flag if it's unmistakably a move (not a bare square ref).
-            if clearly_a_move:
-                issues.append(f"{move_str} is not legal in this position")
-        except (chess.InvalidMoveError, chess.AmbiguousMoveError, ValueError):
-            # Unparseable / ambiguous — could be prose or a future move.
-            pass
-        else:
-            if move not in board.legal_moves:
-                issues.append(f"{move_str} is not legal in this position")
-
-    return issues
+    return [f"{v.text} — {v.detail}" for v in check_text_fidelity(response, fen) if v.kind == "illegal_move"]
 
 
 # --------------------------------------------------------------- eval direction

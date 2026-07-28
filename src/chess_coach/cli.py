@@ -156,7 +156,7 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, 
 
                 t0 = time.perf_counter()
                 if isinstance(engine, CoachingEngine) and engine.coaching_available:
-                    report = engine.get_position_report(fen, multipv=coaching_cfg.get("top_moves", 3))
+                    report = engine.get_position_report(fen, multipv=coaching_cfg.get("top_moves", 5))
                     opening = lookup_fen(fen)
                     coaching_text = generate_position_coaching(report, level=use_level, opening=opening)
                     best_line = report.top_lines[0] if report.top_lines else None
@@ -221,13 +221,14 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, 
             engine=engine,
             llm=llm,
             depth=depth or engine_cfg.get("depth", 18),
-            top_moves=coaching_cfg.get("top_moves", 3),
+            top_moves=coaching_cfg.get("top_moves", 5),
             level=level or coaching_cfg.get("level", "intermediate"),
             max_tokens=llm_cfg.get("max_tokens", 512),
             temperature=llm_cfg.get("temperature", 0.7),
             book_path=_resolve_book_path(engine_cfg),
             template_only=coaching_cfg.get("template_only", False),
             guidance=coaching_cfg.get("guidance", False),
+            constrain_moves=coaching_cfg.get("constrain_moves", True),
             guidance_max=coaching_cfg.get("guidance_max", 3),
         )
 
@@ -451,7 +452,7 @@ def serve(ctx: click.Context, port: int) -> None:
         engine=engine,
         llm=llm,
         depth=engine_cfg.get("depth", 18),
-        top_moves=coaching_cfg.get("top_moves", 3),
+        top_moves=coaching_cfg.get("top_moves", 5),
         level=coaching_cfg.get("level", "intermediate"),
         max_tokens=llm_cfg.get("max_tokens", 512),
         temperature=llm_cfg.get("temperature", 0.7),
@@ -460,6 +461,7 @@ def serve(ctx: click.Context, port: int) -> None:
         template_only=coaching_cfg.get("template_only", False),
         guidance=coaching_cfg.get("guidance", False),
         guidance_max=coaching_cfg.get("guidance_max", 3),
+        constrain_moves=coaching_cfg.get("constrain_moves", True),
     )
 
     app = create_app(coach)

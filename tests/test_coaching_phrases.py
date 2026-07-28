@@ -7,19 +7,25 @@ Covers composer totality/determinism (Property 1/2), policy invariance
 
 from __future__ import annotations
 
+import dataclasses
+
 import chess
 from hypothesis import given
 from hypothesis import strategies as st
 
 from chess_coach.coaching_phrases import (
+    build_move_menu,
+    classify_drop,
     describe_eval,
     describe_hanging,
     describe_king_safety,
+    describe_move_menu,
     describe_pawn_structure,
     describe_placement,
     describe_tactic,
     describe_threat,
     king_safety_relevant,
+    minor_is_developed,
     select_tactics,
     suppress_threats_echoing_tactics,
 )
@@ -29,6 +35,7 @@ from chess_coach.models import (
     KingSafety,
     PawnFeatures,
     PositionReport,
+    PVLine,
     TacticalMotif,
     Threat,
 )
@@ -277,3 +284,166 @@ def test_property_select_tactics_idempotent_and_deduped(ts: list[TacticalMotif])
     once = select_tactics(ts)
     twice = select_tactics(once)
     assert once == twice
+
+
+# --------------------------------------------------------------- unit: move menu
+
+
+def _line(uci: str, eval_cp: int, theme: str = "general play", depth: int = 18) -> PVLine:
+    return PVLine(depth=depth, eval_cp=eval_cp, moves=[uci], theme=theme)
+
+
+def _report_with_lines(fen: str, lines: list[PVLine]) -> PositionReport:
+    return dataclasses.replace(_report(fen=fen), top_lines=lines)
+
+
+def test_classify_drop_boundaries() -> None:
+    # Single source of the cp boundaries: <=50 sound, 51-100 dubious, >100 blunder.
+    assert classify_drop(0) == "sound"
+    assert classify_drop(50) == "sound"
+    assert classify_drop(51) == "dubious"
+    assert classify_drop(100) == "dubious"
+    assert classify_drop(101) == "blunder"
+    assert classify_drop(10_000) == "blunder"
+
+
+def test_build_move_menu_tags_and_drops() -> None:
+    # White to move; best-first lines. Drops from best: 0, 30, 60, 120.
+    report = _report_with_lines(
+        DA_FEN,
+        [
+            _line("d2d4", 40, "central pawn break"),
+            _line("c3d5", 10, "piece development"),
+            _line("f1c4", -20, "piece development"),
+            _line("d1h5", -80, "king attack"),
+        ],
+    )
+    menu = build_move_menu(report)
+    assert [m.tag for m in menu] == ["best", "sound", "dubious", "blunder"]
+    assert [m.drop_cp for m in menu] == [0, 30, 60, 120]
+    # SAN is rendered from the board (not raw UCI) for legal moves.
+    assert menu[0].san == "d4"
+    assert menu[1].san == "Nd5"
+    assert menu[0].theme == "central pawn break"
+
+
+def test_build_move_menu_empty_when_no_lines() -> None:
+    assert build_move_menu(_report(fen=DA_FEN)) == []
+
+
+def test_build_move_menu_single_line_is_best() -> None:
+    menu = build_move_menu(_report_with_lines(DA_FEN, [_line("d2d4", 40)]))
+    assert len(menu) == 1
+    assert menu[0].tag == "best"
+    assert menu[0].drop_cp == 0
+
+
+def test_build_move_menu_skips_lines_without_moves() -> None:
+    report = _report_with_lines(
+        DA_FEN,
+        [_line("d2d4", 40), PVLine(depth=18, eval_cp=0, moves=[], theme="")],
+    )
+    menu = build_move_menu(report)
+    assert len(menu) == 1
+
+
+def test_build_move_menu_black_to_move_perspective() -> None:
+    # Black to move: drop is still best[0] - line[i] with index 0 = best,
+    # regardless of side. Bxc3 best, then Ba5 (drop 50 -> sound), Bd6 (drop 120).
+    report = _report_with_lines(
+        PIN_FEN,
+        [_line("b4c3", 200), _line("b4a5", 150), _line("b4d6", 80)],
+    )
+    menu = build_move_menu(report)
+    assert [m.tag for m in menu] == ["best", "sound", "blunder"]
+    assert [m.drop_cp for m in menu] == [0, 50, 120]
+    assert menu[0].san == "Bxc3+"
+
+
+def test_build_move_menu_clamps_negative_drop() -> None:
+    # Defensive: a later line rated higher than index 0 must not yield a
+    # negative drop (engine sorts best-first, but the menu never goes < 0).
+    report = _report_with_lines(DA_FEN, [_line("d2d4", 10), _line("g1f3", 40)])
+    menu = build_move_menu(report)
+    assert menu[1].drop_cp == 0
+    assert menu[1].tag == "sound"
+
+
+def test_describe_move_menu_renders_block_with_tags() -> None:
+    report = _report_with_lines(DA_FEN, [_line("d2d4", 40, "central pawn break")])
+    text = describe_move_menu(build_move_menu(report))
+    assert text is not None
+    assert "Candidate moves (engine-verified)" in text
+    assert "d4" in text
+    assert "best" in text
+    assert "central pawn break" in text
+
+
+def test_describe_move_menu_none_when_empty() -> None:
+    assert describe_move_menu([]) is None
+
+
+def test_describe_move_menu_omits_empty_theme_suffix() -> None:
+    # The engine sometimes returns an empty theme for multipv lines; the menu
+    # must not render a dangling "— " in that case.
+    report = _report_with_lines(DA_FEN, [_line("d2d4", 40, theme="")])
+    text = describe_move_menu(build_move_menu(report))
+    assert text is not None
+    assert "— " not in text
+    assert text.rstrip().endswith("best)")
+
+
+def test_minor_is_developed() -> None:
+    board = chess.Board(chess.STARTING_FEN)
+    assert minor_is_developed(board, "b1") is False  # knight on home square
+    assert minor_is_developed(board, "e2") is None  # a pawn, not a minor
+    assert minor_is_developed(board, "e4") is None  # empty square
+    italian = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 5")
+    assert minor_is_developed(italian, "f6") is True  # Nf6 developed
+    assert minor_is_developed(italian, "c8") is False  # bishop still home
+
+
+# --------------------------------------------------------------- property: move menu
+
+
+@st.composite
+def _pvlines(draw: st.DrawFn) -> list[PVLine]:
+    n = draw(st.integers(min_value=0, max_value=6))
+    themes = ["general play", "king attack", "material win", "piece development"]
+    return [
+        PVLine(
+            depth=draw(st.integers(min_value=1, max_value=40)),
+            eval_cp=draw(st.integers(min_value=-5000, max_value=5000)),
+            moves=["d2d4"],
+            theme=draw(st.sampled_from(themes)),
+        )
+        for _ in range(n)
+    ]
+
+
+@given(_pvlines())
+def test_property_build_move_menu_is_total(lines: list[PVLine]) -> None:
+    # Property 1/3: never raises; drops are non-negative; index 0 is always best.
+    report = _report_with_lines(DA_FEN, lines)
+    menu = build_move_menu(report)
+    assert len(menu) == len(lines)
+    assert all(m.drop_cp >= 0 for m in menu)
+    if menu:
+        assert menu[0].tag == "best"
+    # describe_move_menu tolerates any menu.
+    text = describe_move_menu(menu)
+    assert (text is None) == (len(menu) == 0)
+
+
+@given(_pvlines())
+def test_property_build_move_menu_is_deterministic(lines: list[PVLine]) -> None:
+    # Property 1: identical input -> identical tags/drops.
+    report = _report_with_lines(DA_FEN, lines)
+    assert build_move_menu(report) == build_move_menu(report)
+
+
+@given(st.integers(min_value=-5000, max_value=5000), st.integers(min_value=0, max_value=5000))
+def test_property_tag_monotonic_in_drop(base: int, extra: int) -> None:
+    # Property 2: a larger drop never yields a safer tag.
+    order = {"sound": 0, "dubious": 1, "blunder": 2}
+    assert order[classify_drop(base if base >= 0 else 0)] <= order[classify_drop((base if base >= 0 else 0) + extra)]

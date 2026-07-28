@@ -36,10 +36,17 @@ llm:
   timeout: 300
 
 coaching:
-  # Number of top moves to analyze and explain
-  top_moves: 3
+  # Number of engine candidate moves to analyze (the multipv width). This is
+  # also the size of the soundness-tagged move menu the coach recommends from;
+  # a wider menu gives the coach more sound options and improves the output
+  # fidelity checker's unsound-move recall.
+  top_moves: 5
   # Coaching style: "beginner", "intermediate", "advanced"
   level: "intermediate"
+  # Constrain the coach to name only "best"/"sound" moves from the engine
+  # candidate menu (never inventing or recommending a dubious/blunder move).
+  # Default on — the primary guard against unsound move advice.
+  constrain_moves: true
   # Inject pedagogy guidance (named principles/plans) into coaching prompts.
   # Helps capable reasoning models; the model-capability profiler recommends a
   # value PER MODEL (see docs/model-profiler.md). Default off = no change.

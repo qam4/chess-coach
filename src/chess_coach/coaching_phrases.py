@@ -20,6 +20,8 @@ Design rules (see ``.kiro/specs/client-side-coaching-text``):
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import chess
 
 from chess_coach.models import (
@@ -90,6 +92,25 @@ def _fmt_move(uci: str) -> str:
     """Render a UCI move for humans: "e1e8" -> "e1-e8"; passthrough otherwise."""
     if len(uci) >= 4 and uci[:2].isalnum() and uci[2:4].isalnum():
         return f"{uci[:2]}-{uci[2:4]}"
+    return uci
+
+
+def uci_to_san(fen: str, uci: str) -> str:
+    """Convert a single UCI move to SAN for the given position.
+
+    Models read SAN — which names the piece (e.g. ``Ke7``, ``O-O``, ``Qg4``) —
+    far more reliably than raw coordinates like ``e1g1``. Falls back to the raw
+    UCI string if the move can't be parsed or is illegal, so a bad datum
+    degrades gracefully instead of raising. Shared by the prompt renderer and
+    the move menu so there is one converter.
+    """
+    try:
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(uci)
+        if move in board.legal_moves:
+            return board.san(move)
+    except (ValueError, AssertionError):
+        pass
     return uci
 
 
@@ -251,6 +272,28 @@ _PIECE_LETTER = {
     chess.PAWN: "P",
 }
 _PIECE_ORDER = [chess.KING, chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN]
+
+
+def minor_is_developed(board: chess.Board | None, square: str) -> bool | None:
+    """Whether the minor piece on ``square`` has left its starting square.
+
+    Returns ``True`` if a knight/bishop stands on ``square`` off its home
+    square (developed), ``False`` if it is still on a home square, and ``None``
+    if the square is empty or does not hold a knight/bishop. Shared by
+    :func:`describe_placement` and the output fidelity checker so the
+    "developed vs still-home" fact has one source.
+    """
+    if board is None:
+        return None
+    try:
+        sq = chess.parse_square(square)
+    except ValueError:
+        return None
+    piece = board.piece_at(sq)
+    if piece is None or piece.piece_type not in (chess.KNIGHT, chess.BISHOP):
+        return None
+    start = _MINOR_START_SQUARES[(piece.color, piece.piece_type)]
+    return sq not in start
 
 
 def describe_placement(board: chess.Board | None) -> str:
@@ -433,3 +476,88 @@ def king_safety_relevant(report: PositionReport) -> bool:
         return True
     piece_count = len(board.piece_map())
     return piece_count > _KING_SAFETY_ENDGAME_PIECE_FLOOR
+
+
+# ---------------------------------------------------------------------------
+# Move menu + soundness tagging (structured — no prose, no engine calls)
+# ---------------------------------------------------------------------------
+
+# Single source of the centipawn boundaries for "how far from best is still
+# acceptable". Shared by the move-menu tags below and ``Coach.classify_move``
+# (good/inaccuracy/blunder), so the numbers live in exactly one place.
+SOUND_MAX_DROP_CP = 50
+DUBIOUS_MAX_DROP_CP = 100
+
+
+def classify_drop(drop_cp: int) -> str:
+    """Soundness tag for a candidate move from its eval-drop-from-best.
+
+    ``sound`` (drop ≤ 50 cp), ``dubious`` (51–100 cp), ``blunder`` (> 100 cp).
+    The top line is tagged ``best`` by :func:`build_move_menu` regardless of
+    drop; this function classifies the non-best candidates. Total: any integer
+    (including negatives, which callers clamp to 0) yields a tag.
+    """
+    if drop_cp <= SOUND_MAX_DROP_CP:
+        return "sound"
+    if drop_cp <= DUBIOUS_MAX_DROP_CP:
+        return "dubious"
+    return "blunder"
+
+
+@dataclass(frozen=True)
+class MenuMove:
+    """One engine candidate move, tagged for soundness.
+
+    ``san`` is the first move of the line rendered in SAN (falls back to the
+    raw UCI when unparseable); ``uci`` is that same first move in coordinate
+    form (used by the fidelity checker to match named moves). ``drop_cp`` is
+    the eval-drop from the best line (≥ 0); ``tag`` is
+    ``best``/``sound``/``dubious``/``blunder``; ``theme`` is the engine's
+    per-line label, passed through as-is.
+    """
+
+    san: str
+    uci: str
+    eval_cp: int
+    drop_cp: int
+    tag: str
+    theme: str
+
+
+def build_move_menu(report: PositionReport) -> list[MenuMove]:
+    """Turn the engine's ``top_lines`` into a soundness-tagged candidate menu.
+
+    The engine sorts lines best-first for the side to move, so the drop is
+    ``top_lines[0].eval_cp - line.eval_cp`` (clamped to ≥ 0) and index 0 is
+    always ``best`` — the same frame the move-comparator and critical-moment
+    logic use, so no per-side sign handling is needed. Lines with no moves are
+    skipped. Pure and total: an empty ``top_lines`` yields an empty menu.
+    """
+    lines = [pv for pv in report.top_lines if pv.moves]
+    if not lines:
+        return []
+    best_eval = lines[0].eval_cp
+    menu: list[MenuMove] = []
+    for i, pv in enumerate(lines):
+        uci = pv.moves[0]
+        san = uci_to_san(report.fen, uci)
+        drop = max(0, best_eval - pv.eval_cp)
+        tag = "best" if i == 0 else classify_drop(drop)
+        menu.append(MenuMove(san=san, uci=uci, eval_cp=pv.eval_cp, drop_cp=drop, tag=tag, theme=pv.theme))
+    return menu
+
+
+def describe_move_menu(menu: list[MenuMove]) -> str | None:
+    """Render the tagged menu as a compact prompt section, or None if empty.
+
+    Deliberately compact — first move + eval + soundness tag + theme, not the
+    full deep line — to keep the prompt readable for small models while still
+    telling the coach which moves are sound and which are blunders.
+    """
+    if not menu:
+        return None
+    lines = ["--- Candidate moves (engine-verified) ---"]
+    for m in menu:
+        suffix = f" — {m.theme}" if m.theme else ""
+        lines.append(f"{m.san}  ({m.eval_cp:+d} cp, {m.tag}){suffix}")
+    return "\n".join(lines)

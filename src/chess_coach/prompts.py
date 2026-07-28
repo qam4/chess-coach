@@ -5,8 +5,10 @@ from __future__ import annotations
 import chess
 
 from chess_coach.coaching_phrases import (
+    build_move_menu,
     describe_hanging,
     describe_king_safety,
+    describe_move_menu,
     describe_pawn_structure,
     describe_placement,
     describe_tactic,
@@ -14,6 +16,7 @@ from chess_coach.coaching_phrases import (
     king_safety_relevant,
     select_tactics,
     suppress_threats_echoing_tactics,
+    uci_to_san,
 )
 from chess_coach.models import (
     ComparisonReport,
@@ -263,10 +266,24 @@ themselves (e.g., "ask yourself: are all my pieces defended?").
 student can reuse in future games.
 - Acknowledge strengths: If the student's position has good aspects, mention \
 them before discussing problems.
-{level_instructions}\
+- Notation: When you name a move, always use standard algebraic notation \
+(SAN, e.g. Nf3, O-O, exd5) — never coordinates or "from-to" phrasing.
+{move_sourcing}{level_instructions}\
 {critical_section}\
 Keep your response concise (under 200 words).\
 """
+
+# Gated move-sourcing rule (Req 3.1, 3.2): appended to the coaching
+# instructions only when the constraint is on AND the engine returned a
+# candidate menu to name from. Keeps the coach's concrete moves engine-sound.
+MOVE_SOURCING_RULE = (
+    "- Choosing a move: When you recommend a specific move, name ONLY a move "
+    'listed as "best" or "sound" in the candidate menu above. You may instead '
+    'give a plan without naming a move (e.g. "castle to safety", "improve your '
+    'worst-placed piece"). Never name a move that is not in the menu, and never '
+    'recommend one tagged "dubious" or "blunder" (mention those only to warn '
+    "against them).\n"
+)
 
 RICH_MOVE_EVALUATION_PROMPT = """\
 {system}
@@ -338,25 +355,6 @@ Keep your response concise (under 100 words).\
 # ---------------------------------------------------------------------------
 # Rich prompt builder helpers
 # ---------------------------------------------------------------------------
-
-
-def _uci_to_san(fen: str, uci: str) -> str:
-    """Convert a single UCI move to SAN for the given position.
-
-    Models read SAN — which names the piece (e.g. ``Ke7``, ``O-O``, ``Qg4``) —
-    far more reliably than raw coordinates like ``e1g1`` (the move-feedback eval
-    showed the model frequently misidentifying the moved piece from UCI). Falls
-    back to the raw UCI string if the move can't be parsed or is illegal, so a
-    bad datum degrades gracefully instead of raising.
-    """
-    try:
-        board = chess.Board(fen)
-        move = chess.Move.from_uci(uci)
-        if move in board.legal_moves:
-            return board.san(move)
-    except (ValueError, AssertionError):
-        pass
-    return uci
 
 
 def _uci_line_to_san(fen: str, ucis: list[str]) -> str:
@@ -505,18 +503,6 @@ def _format_threat_map(report: PositionReport) -> str | None:
     return "\n".join(lines)
 
 
-def _format_top_lines(report: PositionReport) -> str:
-    """Format the top engine lines section, skipping empty lines."""
-    lines = ["--- Top Engine Lines ---"]
-    for i, pv in enumerate(report.top_lines, 1):
-        if not pv.moves:
-            continue
-        moves_str = _uci_line_to_san(report.fen, pv.moves)
-        theme_str = f" — theme: {pv.theme}" if pv.theme else ""
-        lines.append(f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str}{theme_str}")
-    return "\n".join(lines)
-
-
 def _build_level_instructions(level: str) -> str:
     """Build level-adaptive coaching instructions.
 
@@ -578,6 +564,7 @@ def build_rich_coaching_prompt(
     level: str = "intermediate",
     opening_name: str | None = None,
     guidance: list[GuidanceEntry] | None = None,
+    constrain_moves: bool = True,
 ) -> str:
     """Build a rich coaching prompt from a PositionReport.
 
@@ -658,8 +645,12 @@ def build_rich_coaching_prompt(
     if threat_map_section is not None:
         sections.append(threat_map_section)
 
-    # Top lines always present
-    sections.append(_format_top_lines(report))
+    # Candidate move menu (engine-verified, soundness-tagged). Replaces the
+    # raw "Top Engine Lines" — the coach names concrete moves from this menu.
+    menu = build_move_menu(report)
+    menu_section = describe_move_menu(menu)
+    if menu_section is not None:
+        sections.append(menu_section)
 
     # Critical moment
     if report.critical_moment:
@@ -675,6 +666,10 @@ def build_rich_coaching_prompt(
     # Level-adaptive instructions
     level_instructions = _build_level_instructions(level)
 
+    # Move-sourcing rule only when the constraint is on and there is a menu to
+    # name from (an empty menu means no sound move to recommend).
+    move_sourcing = MOVE_SOURCING_RULE if (constrain_moves and menu) else ""
+
     return RICH_COACHING_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,
         level=level,
@@ -683,6 +678,7 @@ def build_rich_coaching_prompt(
         perspective=_format_perspective(report.fen),
         sections="\n\n".join(sections),
         level_instructions=level_instructions,
+        move_sourcing=move_sourcing,
         critical_section=critical_section,
     )
 
@@ -903,9 +899,9 @@ def build_rich_move_evaluation_prompt(
         level=level,
         fen=report.fen,
         perspective=_format_perspective(report.fen),
-        user_move=_uci_to_san(report.fen, report.user_move),
+        user_move=uci_to_san(report.fen, report.user_move),
         user_eval_cp=report.user_eval_cp,
-        best_move=_uci_to_san(report.fen, report.best_move),
+        best_move=uci_to_san(report.fen, report.best_move),
         best_eval_cp=report.best_eval_cp,
         eval_drop_cp=report.eval_drop_cp,
         classification=report.classification,

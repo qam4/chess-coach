@@ -58,6 +58,10 @@ class SelectionInput:
     eco: str | None
     level: str
     max_entries: int
+    preferred_features: frozenset[str] = frozenset()
+    """Soft ranking bias toward these features (e.g. the recommended move's
+    theme). Additive only — never admits or drops an entry, just reorders
+    ties (grounded-move-advice Req 4.2)."""
 
     def __post_init__(self) -> None:
         if self.max_entries < 1:
@@ -91,15 +95,25 @@ def _relevance(entry: GuidanceEntry, inp: SelectionInput) -> int:
     return score
 
 
-def _sort_key(entry: GuidanceEntry, inp: SelectionInput) -> tuple[int, int, str]:
+def _sort_key(entry: GuidanceEntry, inp: SelectionInput) -> tuple[int, int, int, str]:
     """Total, deterministic ordering key (Req 2.4, 2.6).
 
     Primary: relevance descending (more matched keys first) — negated so a
-    plain ascending sort puts the most relevant first. Secondary: type
-    order plan > pattern > principle. Tie-break: ascending ``id`` for a
-    stable, total order.
+    plain ascending sort puts the most relevant first. Secondary: a soft
+    bias toward the recommended move's theme (``preferred_features``),
+    negated so a preferred entry sorts earlier among equally-relevant ones
+    — additive, so it only breaks ties and never changes which entries are
+    eligible (grounded-move-advice Req 4.2). Tertiary: type order
+    plan > pattern > principle. Tie-break: ascending ``id`` for a stable,
+    total order.
     """
-    return (-_relevance(entry, inp), _TYPE_RANK.get(entry.type, _TYPE_RANK_FALLBACK), entry.id)
+    preferred_bonus = len(entry.features & inp.preferred_features)
+    return (
+        -_relevance(entry, inp),
+        -preferred_bonus,
+        _TYPE_RANK.get(entry.type, _TYPE_RANK_FALLBACK),
+        entry.id,
+    )
 
 
 def select(resource: KnowledgeResource, inp: SelectionInput) -> list[GuidanceEntry]:
@@ -152,6 +166,7 @@ def select_for_position(
     report: PositionReport,
     level: str,
     max_entries: int,
+    preferred_features: frozenset[str] = frozenset(),
 ) -> tuple[list[GuidanceEntry], str | None]:
     """Select guidance for an analyzed position, guarding malformed input.
 
@@ -182,6 +197,7 @@ def select_for_position(
         eco=eco_context(report.fen),
         level=level,
         max_entries=max_entries,
+        preferred_features=preferred_features,
     )
     return select(resource, inp), None
 
@@ -191,6 +207,7 @@ def guidance_for_position(
     report: PositionReport,
     level: str,
     max_entries: int,
+    preferred_features: frozenset[str] = frozenset(),
 ) -> list[GuidanceEntry]:
     """The single source of guidance for BOTH prompts (Req 4.1, 4.5).
 
@@ -210,5 +227,5 @@ def guidance_for_position(
     ``teaches_principle`` criterion (Req 3.6, 4.6). Callers needing the error
     indication should use :func:`select_for_position` directly.
     """
-    entries, _error = select_for_position(resource, report, level, max_entries)
+    entries, _error = select_for_position(resource, report, level, max_entries, preferred_features)
     return entries

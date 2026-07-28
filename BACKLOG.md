@@ -12,6 +12,39 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
 ## Recently shipped
 
+- **Grounded move advice — SHIPPED (2026-07-28).** Spec
+  `.kiro/specs/grounded-move-advice/`. The coach now names concrete moves
+  only from an engine-verified, soundness-tagged candidate menu. Input
+  side: `coaching_phrases.build_move_menu` turns the engine's `top_lines`
+  into `MenuMove`s tagged `best`/`sound`/`dubious`/`blunder` from
+  eval-drop-from-best (thresholds shared with `Coach.classify_move`), the
+  rich prompt renders that compact menu (SAN + eval + tag + theme) in place
+  of raw "Top Engine Lines", and a gated `MOVE_SOURCING_RULE` (default on
+  via `coaching.constrain_moves`) forbids naming a move that is not
+  `best`/`sound`. Output side: `verify.check_coaching_fidelity` +
+  `check_text_fidelity` return categorized `Violation`s (illegal /
+  unsound / placement / development / empty_source), precision-first and
+  total; the eval harness's `objective.py` detector was consolidated onto
+  it (one implementation). SAN is used everywhere the coach names a move.
+  A live run on the Italian position confirmed the fix: the coach
+  recommended `O-O` (sound), no phantom `Nxe4`, no invented pieces.
+  `top_moves` (multipv) default raised 3→5. Remaining (this spec):
+  Task 7 — wire the fidelity checker as a Layer-1 A/B metric and run the
+  constraint off-vs-on A/B on the small model and qwen3:14b.
+
+- **Engine gap — per-line theme is hardcoded empty (found 2026-07-28).**
+  Blunder's `CoachJson.cpp::serialize_top_lines` emits `"theme": ""` for
+  every multipv line and never calls the existing (dead)
+  `PositionAnalyzer::label_line_theme`, which would return a real label
+  (worst case `"general play"`). Effect: the coach's candidate-menu theme
+  column is blank and the grounded-move-advice theme→knowledge bias
+  (Req 4) no-ops in production — it degrades gracefully to feature/ECO
+  guidance selection, which already works. Low priority: the fix is a
+  small, additive Blunder change (thread the root board from `r.fen` into
+  `serialize_top_lines`, call `label_line_theme(board, pv.moves)`) plus a
+  rebuild + its test suite. Deferred because guidance selection does not
+  depend on it.
+
 - **Client-side coaching-text composition — SHIPPED (2026-07-02).**
   Spec `.kiro/specs/client-side-coaching-text/`. The engine's prose
   `description` fields (tactics / threats / king-safety) are no longer

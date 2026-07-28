@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from chess_coach.prompts import SYSTEM_PROMPT, build_coaching_prompt
@@ -54,6 +56,7 @@ class TestBuildCoachingPrompt:
 # BUG-011 regression: the rich prompts must state side-to-move / student color
 # --------------------------------------------------------------------------
 
+from chess_coach.coaching_phrases import uci_to_san as _uci_to_san  # noqa: E402
 from chess_coach.models import (  # noqa: E402
     ComparisonReport,
     EvalBreakdown,
@@ -67,7 +70,6 @@ from chess_coach.models import (  # noqa: E402
 from chess_coach.prompts import (  # noqa: E402
     _format_perspective,
     _uci_line_to_san,
-    _uci_to_san,
     build_engine_move_explanation_prompt,
     build_rich_coaching_prompt,
     build_rich_move_evaluation_prompt,
@@ -317,3 +319,64 @@ class TestSocraticPrompt:
     def test_grounding_rules_present(self) -> None:
         prompt = build_socratic_prompt(_socratic_report(), "beginner")
         assert "Never reveal or name the best move" in prompt
+
+
+# --------------------------------------------------------------------------
+# Candidate move menu + move-sourcing constraint (grounded-move-advice spec)
+# --------------------------------------------------------------------------
+
+
+def _report_with_lines(fen: str, lines: list[PVLine]) -> PositionReport:
+    return dataclasses.replace(_position_report(fen), top_lines=lines)
+
+
+_MENU_LINES = [
+    PVLine(depth=18, eval_cp=30, moves=["e2e4"], theme="central pawn break"),
+    PVLine(depth=18, eval_cp=10, moves=["g1f3"], theme="piece development"),
+    PVLine(depth=18, eval_cp=-80, moves=["a2a3"], theme="general play"),
+]
+
+
+def test_rich_prompt_shows_candidate_menu_with_tags() -> None:
+    prompt = build_rich_coaching_prompt(_report_with_lines(WHITE_TO_MOVE_FEN, _MENU_LINES))
+    assert "Candidate moves (engine-verified)" in prompt
+    assert "Top Engine Lines" not in prompt  # menu replaces the raw lines
+    # SAN, not coordinates.
+    assert "e4" in prompt and "Nf3" in prompt
+    assert "e2e4" not in prompt
+    # Soundness tags present.
+    assert "best" in prompt and "sound" in prompt and "blunder" in prompt
+
+
+def test_rich_prompt_move_sourcing_rule_present_when_constrained() -> None:
+    prompt = build_rich_coaching_prompt(_report_with_lines(WHITE_TO_MOVE_FEN, _MENU_LINES), constrain_moves=True)
+    assert "Choosing a move" in prompt
+    assert "not in the menu" in prompt
+
+
+def test_rich_prompt_move_sourcing_rule_absent_when_unconstrained() -> None:
+    prompt = build_rich_coaching_prompt(_report_with_lines(WHITE_TO_MOVE_FEN, _MENU_LINES), constrain_moves=False)
+    assert "Choosing a move" not in prompt
+    # The menu is still shown; only the restriction is dropped.
+    assert "Candidate moves (engine-verified)" in prompt
+
+
+def test_rich_prompt_san_instruction_always_present() -> None:
+    report = _report_with_lines(WHITE_TO_MOVE_FEN, _MENU_LINES)
+    for constrain in (True, False):
+        prompt = build_rich_coaching_prompt(report, constrain_moves=constrain)
+        assert "standard algebraic notation" in prompt
+
+
+def test_rich_prompt_grounding_rules_retained() -> None:
+    prompt = build_rich_coaching_prompt(_report_with_lines(WHITE_TO_MOVE_FEN, _MENU_LINES))
+    assert "Never invent" in prompt
+    assert "Only use information from the engine data" in prompt
+
+
+def test_rich_prompt_no_menu_no_sourcing_rule_when_lines_empty() -> None:
+    # Empty top_lines -> no menu -> the move-sourcing rule is omitted even
+    # when the constraint is on (there is no sound move to name).
+    prompt = build_rich_coaching_prompt(_position_report(WHITE_TO_MOVE_FEN), constrain_moves=True)
+    assert "Candidate moves (engine-verified)" not in prompt
+    assert "Choosing a move" not in prompt

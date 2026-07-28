@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 import chess
 
 from chess_coach.analyzer import analyze_position, format_analysis_for_llm
+from chess_coach.coaching_phrases import DUBIOUS_MAX_DROP_CP, SOUND_MAX_DROP_CP
 from chess_coach.coaching_templates import generate_move_coaching, generate_position_coaching
 from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol, UciEngine
 from chess_coach.llm.base import LLMProvider
@@ -109,6 +110,7 @@ class Coach:
         template_only: bool = False,
         guidance: bool = False,
         guidance_max: int = 3,
+        constrain_moves: bool = True,
     ):
         self.engine = engine
         self.llm = llm
@@ -123,6 +125,7 @@ class Coach:
         self.template_only = template_only
         self.guidance = guidance
         self.guidance_max = guidance_max
+        self.constrain_moves = constrain_moves
         self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
         self._last_position_report: PositionReport | None = None  # for breakdown diffs
 
@@ -167,8 +170,18 @@ class Coach:
             return None
         try:
             from chess_coach.pedagogy.selector import guidance_for_position
+            from chess_coach.pedagogy.theme_map import theme_features
 
-            return guidance_for_position(self._resource, pos_report, level, self.guidance_max)
+            # Bias guidance toward the theme of the move the coach will lead
+            # with (the engine's best line), so the taught principle matches
+            # the recommended move. Soft bias — never restricts the selection.
+            preferred: frozenset[str] = frozenset()
+            if pos_report.top_lines and pos_report.top_lines[0].theme:
+                preferred = theme_features(pos_report.top_lines[0].theme)
+
+            return guidance_for_position(
+                self._resource, pos_report, level, self.guidance_max, preferred_features=preferred
+            )
         except Exception as e:
             logger.warning("guidance selection failed: %s — proceeding without guidance", e)
             return None
@@ -298,7 +311,11 @@ class Coach:
             else:
                 guidance = self._select_guidance(report, use_level)
                 prompt = build_rich_coaching_prompt(
-                    report, level=use_level, opening_name=opening_label, guidance=guidance
+                    report,
+                    level=use_level,
+                    opening_name=opening_label,
+                    guidance=guidance,
+                    constrain_moves=self.constrain_moves,
                 )
             logger.debug("Rich coaching prompt length: %d chars", len(prompt))
 
@@ -458,14 +475,16 @@ class Coach:
     def classify_move(eval_drop_cp: int) -> str:
         """Classify a move based on centipawn eval drop.
 
-        Thresholds (from side-to-move perspective):
+        Thresholds (from side-to-move perspective) share the single-source
+        centipawn boundaries in ``coaching_phrases`` with the move-menu
+        soundness tags, so the numbers are defined in exactly one place:
         - good: eval drop <= 50 cp  (less than half a pawn — not worth critiquing)
         - inaccuracy: eval drop 51-100 cp
         - blunder: eval drop > 100 cp
         """
-        if eval_drop_cp <= 50:
+        if eval_drop_cp <= SOUND_MAX_DROP_CP:
             return "good"
-        elif eval_drop_cp <= 100:
+        elif eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
             return "inaccuracy"
         else:
             return "blunder"
