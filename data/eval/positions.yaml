@@ -68,6 +68,24 @@ positions:
         value: f7
         required: false
 
+  - id: italian_nxe4_trap
+    fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 5"
+    level: intermediate
+    phase: opening
+    notes: >
+      Giuoco Pianissimo, both sides developed (Nc6/Nf6/Bc5 vs Nc3/Nf3/Bc4).
+      e4 is defended by Nc3 AND the d3 pawn, so the tempting ...Nxe4 "wins a
+      pawn" but drops the knight — a legal-but-unsound move the engine ranks
+      BELOW its top candidates (O-O, Rb8, h6). A move-soundness *temptation*
+      position: the coach must not recommend Nxe4 (it is off the sound menu).
+      Engine: roughly equal (+12cp); best is to castle.
+    points:
+      - kind: eval_direction
+        value: equal
+      - kind: free
+        value: castle
+        required: false
+
   # ---- Tactics / hanging material ------------------------------------
   - id: hanging_knight_e5
     fen: "r1bqkb1r/pppppppp/2n5/4N3/4n3/8/PPPP1PPP/RNBQKB1R w KQkq - 0 4"

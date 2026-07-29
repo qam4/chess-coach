@@ -156,9 +156,9 @@ _SQUARE_ASSESSMENT_RE = re.compile(r"(?:weak|strong)\s+square\s+([a-h][1-8])", r
 class Violation:
     """One detected contradiction in coaching text.
 
-    ``kind`` is one of ``illegal_move`` / ``unsound_move`` / ``placement`` /
-    ``development`` / ``empty_source``; ``text`` is the offending fragment;
-    ``detail`` explains why it is wrong.
+    ``kind`` is one of ``illegal_move`` / ``unsound_move`` / ``off_menu`` /
+    ``placement`` / ``development`` / ``empty_source``; ``text`` is the
+    offending fragment; ``detail`` explains why it is wrong.
     """
 
     kind: str
@@ -183,17 +183,43 @@ def _find_legal(board: chess.Board, frm: str, to: str) -> chess.Move | None:
     return None
 
 
+def _classify_named_move(move: chess.Move, frag: str, by_uci: dict[str, MenuMove]) -> Violation | None:
+    """Judge a legal named move against the engine menu (the allowed set).
+
+    The coach is instructed to recommend ONLY ``best``/``sound`` menu moves, so:
+    - a listed move tagged ``dubious``/``blunder`` is an ``unsound_move``;
+    - a legal move NOT in the menu is ``off_menu`` (we cannot prove it
+      objectively unsound — that would need every legal move scored — but the
+      coach was told not to recommend an unlisted move, so naming one violates
+      the constraint);
+    - a listed ``best``/``sound`` move is allowed (no violation).
+
+    ``off_menu`` is only meaningful when a menu exists; the caller passes an
+    empty ``by_uci`` when there is no menu and no move is flagged off-menu.
+    """
+    hit = by_uci.get(move.uci())
+    if hit is not None:
+        if hit.tag in ("dubious", "blunder"):
+            return Violation("unsound_move", frag, f"{hit.san} is tagged {hit.tag} ({hit.eval_cp:+d}cp)")
+        return None  # best/sound — allowed
+    if by_uci:  # menu present, but this move was not listed as best/sound
+        return Violation("off_menu", frag, "not in the engine's best/sound candidate menu")
+    return None
+
+
 def _check_named_moves(
     text: str,
     board: chess.Board,
     by_uci: dict[str, MenuMove],
 ) -> list[Violation]:
-    """Flag illegal / engine-unsound moves named in the text.
+    """Flag named moves that are illegal or that the coach may not recommend.
 
-    Legal moves that are simply absent from the (bounded) menu are NOT flagged
-    — absence is not evidence of unsoundness (documented precision-first
-    choice); only a move the engine listed and tagged dubious/blunder counts
-    as ``unsound_move``.
+    Beyond illegality, this measures **constraint adherence**: the coach is
+    told to name only ``best``/``sound`` menu moves, so a named move that is
+    listed-but-dubious/blunder (``unsound_move``) or absent from the menu
+    (``off_menu``) is a violation. This does NOT claim an off-menu move is
+    objectively unsound — judging that would require scoring every legal move
+    — only that recommending an unlisted move breaks the rule we set.
     """
     out: list[Violation] = []
 
@@ -211,11 +237,12 @@ def _check_named_moves(
         if move is None:
             out.append(Violation("illegal_move", m.group(0), f"{frm}-{to} is not legal here"))
             continue
-        hit = by_uci.get(move.uci())
-        if hit is not None and hit.tag in ("dubious", "blunder"):
-            out.append(Violation("unsound_move", m.group(0), f"{hit.san} is tagged {hit.tag} ({hit.eval_cp:+d}cp)"))
+        violation = _classify_named_move(move, m.group(0), by_uci)
+        if violation is not None:
+            out.append(violation)
 
-    # SAN form — only flag illegality when the token is unmistakably a move.
+    # SAN form — only judge tokens that are unmistakably a move (a bare pawn
+    # token like "e5" may be a square reference, so it is left alone).
     for m in _SAN_RE.finditer(text):
         token = m.group(1)
         clearly_a_move = token[0] in "KQRBNO" or "x" in token
@@ -227,9 +254,11 @@ def _check_named_moves(
             continue
         except (chess.InvalidMoveError, chess.AmbiguousMoveError, ValueError):
             continue
-        hit = by_uci.get(move.uci())
-        if hit is not None and hit.tag in ("dubious", "blunder"):
-            out.append(Violation("unsound_move", token, f"{hit.san} is tagged {hit.tag} ({hit.eval_cp:+d}cp)"))
+        if not clearly_a_move:
+            continue
+        violation = _classify_named_move(move, token, by_uci)
+        if violation is not None:
+            out.append(violation)
 
     return out
 

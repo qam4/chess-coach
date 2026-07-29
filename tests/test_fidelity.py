@@ -139,8 +139,38 @@ def test_bare_square_reference_not_flagged_as_move() -> None:
 def test_empty_menu_disables_unsound_but_keeps_legality() -> None:
     text = "You could grab the pawn with Nxe4."
     v = check_coaching_fidelity(text, _report(), [])
-    # No menu -> no soundness judgment, but the move is legal so nothing flags.
-    assert "unsound_move" not in _kinds(v)
+    # No menu -> no soundness/adherence judgment, but the move is legal so
+    # nothing flags (off_menu needs a menu to compare against).
+    assert v == []
+
+
+# A realistic menu that does NOT list Nxe4 (a knight-drop the engine ranks
+# below the top candidates) — the real-world case where the coach naming
+# Nxe4 is an off-menu recommendation, not a listed-but-bad one.
+ITALIAN_MENU_NO_NXE4 = [
+    MenuMove(san="Nd5", uci="f6d5", eval_cp=20, drop_cp=0, tag="best", theme="piece development"),
+    MenuMove(san="O-O", uci="e8g8", eval_cp=10, drop_cp=10, tag="sound", theme="king safety, castling"),
+]
+
+
+def test_off_menu_move_is_flagged() -> None:
+    # Nxe4 is legal but not in the sound menu -> off_menu (the coach was told
+    # to recommend only listed moves). This is the real Nxe4 case.
+    text = "You could grab the pawn with Nxe4."
+    v = check_coaching_fidelity(text, _report(), ITALIAN_MENU_NO_NXE4)
+    assert _kinds(v) == ["off_menu"]
+
+
+def test_off_menu_not_flagged_for_listed_sound_move() -> None:
+    text = "Play Nd5 to centralize; O-O is also fine."
+    v = check_coaching_fidelity(text, _report(), ITALIAN_MENU_NO_NXE4)
+    assert v == []
+
+
+def test_off_menu_needs_a_menu() -> None:
+    # Without a menu we cannot judge adherence, so no off_menu is emitted.
+    text = "You could grab the pawn with Nxe4."
+    assert check_coaching_fidelity(text, _report(), []) == []
 
 
 def test_bad_fen_returns_empty() -> None:

@@ -65,7 +65,9 @@ class ModelSummary:
     judged_n: int
     quality_mean: float | None  # None when no judge verdicts present
     errors: int
-    total_unsound_moves: int = 0  # engine-tagged dubious/blunder moves the coach named
+    # Constraint-adherence: named moves the coach was not allowed to recommend
+    # — listed-but-dubious/blunder (unsound_move) plus not-listed (off_menu).
+    total_disallowed_moves: int = 0
 
 
 def _mean(xs: list[float]) -> float:
@@ -122,7 +124,10 @@ def summarize_model(model: str, evals: list[ResponseEval]) -> ModelSummary:
         judged_n=len(judged),
         quality_mean=round(_mean(quality_scores), 4) if quality_scores else None,
         errors=sum(1 for e in evals if e.error),
-        total_unsound_moves=sum(e.objective.fidelity_counts.get("unsound_move", 0) for e in evals),
+        total_disallowed_moves=sum(
+            e.objective.fidelity_counts.get("unsound_move", 0) + e.objective.fidelity_counts.get("off_menu", 0)
+            for e in evals
+        ),
     )
 
 
@@ -155,7 +160,7 @@ class Scoreboard:
             "COACHING EVAL SCOREBOARD",
             "=" * 84,
             f"{'model':<24} {'fact':>6} {'pass%':>6} {'cov':>6} "
-            f"{'hall':>5} {'illeg':>6} {'dir!':>5} {'uns':>5} {'qual':>6} {'lat':>7} {'words':>6}",
+            f"{'hall':>5} {'illeg':>6} {'dir!':>5} {'off!':>5} {'qual':>6} {'lat':>7} {'words':>6}",
             "-" * 84,
         ]
         for s in self.summaries:
@@ -163,14 +168,14 @@ class Scoreboard:
             lines.append(
                 f"{s.model:<24} {s.factual_mean:>6.2f} {s.factual_pass_rate * 100:>5.0f}% "
                 f"{s.coverage_mean:>6.2f} {s.total_hallucinations:>5} "
-                f"{s.total_illegal_moves:>6} {s.direction_contradictions:>5} {s.total_unsound_moves:>5} "
+                f"{s.total_illegal_moves:>6} {s.direction_contradictions:>5} {s.total_disallowed_moves:>5} "
                 f"{quality:>6} {s.avg_latency_s:>6.1f}s {s.avg_word_count:>6.0f}"
             )
         lines.append("-" * 84)
         lines.append(
             "fact=mean factual score  pass%=share >= "
             f"{PASS_THRESHOLD:.2f}  cov=key-fact coverage  "
-            "hall/illeg/dir!=factual errors  uns=unsound moves named  qual=judge score"
+            "hall/illeg/dir!=factual errors  off!=moves named outside the sound menu  qual=judge score"
         )
         return "\n".join(lines)
 
