@@ -7,6 +7,8 @@ hallucination/illegal-move checkers.
 
 from __future__ import annotations
 
+import dataclasses
+
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -25,9 +27,12 @@ from chess_coach.models import (
     KingSafety,
     PawnFeatures,
     PositionReport,
+    PVLine,
 )
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+# Black to move; e4 is a defended White pawn, so Nxe4 (f6e4) drops the knight.
+ITALIAN_FEN = "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 5"
 
 
 # --------------------------------------------------------------- report helper
@@ -65,6 +70,38 @@ def _mk_report(fen: str = START_FEN, eval_cp: int = 0) -> PositionReport:
 
 def _pos(points: list[GroundTruthPoint], fen: str = START_FEN) -> BenchmarkPosition:
     return BenchmarkPosition(id="t", fen=fen, level="beginner", phase="opening", points=tuple(points))
+
+
+def _italian_report_with_menu() -> PositionReport:
+    # Nd5 (best) and Nxe4 (a blunder — drop 180cp) as the engine top lines.
+    return dataclasses.replace(
+        _mk_report(ITALIAN_FEN),
+        top_lines=[
+            PVLine(depth=12, eval_cp=20, moves=["f6d5"], theme=""),
+            PVLine(depth=12, eval_cp=-160, moves=["f6e4"], theme=""),
+        ],
+    )
+
+
+# --------------------------------------------------------------- fidelity metric
+
+
+def test_fidelity_counts_flag_unsound_named_move() -> None:
+    obj = evaluate_objective("You could grab the pawn with Nxe4.", _italian_report_with_menu(), _pos([], ITALIAN_FEN))
+    assert obj.fidelity_counts.get("unsound_move", 0) == 1
+
+
+def test_unsound_move_does_not_lower_factual_score() -> None:
+    # Naming an unsound move is recorded but is NOT a hard factual error, so
+    # the factual score (coverage-driven) is unaffected.
+    obj = evaluate_objective("You could grab the pawn with Nxe4.", _italian_report_with_menu(), _pos([], ITALIAN_FEN))
+    assert obj.factual_score == 1.0
+    assert not obj.hallucinations and not obj.illegal_moves
+
+
+def test_sound_named_move_has_no_fidelity_violations() -> None:
+    obj = evaluate_objective("Centralize with Nd5.", _italian_report_with_menu(), _pos([], ITALIAN_FEN))
+    assert obj.fidelity_counts == {}
 
 
 # --------------------------------------------------------------- hallucination

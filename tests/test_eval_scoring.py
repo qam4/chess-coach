@@ -30,6 +30,7 @@ def _obj(
     hallucinations: int = 0,
     illegal: int = 0,
     direction_ok: bool | None = None,
+    unsound: int = 0,
 ) -> ObjectiveResult:
     return ObjectiveResult(
         hallucinations=["h"] * hallucinations,
@@ -38,6 +39,7 @@ def _obj(
         coverage_hits=[],
         coverage_total=0 if coverage == 1.0 else 1,
         factual_score=factual,
+        fidelity_counts={"unsound_move": unsound} if unsound else {},
     )
 
     # note: coverage_fraction derives from hits/total; we set
@@ -52,6 +54,7 @@ def _ev(
     latency: float = 1.0,
     words: int = 100,
     error: str | None = None,
+    unsound: int = 0,
 ) -> ResponseEval:
     return ResponseEval(
         position_id="p",
@@ -59,10 +62,17 @@ def _ev(
         response="text",
         word_count=words,
         latency_s=latency,
-        objective=_obj(factual=factual),
+        objective=_obj(factual=factual, unsound=unsound),
         judge=_FakeVerdict(quality) if quality is not None else None,
         error=error,
     )
+
+
+def test_scoreboard_aggregates_unsound_moves() -> None:
+    evals = [_ev("m", factual=1.0, unsound=2), _ev("m", factual=1.0, unsound=1)]
+    s = summarize_model("m", evals)
+    assert s.total_unsound_moves == 3
+    assert "uns" in Scoreboard(summaries=[s]).render()
 
 
 # --------------------------------------------------------------- summarize

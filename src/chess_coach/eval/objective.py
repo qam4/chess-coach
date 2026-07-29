@@ -26,10 +26,12 @@ threshold, because the entire point of the score is trust.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 
+from ..coaching_phrases import build_move_menu
 from ..models import PositionReport
-from ..verify import check_text_fidelity
+from ..verify import check_coaching_fidelity, check_text_fidelity
 from .benchmark import BenchmarkPosition, GroundTruthPoint
 
 # Coaching on a position within this many centipawns of zero is treated
@@ -212,6 +214,12 @@ class ObjectiveResult:
     coverage_hits: list[str]
     coverage_total: int
     factual_score: float
+    # Full menu-aware fidelity breakdown by violation kind (placement,
+    # development, empty_source, illegal_move, unsound_move) — a diagnostic
+    # metric recorded for the A/B; it does NOT feed factual_score (which stays
+    # comparable across runs). ``unsound_move`` requires the engine move menu,
+    # so it is only populated here, not by the standalone helpers.
+    fidelity_counts: dict[str, int] = field(default_factory=dict)
 
     @property
     def coverage_fraction(self) -> float:
@@ -243,9 +251,15 @@ def evaluate_objective(
     coverage fraction (1.0 when there's nothing to cover). A single
     hard error caps it at <= 0.3, below the 0.8 pass threshold.
     """
-    fen = report.fen
-    hallucinations = check_piece_hallucinations(fen, response)
-    illegal_moves = check_move_validity(fen, response)
+    # One menu-aware pass over the response yields every fidelity violation;
+    # the scored buckets (placement -> hallucinations, illegal_move) are
+    # identical with or without the menu, so factual_score is unchanged from
+    # the standalone-helper version. The menu additionally surfaces
+    # unsound_move for the diagnostic breakdown.
+    violations = check_coaching_fidelity(response, report, build_move_menu(report))
+    hallucinations = [f"{v.text} — {v.detail}" for v in violations if v.kind == "placement"]
+    illegal_moves = [f"{v.text} — {v.detail}" for v in violations if v.kind == "illegal_move"]
+    fidelity_counts = dict(Counter(v.kind for v in violations))
     direction_ok = check_eval_direction(response, report)
     hits, total = check_coverage(response, position)
 
@@ -262,4 +276,5 @@ def evaluate_objective(
         coverage_hits=hits,
         coverage_total=total,
         factual_score=round(score, 4),
+        fidelity_counts=fidelity_counts,
     )

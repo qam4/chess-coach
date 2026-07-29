@@ -65,6 +65,7 @@ class ModelSummary:
     judged_n: int
     quality_mean: float | None  # None when no judge verdicts present
     errors: int
+    total_unsound_moves: int = 0  # engine-tagged dubious/blunder moves the coach named
 
 
 def _mean(xs: list[float]) -> float:
@@ -121,6 +122,7 @@ def summarize_model(model: str, evals: list[ResponseEval]) -> ModelSummary:
         judged_n=len(judged),
         quality_mean=round(_mean(quality_scores), 4) if quality_scores else None,
         errors=sum(1 for e in evals if e.error),
+        total_unsound_moves=sum(e.objective.fidelity_counts.get("unsound_move", 0) for e in evals),
     )
 
 
@@ -149,26 +151,26 @@ class Scoreboard:
         if not self.summaries:
             return "(no results)"
         lines = [
-            "=" * 78,
+            "=" * 84,
             "COACHING EVAL SCOREBOARD",
-            "=" * 78,
+            "=" * 84,
             f"{'model':<24} {'fact':>6} {'pass%':>6} {'cov':>6} "
-            f"{'hall':>5} {'illeg':>6} {'dir!':>5} {'qual':>6} {'lat':>7} {'words':>6}",
-            "-" * 78,
+            f"{'hall':>5} {'illeg':>6} {'dir!':>5} {'uns':>5} {'qual':>6} {'lat':>7} {'words':>6}",
+            "-" * 84,
         ]
         for s in self.summaries:
             quality = f"{s.quality_mean:.2f}" if s.quality_mean is not None else "  n/a"
             lines.append(
                 f"{s.model:<24} {s.factual_mean:>6.2f} {s.factual_pass_rate * 100:>5.0f}% "
                 f"{s.coverage_mean:>6.2f} {s.total_hallucinations:>5} "
-                f"{s.total_illegal_moves:>6} {s.direction_contradictions:>5} "
+                f"{s.total_illegal_moves:>6} {s.direction_contradictions:>5} {s.total_unsound_moves:>5} "
                 f"{quality:>6} {s.avg_latency_s:>6.1f}s {s.avg_word_count:>6.0f}"
             )
-        lines.append("-" * 78)
+        lines.append("-" * 84)
         lines.append(
             "fact=mean factual score  pass%=share >= "
             f"{PASS_THRESHOLD:.2f}  cov=key-fact coverage  "
-            "hall/illeg/dir!=factual errors  qual=judge score"
+            "hall/illeg/dir!=factual errors  uns=unsound moves named  qual=judge score"
         )
         return "\n".join(lines)
 
@@ -199,6 +201,9 @@ class RunConfig:
     # baseline. ``guidance_max`` is the per-position selection cap.
     guidance: str = "off"
     guidance_max: int = 0
+    # Whether the coach prompt constrained named moves to the sound menu
+    # (grounded-move-advice). Recorded so an A/B run is self-describing.
+    constrain_moves: bool = True
 
     @classmethod
     def create(
@@ -212,6 +217,7 @@ class RunConfig:
         temperature: float = 0.0,
         guidance: str = "off",
         guidance_max: int = 0,
+        constrain_moves: bool = True,
     ) -> RunConfig:
         """Build a RunConfig, stamping the current timestamp and copying the model list."""
         return cls(
@@ -224,6 +230,7 @@ class RunConfig:
             temperature=temperature,
             guidance=guidance,
             guidance_max=guidance_max,
+            constrain_moves=constrain_moves,
         )
 
 
@@ -276,7 +283,8 @@ def persist_results(
         f"Rubric: {config.rubric_version or '(none)'}  "
         f"Benchmark v{config.benchmark_version}\n"
         f"Guidance: {config.guidance}"
-        f"{f' (max {config.guidance_max})' if config.guidance == 'on' else ''}\n\n"
+        f"{f' (max {config.guidance_max})' if config.guidance == 'on' else ''}  "
+        f"Constrain-moves: {'on' if config.constrain_moves else 'off'}\n\n"
     )
     summary_path.write_text(header + scoreboard.render() + "\n", encoding="utf-8")
 

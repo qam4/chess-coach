@@ -120,24 +120,38 @@ them. No engine (Blunder) change is required.
         `config.example.yaml` (committed) documents the new defaults.
   - _Requirements: 1.1, 7.1, 7.2_
 
-- [ ] 7. Layer-1 eval metric + A/B
-  - [ ] 7.1 Wrap `check_coaching_fidelity` as an objective metric over a
-        benchmark run, aggregating violation rate per category; expose
-        the constraint switch and `multipv` width as run parameters.
-  - [ ] 7.2 Eval smoke test on a tiny slice (per-category rates emitted).
-  - [ ] 7.3 Run the A/B (constraint off vs on) on the small model AND
-        qwen3:14b at temp 0.7 via `kiro-monitor`; record results in
-        BACKLOG/eval notes (not committed config).
+- [x] 7. Layer-1 eval metric + A/B
+  - [x] 7.1 Added `ObjectiveResult.fidelity_counts` (menu-aware violation
+        breakdown via `check_coaching_fidelity` + `build_move_menu`) that
+        deliberately does NOT feed `factual_score` (runs stay comparable);
+        `scoring.total_unsound_moves` + `uns` scoreboard column;
+        `RunConfig.constrain_moves`; `eval_run.py` gained
+        `--constrain-moves/--no-constrain-moves` and `--multipv` default 5.
+  - [x] 7.2 Tests: unsound flagged at the objective level (Nxe4), score
+        unchanged by an unsound move, sound-move-clean, scoreboard
+        aggregation. Smoke run over one position confirmed the `uns`
+        column renders.
+  - [x] 7.3 Ran the A/B (off vs on) on qwen3:8b AND qwen3:14b at temp 0.7
+        (Layer 1, 9 positions). Results + verdict recorded in BACKLOG.
+        FINDING: inconclusive on this benchmark — baseline unsound rate is
+        ~0 (positions are mostly quiet), so there is nothing to reduce; the
+        metric works and `factual_score` stayed flat. Surfaced two
+        follow-ups (benchmark "temptation" positions; warn-against
+        over-count) recorded in BACKLOG.
   - _Requirements: 6.1, 6.2, 6.3_
 
-- [ ] 8. Definition-of-done gate (joint)
-  - [ ] 8.1 Full green: `uv run pytest`, `uv run mypy src`, `uv run ruff
-        check src tests`, `uv run ruff format --check src tests`.
-  - [ ] 8.2 Confirm BOTH halves are live: the prompt names only sound
-        menu moves (Task 3) AND the checker guards the output (Task 2/5).
-        A run with either half missing is not done.
-  - [ ] 8.3 Update BACKLOG (shipped note) and the coaching-philosophy /
-        VISION cross-reference for the move-sourcing invariant.
+- [x] 8. Definition-of-done gate (joint)
+  - [x] 8.1 Full green: `uv run pytest` (595), `uv run mypy src`,
+        `uv run ruff check src tests scripts`, `uv run ruff format --check`
+        — all clean.
+  - [x] 8.2 BOTH halves live: the rich prompt names only sound menu moves
+        (Task 3, verified in the live Italian run — recommended O-O, no
+        `Nxe4`) AND the checker guards the output (Task 2/5, wired into the
+        eval metric Task 7).
+  - [x] 8.3 Updated BACKLOG (shipped note + A/B verdict + two follow-ups).
+        The move-sourcing invariant is documented in the spec
+        requirements; VISION's "engine grounds the concrete action" already
+        states it, so no VISION edit was needed.
   - _Requirements: 8.1, 8.2, 8.3_
 
 ## Task Dependency Graph

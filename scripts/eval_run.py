@@ -83,6 +83,7 @@ def _zero_objective(position: BenchmarkPosition) -> ObjectiveResult:
         coverage_hits=[],
         coverage_total=required_referenceable,
         factual_score=0.0,
+        fidelity_counts={},
     )
 
 
@@ -124,6 +125,7 @@ def _run_model(
     reports: dict[str, PositionReport],
     temperature: float = 0.0,
     guidance_by_id: dict[str, list[GuidanceEntry]] | None = None,
+    constrain_moves: bool = True,
 ) -> list[ResponseEval]:
     if not provider.is_available():  # type: ignore[attr-defined]
         print(f"  WARNING: model {model} not available — skipping")
@@ -137,7 +139,13 @@ def _run_model(
         opening = lookup_fen(pos.fen)
         opening_label = f"{opening.eco} {opening.name}" if opening else None
         guidance = guidance_by_id.get(pos.id) if guidance_by_id is not None else None
-        prompt = build_rich_coaching_prompt(report, level=pos.level, opening_name=opening_label, guidance=guidance)
+        prompt = build_rich_coaching_prompt(
+            report,
+            level=pos.level,
+            opening_name=opening_label,
+            guidance=guidance,
+            constrain_moves=constrain_moves,
+        )
 
         print(f"  {model}: {pos.id}...", end=" ", flush=True)
         t0 = time.perf_counter()
@@ -214,7 +222,7 @@ def main() -> None:
     parser.add_argument("--positions", nargs="*", default=[], help="Only these position ids")
     parser.add_argument("--benchmark", default=None, help="Path to positions.yaml")
     parser.add_argument("--out", default="output/eval_run", help="Output directory")
-    parser.add_argument("--multipv", type=int, default=3)
+    parser.add_argument("--multipv", type=int, default=5)
     parser.add_argument(
         "--engine-timeout",
         type=float,
@@ -245,6 +253,13 @@ def main() -> None:
         type=int,
         default=3,
         help="Max guidance entries selected per position when --guidance on (default 3).",
+    )
+    parser.add_argument(
+        "--constrain-moves",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Constrain the coach to name only sound menu moves (grounded-move-advice). "
+        "Use --no-constrain-moves for the A/B baseline. Default on.",
     )
     parser.add_argument(
         "--judge-model",
@@ -362,6 +377,7 @@ def main() -> None:
                     reports,
                     temperature=args.temperature,
                     guidance_by_id=guidance_by_id,
+                    constrain_moves=args.constrain_moves,
                 )
             )
 
@@ -395,6 +411,7 @@ def main() -> None:
         rubric_version=rubric.version if rubric else None,
         guidance=args.guidance,
         guidance_max=args.guidance_max if args.guidance == "on" else 0,
+        constrain_moves=args.constrain_moves,
     )
     results_path, summary_path = persist_results(args.out, run_config, all_evals, scoreboard)
 

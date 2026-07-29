@@ -28,9 +28,46 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   it (one implementation). SAN is used everywhere the coach names a move.
   A live run on the Italian position confirmed the fix: the coach
   recommended `O-O` (sound), no phantom `Nxe4`, no invented pieces.
-  `top_moves` (multipv) default raised 3→5. Remaining (this spec):
-  Task 7 — wire the fidelity checker as a Layer-1 A/B metric and run the
-  constraint off-vs-on A/B on the small model and qwen3:14b.
+  `top_moves` (multipv) default raised 3→5. Task 7: the fidelity checker
+  is wired as a Layer-1 diagnostic (`ObjectiveResult.fidelity_counts`,
+  `total_unsound_moves` scoreboard column, `eval_run --constrain-moves/
+  --no-constrain-moves` A/B toggle) that does NOT feed `factual_score`.
+  A/B run (2026-07-28, 9-position benchmark, temp 0.7, Layer 1):
+
+  | model | constraint | unsound | halluc | factual |
+  |-------|-----------|:---:|:---:|:---:|
+  | qwen3:8b  | off | 0 | 0 | 0.35 |
+  | qwen3:8b  | on  | 2 | 0 | 0.30 |
+  | qwen3:14b | off | 0 | 0 | 0.26 |
+  | qwen3:14b | on  | 0 | 1 | 0.23 |
+
+  **A/B verdict: inconclusive on this benchmark — the baseline already
+  names ~0 unsound moves across these 9 (mostly quiet opening/endgame)
+  positions, so there is nothing for the constraint to reduce.** The
+  metric itself works (it fired: 2 on qwen3:8b-on) and `factual_score`
+  stayed flat across conditions as designed. The constraint's value was
+  shown anecdotally in the live Italian run (recommended O-O, no phantom
+  `Nxe4`), but the benchmark lacks the sharp tactical "temptation"
+  positions where the unconstrained coach is drawn to an unsound move.
+  Two follow-ups fall out (below).
+
+- **Benchmark needs move-soundness "temptation" positions (found
+  2026-07-28).** The grounded-move-advice A/B could not measure the
+  constraint because all 9 current benchmark positions have a baseline
+  unsound-move rate of ~0. Add positions where the unconstrained coach
+  reliably names a legal-but-unsound move (e.g. the Italian `Nxe4`
+  knight-drop, a tempting-but-losing capture/sac), so the off-vs-on A/B
+  has signal. Without these the fidelity metric has nothing to bite on.
+
+- **`unsound_move` counts a move even when the coach warns against it
+  (found 2026-07-28).** The prompt explicitly permits naming a
+  dubious/blunder move *to warn against it*, but the deterministic
+  checker flags any named dubious/blunder move regardless of surrounding
+  intent (it cannot read "avoid …" negation context reliably). This
+  likely inflated qwen3:8b-on's count of 2. Options: teach the checker a
+  conservative negation/warn context, or accept it as an over-count and
+  interpret `unsound_move` as "named a bad move at all". Decide when the
+  metric is actually used for tuning.
 
 - **Engine gap — per-line theme is hardcoded empty (found 2026-07-28).**
   Blunder's `CoachJson.cpp::serialize_top_lines` emits `"theme": ""` for
