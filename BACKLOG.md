@@ -60,18 +60,20 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   `factual_score` stayed comparable across conditions, as designed (the
   adherence metric is diagnostic, not part of the score).
 
-- **Known limitation — `off!` counts a move even when the coach warns
-  against it (found 2026-07-28).** The prompt permits naming a bad move
-  *to warn against it*, but the deterministic checker flags any named
-  off-menu/dubious move regardless of surrounding "avoid …" intent (it
-  cannot read negation context reliably). Accept as a small over-count,
-  or teach the checker a conservative warn-context guard — decide when
-  the metric is used for real tuning.
+- **`off!` warn-context guard (done 2026-07-29).** The checker now
+  suppresses `off_menu`/`unsound_move` when a strong warning cue ("avoid",
+  "don't play", "instead of", "tempted to play", …) appears just before
+  the named move — naming a bad move *to warn against it* is allowed by
+  the prompt. Conservative/precision-first: a warning phrased AFTER the
+  move ("Nxe4 loses a piece") is not detected and is still counted (a
+  documented, minor over-count). Illegality is never suppressed.
 
-- **More temptation positions (partly done 2026-07-29).** Added
-  `italian_nxe4_trap` (the `Nxe4` knight-drop). More sharp
-  tactical/positional traps would sharpen the A/B further, but the metric
-  now has signal with the one added.
+- **More temptation positions (done 2026-07-29).** Added
+  `italian_nxe4_trap` (Nxe4 off-menu/unlisted → `off_menu`) and
+  `scotch_nxe4_trap` (Nxe4 a listed blunder → `unsound_move`), covering
+  both violation kinds. Confirmed hard: on these two, unconstrained
+  qwen3:14b made an illegal move that the constraint fixed. More traps
+  could sharpen the A/B further but the metric has clear signal.
 
 - **Engine gap — per-line theme is hardcoded empty (found 2026-07-28).**
   Blunder's `CoachJson.cpp::serialize_top_lines` emits `"theme": ""` for

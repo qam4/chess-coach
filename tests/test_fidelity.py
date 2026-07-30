@@ -173,6 +173,30 @@ def test_off_menu_needs_a_menu() -> None:
     assert check_coaching_fidelity(text, _report(), []) == []
 
 
+def test_warned_against_move_is_not_flagged() -> None:
+    # Naming a bad move to warn against it is allowed by the prompt.
+    for text in (
+        "Avoid Nxe4 — it drops the knight.",
+        "Don't play Nxe4 here.",
+        "Play Nd5 instead of Nxe4.",
+        "You might be tempted to play Nxe4, but it loses a piece.",
+    ):
+        v = check_coaching_fidelity(text, _report(), ITALIAN_MENU_NO_NXE4)
+        assert "off_menu" not in _kinds(v), text
+
+
+def test_recommended_bad_move_still_flagged_without_warning() -> None:
+    # No warning cue -> naming the off-menu move is a violation.
+    v = check_coaching_fidelity("A strong try is Nxe4.", _report(), ITALIAN_MENU_NO_NXE4)
+    assert _kinds(v) == ["off_menu"]
+
+
+def test_illegal_move_flagged_even_when_warned() -> None:
+    # Illegality is a factual error regardless of framing, so it still fires.
+    v = check_coaching_fidelity("Avoid Rd4, it loses.", _report(), ITALIAN_MENU_NO_NXE4)
+    assert "illegal_move" in _kinds(v)
+
+
 def test_bad_fen_returns_empty() -> None:
     bad = _report(fen="not a fen")
     assert check_coaching_fidelity("Play Nxe4 from b8.", bad, ITALIAN_MENU) == []

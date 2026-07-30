@@ -151,6 +151,38 @@ _FROM_RE = re.compile(r"\bfrom\s+([a-h][1-8])\b", re.IGNORECASE)
 _INFLUENCE_VERBS = ("controlling", "targeting", "attacking", "defending")
 _SQUARE_ASSESSMENT_RE = re.compile(r"(?:weak|strong)\s+square\s+([a-h][1-8])", re.IGNORECASE)
 
+# Strong cues that, appearing shortly BEFORE a named move, mean the coach is
+# warning against it rather than recommending it — which the prompt permits.
+# Deliberately conservative (clear phrases only) to keep precision high; a
+# warning phrased AFTER the move ("Nxe4 loses a piece") is not caught and is
+# still counted (documented over-count).
+_WARN_CUES = (
+    "avoid",
+    "don't play",
+    "do not play",
+    "never play",
+    "instead of",
+    "rather than",
+    "beware",
+    "watch out",
+    "steer clear",
+    "resist",
+    "don't fall for",
+    "tempted to play",
+    "tempting to play",
+)
+
+
+def _warned_against(text: str, start: int) -> bool:
+    """True if a warning cue appears in the ~40 chars before position ``start``.
+
+    Used to suppress ``off_menu``/``unsound_move`` when the coach names a bad
+    move only to warn against it (allowed by the prompt). Illegality is never
+    suppressed — an illegal move is a factual error however it is framed.
+    """
+    window = text[max(0, start - 40) : start].lower()
+    return any(cue in window for cue in _WARN_CUES)
+
 
 @dataclasses.dataclass(frozen=True)
 class Violation:
@@ -183,7 +215,12 @@ def _find_legal(board: chess.Board, frm: str, to: str) -> chess.Move | None:
     return None
 
 
-def _classify_named_move(move: chess.Move, frag: str, by_uci: dict[str, MenuMove]) -> Violation | None:
+def _classify_named_move(
+    move: chess.Move,
+    frag: str,
+    by_uci: dict[str, MenuMove],
+    warned: bool = False,
+) -> Violation | None:
     """Judge a legal named move against the engine menu (the allowed set).
 
     The coach is instructed to recommend ONLY ``best``/``sound`` menu moves, so:
@@ -196,7 +233,11 @@ def _classify_named_move(move: chess.Move, frag: str, by_uci: dict[str, MenuMove
 
     ``off_menu`` is only meaningful when a menu exists; the caller passes an
     empty ``by_uci`` when there is no menu and no move is flagged off-menu.
+    When ``warned`` is True the coach is warning against the move (not
+    recommending it), which the prompt allows — no violation.
     """
+    if warned:
+        return None
     hit = by_uci.get(move.uci())
     if hit is not None:
         if hit.tag in ("dubious", "blunder"):
@@ -237,7 +278,7 @@ def _check_named_moves(
         if move is None:
             out.append(Violation("illegal_move", m.group(0), f"{frm}-{to} is not legal here"))
             continue
-        violation = _classify_named_move(move, m.group(0), by_uci)
+        violation = _classify_named_move(move, m.group(0), by_uci, _warned_against(text, m.start()))
         if violation is not None:
             out.append(violation)
 
@@ -256,7 +297,7 @@ def _check_named_moves(
             continue
         if not clearly_a_move:
             continue
-        violation = _classify_named_move(move, token, by_uci)
+        violation = _classify_named_move(move, token, by_uci, _warned_against(text, m.start()))
         if violation is not None:
             out.append(violation)
 

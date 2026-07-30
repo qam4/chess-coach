@@ -86,6 +86,25 @@ positions:
         value: castle
         required: false
 
+  - id: scotch_nxe4_trap
+    fen: "r1bqkb1r/pppp1ppp/2n2n2/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq d3 0 4"
+    level: intermediate
+    phase: opening
+    notes: >
+      Scotch Opening (1.e4 e5 2.Nf3 Nc6 3.d4), Black to move. The e4 pawn
+      looks free, but the tempting ...Nxe4 loses material to 4.d5 forking
+      the knights — the engine tags it a blunder AND lists it in the menu
+      (drop ~120cp), so recommending it is an unsound_move. Best is ...exd4,
+      taking the centre. A move-soundness *temptation* position where the
+      bad move is listed (complements italian_nxe4_trap, where the bad move
+      is off-menu). Engine: White edge at this depth (engine oracle).
+    points:
+      - kind: eval_direction
+        value: white_better
+      - kind: free
+        value: center
+        required: false
+
   # ---- Tactics / hanging material ------------------------------------
   - id: hanging_knight_e5
     fen: "r1bqkb1r/pppppppp/2n5/4N3/4n3/8/PPPP1PPP/RNBQKB1R w KQkq - 0 4"
