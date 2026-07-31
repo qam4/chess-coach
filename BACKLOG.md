@@ -237,6 +237,21 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
     more games (bigger n) would firm up significance. Next: more games /
     models; a game-level judging pass (consistency / turning-points);
     generalize the A/B beyond guidance (e.g. constrain-moves).
+  - **Bugs + gaps this test surfaced (its real payoff).** Mining the 40
+    judge rationales (not the tally) exposed concrete coaching defects the
+    curated position benchmarks never caught — logged as BUG-013 (coach
+    invents ungrounded follow-up lines), BUG-014 (coach second-guesses a
+    move that was already the engine's best), BUG-015 (piece-type/geometry
+    misID in prose). Two teaching-quality gaps toward the north star also
+    showed up empirically: (a) **filler / condescending praise dilutes the
+    lesson** — the judge repeatedly preferred the concise "one principle +
+    one concrete action" version over cheerleading; and (b) **the coach is
+    weak exactly on material-winning/tactical moves** — on good captures
+    like `fxg5` *both* off and on "named no concrete principle or actionable
+    follow-up", because the knowledge bank still lacks capture-value /
+    recapture / when-to-exchange entries (the content gap already noted
+    under "Grounded position description"). So the game test both validated
+    the instrument AND handed us a prioritized fix list.
 
 - **Eval sensitivity & validity — THE next investment (decided 2026-06-18).**
   After three guidance A/Bs (more entries, tighter prompt, sharper cap-1

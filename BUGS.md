@@ -247,3 +247,65 @@ Tracked issues discovered during development and testing.
 - **Status**: FIXED — `main()` in `cli.py` now reconfigures
   `sys.stdout`/`sys.stderr` to `encoding="utf-8", errors="replace"` at
   startup, so Unicode output works regardless of the console code page.
+
+## Coaching-Quality Issues (found via the end-to-end game-coaching test)
+
+*All three below were surfaced by the new end-to-end game-coaching eval
+(`scripts/eval_game_coaching_pairwise.py`, spec
+`.kiro/specs/game-coaching-eval/`) on its first live run (2026-07-30):
+Blunder played two full games at ~1350/1500 Elo, the coach (qwen3:14b)
+gave move-feedback on all 40 student moves, and a frontier judge
+(claude-sonnet-4.6 via kiro-cli) critiqued each. Reading the 40 judge
+rationales — not the win/loss tally — is what exposed these. This is
+exactly the "surface bugs the curated position benchmarks miss" value the
+game test was built for. These are LLM-output quality issues (the eval
+harness measures their rate); the value is the pattern, not single
+anecdotes.*
+
+### BUG-013: Coach invents ungrounded follow-up lines
+- **Observed**: On several *correct* moves the coach grounded the named
+  move fine, then padded with **fabricated continuations not in the
+  engine data**. Judge examples: on `exd4` it invented "Ne3+ / Nc3 king
+  attacks not supported by the position"; on `Qxf6` it invented a "warning
+  about gxf6 counterplay" and "Ne4 plans" with no basis.
+- **Impact**: Teaches wrong concrete lines — the worst kind of coaching
+  error (a confident, specific falsehood). Toward the north star, the
+  "concrete sound action" half of the bridge must be engine-grounded.
+- **Why the fidelity checker misses it**: `check_coaching_fidelity`
+  validates the *named move* against the board/menu, but a fabricated
+  *multi-move continuation* ("...then Ne3+ and Nc3") isn't a single named
+  move it evaluates.
+- **Proposed fix**: constrain the prompt to not narrate continuations
+  beyond what the engine top-line provides, and/or extend the checker to
+  flag multi-move sequences whose later plies are illegal/unsupported.
+- **Status**: OPEN.
+
+### BUG-014: Coach second-guesses a move that was already the engine's best
+- **Observed**: When the student played the **engine's top move** (e.g.
+  `Bc4`), the coach still "implies the move is merely solid and hints at a
+  better alternative" and "invents a distinction between the student's
+  move and the 'best move'" — when they are the same move.
+- **Impact**: Undermines trust and teaches a false "you could have done
+  better" on a best move. Directly contradicts the engine ground truth.
+- **Likely cause**: the move-feedback prompt / `evaluate_move` path does
+  not tell the model when the student's move *is* the best move, so it
+  manufactures a correction anyway.
+- **Proposed fix**: when `classification == good` and the student's move
+  equals the engine best (eval drop ~0), instruct the coach to affirm and
+  teach the idea behind it — never to invent a superior alternative.
+- **Status**: OPEN.
+
+### BUG-015: Piece-type / square misidentification in coaching prose
+- **Observed** (reconfirms the BACKLOG "relational falsehoods" gap, with
+  fresh live instances): captured **knight described as a pawn** (`dxe3`);
+  `Kc1` called "central" (it is queenside); a `c4` pawn called "isolated"
+  when it is not; "supporting the knight on b1" when no knight is there.
+- **Impact**: Wrong board facts in otherwise fluent coaching.
+- **Why partly uncaught**: the objective checker now catches "piece on
+  square" placement and developed/undeveloped claims, but not piece-type
+  labels on captures, adjacency/geometry claims ("central"), or pawn
+  structure adjectives.
+- **Proposed fix**: extend the objective fidelity checks to piece-type on
+  captures and a few geometry/pawn-structure adjectives; keep the judge
+  `grounded` criterion as the backstop.
+- **Status**: OPEN.
