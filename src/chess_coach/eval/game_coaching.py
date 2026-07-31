@@ -114,6 +114,16 @@ class GameTrajectory:
         )
 
 
+def student_moves(traj: GameTrajectory) -> list[tuple[int, str, str]]:
+    """``(ply, fen_before, student_move)`` for each coached turn.
+
+    The played game's student moves are exactly move-feedback scenarios; the
+    pairwise driver turns these into ``MoveFeedbackScenario``s so a whole game
+    feeds the existing pairwise A/B judging over realistic positions.
+    """
+    return [(t.ply, t.fen_before, t.student_move) for t in traj.turns]
+
+
 def _result_string(board: chess.Board, ply: int, ply_cap: int) -> str:
     if board.is_game_over(claim_draw=True):
         return board.result(claim_draw=True)

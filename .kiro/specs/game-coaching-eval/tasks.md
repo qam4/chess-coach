@@ -60,22 +60,26 @@ and kiro-monitor — build only the driver + trajectory + aggregation.
         coach legitimately stays silent).
   - _Requirements: 5.3, 5.1_
 
-- [ ] 4. Frontier judging per turn — BLOCKED on a design decision
-  - [ ] 4.1 DECISION NEEDED: there is **no absolute move-feedback rubric**
-        today — the move-feedback path only has *pairwise* judging
-        (`build_pairwise_prompt`); rubric.v1/v2 are position-explanation
-        rubrics keyed to a `BenchmarkPosition`/`PositionReport`, not a
-        `ComparisonReport`. So per-move absolute judging needs one of:
-        (a) a small new move-feedback judge prompt + rubric over the
-        `ComparisonReport` ground truth; (b) reuse rubric.v2 criteria via a
-        new comparison-report adapter; (c) reframe as pairwise (two coach
-        configs over the same game). Also needs kiro-cli available. Judging
-        stays **off by default** regardless (Req 3.2), so the tool is fully
-        useful judge-free until this lands.
-  - [ ] 4.2 Failure isolation + re-judge-from-saved-trajectory (once 4.1
-        is decided). `aggregate` already accepts a `ply -> quality` verdict
-        map and treats absent plies as un-judged (Property 4 core is done).
-  - [ ] 4.3 Tests with a fake provider.
+- [x] 4. Frontier judging — PAIRWISE (decision: option c)
+  - [x] 4.1 DECIDED (product owner): pairwise, not a new absolute rubric.
+        A played game's student moves ARE move-feedback scenarios, so the
+        pairwise driver (`scripts/eval_game_coaching_pairwise.py`) plays N
+        games between two leveled Blunders, converts every student move to a
+        `MoveFeedbackScenario` (via `student_moves`), and feeds them to the
+        **existing, validated** `run_move_feedback_pairwise` (guidance OFF
+        vs ON) judged by the frontier kiro-cli `CliProvider`. This reuses
+        the whole pairwise stack (`pairwise_compare_move`, `majority_winner`,
+        `summarize_pairwise`, sign test) — the instrument that already
+        showed a significant win on curated scenarios, now on realistic
+        game positions. A full-strength oracle engine is the coaching
+        ground truth; a separate leveled player engine generates the games.
+  - [x] 4.2 Failure isolation + skip taxonomy are inherited from
+        `run_move_feedback_pairwise` (engine/gen/judge skips bubble up);
+        per-scenario judge repeats + majority vote denoise the judge.
+  - [x] 4.3 `student_moves` unit-tested; the pairwise stack is already
+        tested. LIVE run pending: needs the Ollama tunnel (coaching
+        generation) AND kiro-cli (judge). kiro-cli is available; tunnel was
+        down at build time.
   - _Requirements: 3.1, 3.2, 3.3, 7.2_
 
 - [ ] 5. Report + smoke + docs

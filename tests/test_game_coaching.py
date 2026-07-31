@@ -253,6 +253,17 @@ def test_aggregate_does_not_flag_empty_feedback_on_good_move() -> None:
     assert not any("empty coach feedback" in i for i in report.issues)
 
 
+def test_student_moves_extracts_ply_fen_move() -> None:
+    from chess_coach.eval.game_coaching import student_moves
+
+    traj = GameTrajectory(
+        meta={},
+        turns=[_turn(0, START, "e2e4"), _turn(2, "somefen", "g1f3")],
+        result="ply-cap",
+    )
+    assert student_moves(traj) == [(0, START, "e2e4"), (2, "somefen", "g1f3")]
+
+
 def test_game_report_render_smoke() -> None:
     report = GameReport(
         result="1-0",
