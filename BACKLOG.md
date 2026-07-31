@@ -185,6 +185,40 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
 ## Coaching-eval harness
 
+- **End-to-end game-coaching eval — AGREED, being specced (2026-07-30),
+  `.kiro/specs/game-coaching-eval/`.** The current benchmark judges the
+  coach on isolated, curated positions — the "position analyst" mode
+  VISION does NOT want, and it never exercises the reactive move-feedback
+  path over a real game arc. Idea (product owner): drive a **whole game**
+  and check the coaching across it. Design agreed this session:
+  - **Players = Blunder at chosen Elo** (`UCI_LimitStrength`/`UCI_Elo`,
+    already wired via `Coach.play_elo`). The *student* side plays weak
+    enough to make real, coachable mistakes (~1350 default, configurable);
+    the opponent at a chosen level. The **coach's analysis engine stays
+    full-strength** — same binary, three roles (student-weak, opponent,
+    coach-oracle-strong).
+  - **Coach = the existing local-LLM `Coach.evaluate_move`** on each
+    student move (the move-feedback path). Reuses the shipped pipeline.
+  - **Judge = kiro-cli frontier** (`CliProvider`, `--judge-provider cli`,
+    already shipped/validated) scoring each coaching output vs engine
+    ground truth (reuse the move-feedback rubric). Whole-game context lets
+    it assess what per-position judging can't: did it catch the turning
+    points (`critical_moment`), stay consistent, avoid repetition. Using a
+    frontier model to judge the local LLM is accepted (a proxy, honest
+    ceiling per "Who calibrates teaching quality?"), valuable as an E2E
+    test that surfaces integration + quality issues.
+  - **New parts:** a **game-trajectory driver** (play a full game between
+    two leveled Blunders, capture the per-student-move trajectory:
+    position, move, engine best/eval/classification, active features,
+    coach output) + game-level aggregation/report. Everything else is
+    reuse. Run via kiro-monitor (~20–40 coached moves/game). Shape: a
+    `scripts/` driver + pure `eval/` core, like the other eval tools.
+  - **v1 = per-move judging** (reuses the shipped judge); **v2 = a
+    game-level pass** for consistency / turning-points / non-repetition.
+  - **Synergy:** the trajectory it produces is exactly what the cross-game
+    tracker (below) consumes — this harness is also the tracker's test
+    fixture and first data source.
+
 - **Eval sensitivity & validity — THE next investment (decided 2026-06-18).**
   After three guidance A/Bs (more entries, tighter prompt, sharper cap-1
   selection) every teaching-quality result came back *within judge noise*:
@@ -880,6 +914,34 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 - **Benchmark size.** Only 10 seed positions today. Grow toward
   20-40 across phases/levels once the annotation guard (Task 9) makes
   authoring safe.
+
+## Progress tracking — cross-game (VISION Step 2)
+
+- **Cross-game player progress tracker — AGREED follow-on (2026-07-30).**
+  VISION's Step 2 ("the arc this unlocks") and the honest path toward
+  true-north (student improvement over time). Refined framing from the
+  product owner this session: this is **longitudinal across games**, NOT
+  in-game. The in-game move feedback already exists (`evaluate_move`); the
+  tracker is the store + cross-game aggregation + trend + targeting.
+  - **Mechanism (from IDEAS "Player Strength Profile"):** for each student
+    move, attribute it to the dimension(s) the position exercises
+    (material awareness, piece activity, pawn structure, king safety,
+    trading, endgame technique, opening principles, tactical vision), score
+    whether the move aligned with the engine *in positions where that
+    dimension mattered*, and aggregate per-dimension across all the
+    student's games into a profile + **trend over time**, then target
+    coaching at the weakest dimension.
+  - **New parts vs today:** (a) **dimension attribution** — map (position
+    features + what the best move addresses) → dimension, reusing the
+    engine features + `theme_map`; (b) **persistence** — a per-user local
+    store (JSON/SQLite; VISION: local-only, nothing leaves the machine),
+    since play today is stateless; (c) **surfacing** — a CLI/web dashboard
+    of per-dimension ratings + trend.
+  - **Consumes the game-trajectory substrate** from the E2E eval above, so
+    build that first: the eval's simulated games are the tracker's first
+    data + a way to validate the dimension model before wiring persistence
+    and UI for a real user. Ties to IDEAS "Structured Learning Path" and
+    the (later) level-adaptive teaching, VISION Step 3.
 
 ## Shared "reliable LLM access" library (cross-project)
 
