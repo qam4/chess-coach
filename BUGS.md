@@ -293,7 +293,14 @@ anecdotes.*
 - **Proposed fix**: when `classification == good` and the student's move
   equals the engine best (eval drop ~0), instruct the coach to affirm and
   teach the idea behind it — never to invent a superior alternative.
-- **Status**: OPEN.
+- **Status**: FIXED — `build_rich_move_evaluation_prompt` now branches on
+  `user_move == best_move`: the move-eval prompt's instruction block is
+  `_MOVE_EVAL_INSTRUCTIONS_BEST` (affirm the engine's top move, teach the
+  idea, "there is no better move here — do NOT suggest a different/better
+  move") instead of the "what was missed / why best is stronger" framing.
+  Keyed on exact move equality (a near-best but *different* move may still
+  point at the engine's slight preference). Regression tests in
+  `tests/test_prompts.py::TestPlayedBestMove`.
 
 ### BUG-015: Piece-type / square misidentification in coaching prose
 - **Observed** (reconfirms the BACKLOG "relational falsehoods" gap, with

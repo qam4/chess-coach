@@ -243,6 +243,26 @@ class TestMoveEvaluationUsesSan:
         assert "e1g1" not in prompt
 
 
+class TestPlayedBestMove:
+    """BUG-014: when the student played the engine's top move, the prompt must
+    affirm it and forbid inventing a 'better' alternative."""
+
+    def test_played_best_affirms_and_forbids_alternative(self) -> None:
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "b8c6", "b8c6")  # user == best
+        prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+        assert "there is no better move here" in prompt
+        assert 'Do NOT suggest a different or "better" move' in prompt
+        # The "what was missed / why the best move is stronger" framing must NOT appear.
+        assert "Explain why the best move is stronger" not in prompt
+        assert "what the move failed to address" not in prompt
+
+    def test_inferior_move_uses_gap_framing(self) -> None:
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6")  # user != best
+        prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+        assert "Explain why the best move is stronger" in prompt
+        assert "there is no better move here" not in prompt
+
+
 # --------------------------------------------------------------------------
 # Socratic mode: the prompt must ask guiding questions and must NOT leak the
 # answer (best move, top lines, or the evaluation).

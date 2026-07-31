@@ -337,6 +337,15 @@ What the best move achieves: {best_move_idea}
 
 {sections}
 
+{move_instructions}\
+{level_instructions}\
+{critical_section}\
+Keep your response concise (under 100 words).\
+"""
+
+# Instructions when the student's move was NOT the engine's best — explain the
+# gap and why the best move is stronger.
+_MOVE_EVAL_INSTRUCTIONS_INFERIOR = """\
 COACHING INSTRUCTIONS:
 - Constructive framing: Acknowledge what the student may have been trying to \
 do before explaining what was missed.
@@ -346,9 +355,20 @@ the opponent to do, or what problem did it leave unsolved?
 concrete terms (specific squares, pieces, threats)?
 - Stay grounded: Only reference facts present in the data above. Do not \
 invent analysis, piece placements, or tactical ideas not in the data.
-{level_instructions}\
-{critical_section}\
-Keep your response concise (under 100 words).\
+"""
+
+# Instructions when the student PLAYED the engine's top move — affirm it and
+# teach the idea; do NOT invent a "better" alternative (BUG-014).
+_MOVE_EVAL_INSTRUCTIONS_BEST = """\
+COACHING INSTRUCTIONS:
+- The student played the engine's top move — there is no better move here. \
+Do NOT suggest a different or "better" move, and do NOT imply the move was \
+merely okay or that a superior alternative exists.
+- Affirm the move clearly, then teach the idea behind it: what does it \
+achieve or prepare (specific squares, pieces, plans)?
+- Give the student a transferable principle they can reuse.
+- Stay grounded: Only reference facts present in the data above. Do not \
+invent analysis, piece placements, or tactical ideas not in the data.
 """
 
 
@@ -894,6 +914,13 @@ def build_rich_move_evaluation_prompt(
     # Level-adaptive instructions
     level_instructions = _build_level_instructions(level)
 
+    # When the student's move IS the engine's top move, affirm it and teach
+    # the idea — never invent a "better" alternative (BUG-014). Keyed on move
+    # equality (exact), not a small eval drop: a near-best but different move
+    # can still legitimately point at the engine's slight preference.
+    played_best = report.user_move == report.best_move
+    move_instructions = _MOVE_EVAL_INSTRUCTIONS_BEST if played_best else _MOVE_EVAL_INSTRUCTIONS_INFERIOR
+
     return RICH_MOVE_EVALUATION_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,
         level=level,
@@ -908,6 +935,7 @@ def build_rich_move_evaluation_prompt(
         nag=report.nag,
         best_move_idea=report.best_move_idea,
         sections="\n\n".join(sections),
+        move_instructions=move_instructions,
         level_instructions=level_instructions,
         critical_section=critical_section,
     )
