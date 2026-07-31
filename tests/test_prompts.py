@@ -177,14 +177,14 @@ class TestPerspective:
 CASTLE_FEN = "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
 
 
-def _move_eval_report(fen: str, user_move: str, best_move: str) -> ComparisonReport:
+def _move_eval_report(fen: str, user_move: str, best_move: str, eval_drop_cp: int = 70) -> ComparisonReport:
     return ComparisonReport(
         fen=fen,
         user_move=user_move,
         user_eval_cp=-50,
         best_move=best_move,
         best_eval_cp=20,
-        eval_drop_cp=70,
+        eval_drop_cp=eval_drop_cp,
         classification="mistake",
         nag="?",
         best_move_idea="develop a piece",
@@ -256,11 +256,24 @@ class TestPlayedBestMove:
         assert "Explain why the best move is stronger" not in prompt
         assert "what the move failed to address" not in prompt
 
+    def test_sound_move_affirms_without_pushing_alternative(self) -> None:
+        # user != best, but a small eval drop (within the sound band): a strong
+        # move that scores well in the multi-line PV. Affirm, don't second-guess.
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=30)
+        prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+        assert "strong, sound move" in prompt
+        assert "do NOT nitpick or imply the student" in prompt
+        # It must NOT claim "no better move exists" (the engine's top line is
+        # marginally higher) nor fall back to the gap framing.
+        assert "there is no better move here" not in prompt
+        assert "Explain why the best move is stronger" not in prompt
+
     def test_inferior_move_uses_gap_framing(self) -> None:
-        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6")  # user != best
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6")  # drop 70 > sound band
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
         assert "Explain why the best move is stronger" in prompt
         assert "there is no better move here" not in prompt
+        assert "strong, sound move" not in prompt
 
 
 # --------------------------------------------------------------------------

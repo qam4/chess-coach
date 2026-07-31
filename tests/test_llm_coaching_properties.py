@@ -23,7 +23,7 @@ import chess
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from chess_coach.coaching_phrases import describe_tactic, select_tactics
+from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP, describe_tactic, select_tactics
 from chess_coach.coaching_templates import (
     CAT_ASSESSMENT,
     CAT_PIECE_SAFETY,
@@ -469,20 +469,32 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     prompt = build_rich_move_evaluation_prompt(report, level=level)
     prompt_lower = prompt.lower()
 
-    # Explain what the move failed to address (Req 3.1)
-    assert "failed to address" in prompt_lower or "what the move" in prompt_lower or "allowed" in prompt_lower, (
-        "Prompt must instruct LLM to explain what the move failed to address"
-    )
+    # The "explain the gap / why the best move is stronger" instructions (Req
+    # 3.1-3.3) only apply when the move is inferior. On a move that is the
+    # engine's top move or scores well in the multi-line PV (eval drop within
+    # the sound band), the prompt AFFIRMS instead and must not push a "better"
+    # alternative (BUG-014). Assert the branch-appropriate instructions.
+    played_best = report.user_move == report.best_move
+    if played_best or report.eval_drop_cp <= SOUND_MAX_DROP_CP:
+        assert "do not suggest a different" in prompt_lower, (
+            "Affirming branch must forbid suggesting a different/better move"
+        )
+        assert "teach the idea behind it" in prompt_lower, "Affirming branch must instruct to teach the idea"
+    else:
+        # Explain what the move failed to address (Req 3.1)
+        assert "failed to address" in prompt_lower or "what the move" in prompt_lower or "allowed" in prompt_lower, (
+            "Prompt must instruct LLM to explain what the move failed to address"
+        )
 
-    # Explain why best move is stronger (Req 3.2)
-    assert "stronger" in prompt_lower or "best move" in prompt_lower, (
-        "Prompt must instruct LLM to explain why best move is stronger"
-    )
+        # Explain why best move is stronger (Req 3.2)
+        assert "stronger" in prompt_lower or "best move" in prompt_lower, (
+            "Prompt must instruct LLM to explain why best move is stronger"
+        )
 
-    # Constructive framing (Req 3.3)
-    assert "constructive" in prompt_lower or "acknowledge" in prompt_lower, (
-        "Prompt must contain constructive framing instruction"
-    )
+        # Constructive framing (Req 3.3)
+        assert "constructive" in prompt_lower or "acknowledge" in prompt_lower, (
+            "Prompt must contain constructive framing instruction"
+        )
 
     # Grounding instruction (Req 3.5)
     assert "grounded" in prompt_lower or "only" in prompt_lower, "Prompt must contain grounding instruction"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import chess
 
 from chess_coach.coaching_phrases import (
+    SOUND_MAX_DROP_CP,
     build_move_menu,
     describe_hanging,
     describe_king_safety,
@@ -364,6 +365,25 @@ COACHING INSTRUCTIONS:
 - The student played the engine's top move — there is no better move here. \
 Do NOT suggest a different or "better" move, and do NOT imply the move was \
 merely okay or that a superior alternative exists.
+- Affirm the move clearly, then teach the idea behind it: what does it \
+achieve or prepare (specific squares, pieces, plans)?
+- Give the student a transferable principle they can reuse.
+- Stay grounded: Only reference facts present in the data above. Do not \
+invent analysis, piece placements, or tactical ideas not in the data.
+"""
+
+# Instructions when the student played a SOUND move — one that scores well in
+# the engine's multi-line PV (small eval drop from best), even if it is not the
+# single top move. Affirm it as a strong choice; do NOT second-guess it or push
+# a marginally-preferred alternative (BUG-014, broadened beyond the exact best
+# move). Distinct from _MOVE_EVAL_INSTRUCTIONS_BEST: we do not claim "no better
+# move exists" because the engine's top line scores slightly higher.
+_MOVE_EVAL_INSTRUCTIONS_SOUND = """\
+COACHING INSTRUCTIONS:
+- The student played a strong, sound move — it is among the engine's top \
+choices and gives up nothing meaningful. Treat it as a good move: do NOT \
+suggest a different or "better" move, and do NOT nitpick or imply the student \
+should have played something else.
 - Affirm the move clearly, then teach the idea behind it: what does it \
 achieve or prepare (specific squares, pieces, plans)?
 - Give the student a transferable principle they can reuse.
@@ -914,12 +934,18 @@ def build_rich_move_evaluation_prompt(
     # Level-adaptive instructions
     level_instructions = _build_level_instructions(level)
 
-    # When the student's move IS the engine's top move, affirm it and teach
-    # the idea — never invent a "better" alternative (BUG-014). Keyed on move
-    # equality (exact), not a small eval drop: a near-best but different move
-    # can still legitimately point at the engine's slight preference.
-    played_best = report.user_move == report.best_move
-    move_instructions = _MOVE_EVAL_INSTRUCTIONS_BEST if played_best else _MOVE_EVAL_INSTRUCTIONS_INFERIOR
+    # Do not second-guess a move that scores well in the engine's multi-line
+    # PV, not only the single top move (BUG-014). Three cases:
+    #   - exact top move  -> affirm, "there is no better move here".
+    #   - sound move (eval drop from best within SOUND_MAX_DROP_CP) -> affirm
+    #     as a strong choice; don't push the engine's marginally-preferred line.
+    #   - otherwise (dubious/blunder) -> explain the gap and the stronger move.
+    if report.user_move == report.best_move:
+        move_instructions = _MOVE_EVAL_INSTRUCTIONS_BEST
+    elif report.eval_drop_cp <= SOUND_MAX_DROP_CP:
+        move_instructions = _MOVE_EVAL_INSTRUCTIONS_SOUND
+    else:
+        move_instructions = _MOVE_EVAL_INSTRUCTIONS_INFERIOR
 
     return RICH_MOVE_EVALUATION_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,

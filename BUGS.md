@@ -293,14 +293,24 @@ anecdotes.*
 - **Proposed fix**: when `classification == good` and the student's move
   equals the engine best (eval drop ~0), instruct the coach to affirm and
   teach the idea behind it — never to invent a superior alternative.
-- **Status**: FIXED — `build_rich_move_evaluation_prompt` now branches on
-  `user_move == best_move`: the move-eval prompt's instruction block is
-  `_MOVE_EVAL_INSTRUCTIONS_BEST` (affirm the engine's top move, teach the
-  idea, "there is no better move here — do NOT suggest a different/better
-  move") instead of the "what was missed / why best is stronger" framing.
-  Keyed on exact move equality (a near-best but *different* move may still
-  point at the engine's slight preference). Regression tests in
-  `tests/test_prompts.py::TestPlayedBestMove`.
+- **Status**: FIXED — `build_rich_move_evaluation_prompt` now branches on how
+  the played move scores in the engine's multi-line PV, in three cases:
+  - **exact top move** (`user_move == best_move`) →
+    `_MOVE_EVAL_INSTRUCTIONS_BEST`: affirm, "there is no better move here — do
+    NOT suggest a different/better move".
+  - **sound move** (eval drop from best within `SOUND_MAX_DROP_CP`, i.e. it
+    scores well in the PV but is not the single top move) →
+    `_MOVE_EVAL_INSTRUCTIONS_SOUND`: affirm it as a strong choice and teach the
+    idea; do NOT nitpick or push the engine's marginally-preferred line (it
+    does not claim "no better move exists", since the top line is slightly
+    higher).
+  - **otherwise** (dubious/blunder) → the existing "what was missed / why best
+    is stronger" gap framing.
+  This broadens the original exact-best fix so the coach does not second-guess
+  ANY move that scores well in the multi-line PV, not just the single best.
+  Regression tests in `tests/test_prompts.py::TestPlayedBestMove` (best, sound,
+  inferior) and the branch-aware property test
+  `test_move_prompt_contains_instructions_and_data`.
 
 ### BUG-015: Piece-type / square misidentification in coaching prose
 - **Observed** (reconfirms the BACKLOG "relational falsehoods" gap, with
