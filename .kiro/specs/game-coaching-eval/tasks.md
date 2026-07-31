@@ -89,9 +89,11 @@ and kiro-monitor — build only the driver + trajectory + aggregation.
         game (no tunnel needed) — played at student/opponent Elo, coached 5
         student moves, 0 fidelity violations, trajectory + report written.
         (A live LLM/judge run is pending tunnel + Task 4.)
-  - [ ] 5.3 Full green (pytest/mypy/ruff/format — currently green). Docs
-        note + kiro-monitor launch example, and record the first real
-        (LLM, judged) run's findings in BACKLOG — pending tunnel + Task 4.
+  - [x] 5.3 Full green (pytest 615 / mypy / ruff / format). First live
+        pairwise run done + recorded in BACKLOG: qwen3:14b, 2 games, 40
+        scenarios, guidance OFF vs ON → ON 21 / OFF 12 / 7 ties, 64%
+        win-rate, p=0.163 (directional, not significant; matches the
+        curated-scenario finding). A short docs note remains nice-to-have.
   - _Requirements: 5.1, 5.2, 6.3, 8.1, 8.3_
 
 - [ ] 6. (v2, deferred) Game-level judging pass

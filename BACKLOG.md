@@ -185,7 +185,7 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
 ## Coaching-eval harness
 
-- **End-to-end game-coaching eval — AGREED, being specced (2026-07-30),
+- **End-to-end game-coaching eval — SHIPPED (2026-07-30),
   `.kiro/specs/game-coaching-eval/`.** The current benchmark judges the
   coach on isolated, curated positions — the "position analyst" mode
   VISION does NOT want, and it never exercises the reactive move-feedback
@@ -218,6 +218,25 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   - **Synergy:** the trajectory it produces is exactly what the cross-game
     tracker (below) consumes — this harness is also the tracker's test
     fixture and first data source.
+  - **Shipped:** pure core `eval/game_coaching.py` (`play_game` /
+    `aggregate` / `TurnRecord` / `GameTrajectory`, unit+property tested),
+    judge-free driver `scripts/eval_game_coaching.py` (objective fidelity
+    per turn), and the **pairwise** driver
+    `scripts/eval_game_coaching_pairwise.py` — a played game's student moves
+    become move-feedback scenarios fed to the existing validated
+    `run_move_feedback_pairwise` (guidance off vs on), judged by the
+    frontier kiro-cli. Three Blunder roles kept distinct (student-weak /
+    opponent / full-strength coach oracle).
+  - **First live result (2026-07-30):** qwen3:14b, 2 games @ student 1350 /
+    opponent 1500 Elo, 40 coaching scenarios, sonnet judge via kiro-cli,
+    guidance OFF vs ON. **ON 21, OFF 12, 7 ties → 64% win-rate of decisive,
+    two-sided sign test p=0.163 (not significant).** Directionally positive
+    and consistent with the curated move-feedback finding (qwen3:14b 75%,
+    p=0.041); weaker here because game trajectories include many quiet good
+    moves where guidance barely matters. The instrument works end-to-end;
+    more games (bigger n) would firm up significance. Next: more games /
+    models; a game-level judging pass (consistency / turning-points);
+    generalize the A/B beyond guidance (e.g. constrain-moves).
 
 - **Eval sensitivity & validity — THE next investment (decided 2026-06-18).**
   After three guidance A/Bs (more entries, tighter prompt, sharper cap-1
