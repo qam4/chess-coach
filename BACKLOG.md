@@ -237,6 +237,17 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
     more games (bigger n) would firm up significance. Next: more games /
     models; a game-level judging pass (consistency / turning-points);
     generalize the A/B beyond guidance (e.g. constrain-moves).
+  - **Two modes — and single/absolute is the right one for bug-finding
+    (insight 2026-07-30).** A/B (pairwise) reveals *differences* between two
+    configs and is the low-noise tool for change-detection; but a bug
+    present in BOTH arms hides as a "tie", so A/B is the wrong instrument
+    for "is the coach bugged?". The three bugs below leaked out of the A/B
+    run only incidentally (ties / the losing side's flaw). A **single mode**
+    — run ONE coach config over a game, frontier model audits each move
+    against the engine ground truth and emits a findings report — surfaces
+    defects directly, no second version needed. NOT built yet (the v1 A/B is
+    what shipped); single mode is the natural next addition when we want the
+    test to self-report bugs rather than hand-mine A/B rationales.
   - **Bugs + gaps this test surfaced (its real payoff).** Mining the 40
     judge rationales (not the tally) exposed concrete coaching defects the
     curated position benchmarks never caught — logged as BUG-013 (coach
