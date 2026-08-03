@@ -407,6 +407,18 @@ def test_rich_prompt_grounding_rules_retained() -> None:
     assert "Only use information from the engine data" in prompt
 
 
+def test_rich_prompts_forbid_invented_continuations() -> None:
+    # BUG-013: the coach must not narrate fabricated multi-move follow-up lines.
+    # The shared system grounding rule carries the constraint into both paths.
+    coaching = build_rich_coaching_prompt(_report_with_lines(WHITE_TO_MOVE_FEN, _MENU_LINES))
+    assert "inventing concrete continuations" in coaching
+    assert '"and then..."' in coaching
+
+    move_eval = build_rich_move_evaluation_prompt(_move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6"), "intermediate")
+    assert "inventing concrete continuations" in move_eval  # shared system rule
+    assert "follow-up move" in move_eval  # reinforced in the move-eval instructions
+
+
 def test_rich_prompt_no_menu_no_sourcing_rule_when_lines_empty() -> None:
     # Empty top_lines -> no menu -> the move-sourcing rule is omitted even
     # when the constraint is on (there is no sound move to name).

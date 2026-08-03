@@ -278,7 +278,26 @@ anecdotes.*
 - **Proposed fix**: constrain the prompt to not narrate continuations
   beyond what the engine top-line provides, and/or extend the checker to
   flag multi-move sequences whose later plies are illegal/unsupported.
-- **Status**: OPEN.
+- **Status**: FIXED (prompt constraint) — added a strict grounding rule to
+  `SYSTEM_PROMPT_V2` (shared by the position-coaching and move-eval rich
+  prompts): *do not narrate "and then..." move sequences or follow-up
+  variations unless those exact moves appear in the engine lines above;
+  explain the plan/idea in words instead — a made-up line is the most
+  misleading error you can make.* The "Stay grounded" bullet in all three
+  move-eval instruction blocks (best/sound/inferior) now names "follow-up
+  move sequences" explicitly. Regression test
+  `tests/test_prompts.py::test_rich_prompts_forbid_invented_continuations`.
+  Live look (qwen3:14b, guidance on, 6 move-feedback scenarios): none narrated
+  an invented continuation; feedback stayed on the named move + one principle.
+  **Deferred (deliberately): the deterministic checker extension.** Flagging a
+  fabricated multi-move line at the fidelity checker's precision-first bar is
+  hard: telling apart a *fabricated variation* ("exd4, then Ne3+, Nc3") from
+  *legitimate prose mentioning two moves* ("exd4 was fine, and later O-O")
+  needs understanding the checker doesn't encode. Playing the line forward
+  false-positives on plans that skip the opponent's replies; requiring a match
+  to an engine PV false-positives on ordinary two-move mentions. Either erodes
+  trust, which this checker refuses to do, so the frontier judge (which already
+  catches the "legal-but-unsupported" case) stays the backstop for it.
 
 ### BUG-014: Coach second-guesses a move that was already the engine's best
 - **Observed**: When the student played the **engine's top move** (e.g.

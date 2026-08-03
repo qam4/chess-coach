@@ -186,6 +186,10 @@ GROUNDING RULES (strict):
 - Only use information from the engine data sections provided below.
 - Never invent analysis, piece placements, or tactical ideas not in the data.
 - Never describe a piece as being on a square unless the data confirms it.
+- Do not narrate "and then..." move sequences or follow-up variations unless \
+those exact moves appear in the engine lines above. Explain the plan or idea \
+in words rather than inventing concrete continuations — a made-up line is the \
+most misleading error you can make.
 - If the engine data is empty or incomplete, say so honestly.
 
 CHESS PRINCIPLES (use these to frame your advice):
@@ -355,7 +359,8 @@ the opponent to do, or what problem did it leave unsolved?
 - Explain why the best move is stronger: What does it achieve or prevent, in \
 concrete terms (specific squares, pieces, threats)?
 - Stay grounded: Only reference facts present in the data above. Do not \
-invent analysis, piece placements, or tactical ideas not in the data.
+invent analysis, piece placements, tactical ideas, or follow-up move \
+sequences ("and then...") that are not in the data.
 """
 
 # Instructions when the student PLAYED the engine's top move — affirm it and
@@ -369,7 +374,8 @@ merely okay or that a superior alternative exists.
 achieve or prepare (specific squares, pieces, plans)?
 - Give the student a transferable principle they can reuse.
 - Stay grounded: Only reference facts present in the data above. Do not \
-invent analysis, piece placements, or tactical ideas not in the data.
+invent analysis, piece placements, tactical ideas, or follow-up move \
+sequences ("and then...") that are not in the data.
 """
 
 # Instructions when the student played a SOUND move — one that scores well in
@@ -388,7 +394,8 @@ should have played something else.
 achieve or prepare (specific squares, pieces, plans)?
 - Give the student a transferable principle they can reuse.
 - Stay grounded: Only reference facts present in the data above. Do not \
-invent analysis, piece placements, or tactical ideas not in the data.
+invent analysis, piece placements, tactical ideas, or follow-up move \
+sequences ("and then...") that are not in the data.
 """
 
 
