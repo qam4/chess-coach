@@ -1,0 +1,77 @@
+# Move-feedback benchmark — CAPTURE / EXCHANGE / PAWN-PUSH scenarios.
+#
+# These target the coaching moments the end-to-end game test found the coach
+# weakest on (good captures/trades got "no concrete principle"). They exist to
+# A/B the new material guidance (principle.capture_value / exchange_when_ahead /
+# pawn_majority_push) off vs on. Each position triggers at least one of the new
+# board-derived features (favorable_capture / material_lead / pawn_majority);
+# the student `move` is a capture, trade, or pawn push (a mix of good and
+# dubious). Ground truth stays ENGINE-derived at eval time — no hand-annotated
+# verdicts. Every `move` must be legal in `fen` (checked by the loader) and the
+# intended feature must fire (checked by scripts/eval_check_annotations-style
+# validation before running).
+
+version: 1
+scenarios:
+  # --- capture value: a material-winning capture is available -------------
+  - id: cap_pawn_takes_hanging_knight
+    fen: "4k3/pp3ppp/8/3n4/4P3/8/PP3PPP/4K3 w - - 0 1"
+    move: e4d5
+    level: intermediate
+    note: "pawn wins an undefended knight — capture value (least valuable attacker)"
+
+  - id: cap_take_undefended_knight
+    fen: "r3k2r/ppp2ppp/2n5/8/4n3/2N5/PPP2PPP/R3K2R w KQkq - 0 1"
+    move: c3e4
+    level: intermediate
+    note: "knight takes an undefended knight — winning material"
+
+  - id: cap_miss_the_win_quiet_move
+    fen: "4k3/pp3ppp/8/3n4/4P3/8/PP3PPP/4K3 w - - 0 1"
+    move: b2b3
+    level: intermediate
+    note: "a favorable capture (exd5) is available but the student plays a quiet pawn move"
+
+  - id: cap_recapture_wins_knight
+    fen: "r1bqkb1r/pppp1ppp/5n2/4n3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1"
+    move: f3e5
+    level: intermediate
+    note: "the e5 knight is undefended — Nxe5 wins material (recapture/win)"
+
+  # --- when to exchange: side to move is up material ----------------------
+  - id: exch_trade_rooks_when_up_a_rook
+    fen: "3rk3/pp3ppp/8/8/8/8/PP3PPP/3RK2R w K - 0 1"
+    move: d1d8
+    level: intermediate
+    note: "up a rook: trading a pair of rooks simplifies toward the win"
+
+  - id: exch_trade_queens_when_ahead
+    fen: "4k3/pp1q1ppp/8/8/8/8/PP1Q1PPP/3RK3 w - - 0 1"
+    move: d2d7
+    level: intermediate
+    note: "up an exchange (rook) with queens on: Qxd7+ trades queens to simplify"
+
+  - id: exch_keep_tension_passive_when_ahead
+    fen: "3rk3/pp3ppp/8/8/8/8/PP3PPP/3RK2R w K - 0 1"
+    move: h1f1
+    level: intermediate
+    note: "up a rook but shuffles a rook instead of simplifying with Rxd8"
+
+  # --- pawn majority: push the candidate to make a passer -----------------
+  - id: maj_push_candidate_c_pawn
+    fen: "4k3/pp3ppp/8/8/8/8/PPP2PPP/4K3 w - - 0 1"
+    move: c2c4
+    level: intermediate
+    note: "3v2 queenside majority: pushing the unopposed c-pawn (candidate) makes a passer"
+
+  - id: maj_push_wrong_pawn
+    fen: "4k3/pp3ppp/8/8/8/8/PPP2PPP/4K3 w - - 0 1"
+    move: a2a4
+    level: intermediate
+    note: "majority present but advances the opposed a-pawn rather than the candidate c-pawn"
+
+  - id: maj_kingside_push_f_pawn
+    fen: "4k3/ppp3pp/8/8/8/8/PPP2PPP/4K3 w - - 0 1"
+    move: f2f4
+    level: intermediate
+    note: "3v2 kingside majority: advancing the majority to create a passer"

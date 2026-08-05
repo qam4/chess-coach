@@ -194,12 +194,26 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   flank a–c/f–h pawn majority) → `principle.pawn_majority_push` (advance the
   majority, push the candidate first). Verified end-to-end: each triggering
   position selects exactly its new entry (features → selector → guidance).
-  Not yet done: a move-feedback **pairwise A/B** (guidance off vs on) on a
-  capture/material-heavy scenario set to measure whether these entries move
-  the teaching-quality needle on the moves where the coach was weak — the
-  proper validation, deferred as the next measurement step. The
-  `favorable_capture` trigger is a heuristic (no full static-exchange eval);
-  the engine lines in the prompt remain the oracle for the actual move.
+  **A/B VALIDATED (2026-08-05).** Built a capture/material-heavy move-feedback
+  benchmark (`data/eval/move_feedback_material.yaml`, 10 scenarios: 4 capture,
+  3 exchange, 3 pawn-majority; each verified to fire its intended feature) and
+  ran the move-feedback pairwise A/B (guidance off vs on, qwen3:14b, sonnet
+  judge via kiro-cli, 3 votes/pair). **Result: ON 9, OFF 1, on win-rate 90%,
+  two-sided sign test p=0.021 — significant.** The judge rationales confirm
+  real teaching: ON won by naming the concrete principle and staying grounded
+  (e.g. "capture with the least valuable piece" = `capture_value` verbatim;
+  "queen trade and simplification toward the endgame" = `exchange_when_ahead`),
+  while OFF drifted into vague/positional advice, invented a king-attack
+  narrative, or made a piece-type error ("wins a pawn" when the capture won a
+  knight — the BUG-015 class). So the new content measurably helps exactly the
+  moves the game test found the coach weak on. Caveats: small n (10); the K+P
+  majority positions are sparse enough that `phase:endgame` also fires, so the
+  judge sometimes credited "king activity" over the majority principle — a
+  piece-richer majority set would isolate that lesson; the one OFF win was ON
+  adding a less-relevant king-safety aside. The `favorable_capture` trigger is
+  a heuristic (no full static-exchange eval); the engine lines in the prompt
+  remain the oracle for the actual move. Follow-up: a larger, more
+  game-realistic scenario set (and isolate the majority lesson).
 
 ## Coaching-eval harness
 
