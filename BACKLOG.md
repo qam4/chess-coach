@@ -183,6 +183,24 @@ This file is for "real, agreed, not-yet-scheduled" follow-ups.
   lead + trade-available, pawn majority, recapture choice) — part of the
   "grow the resource" + "richer engine features" levers.
 
+  **SHIPPED (2026-08-05).** All three teaching moments are now in the
+  resource, keyed to three new board-derived `Position_Feature`s (added to
+  the closed `FEATURE_VOCAB`, extracted deterministically from the board in
+  `features.py`, same discipline as `open_file`/`exposed_king`):
+  `favorable_capture` (a material-winning capture exists — higher-value or
+  undefended victim) → entry `principle.capture_value`; `material_lead` (side
+  to move up ≥ 2 pawns) → `principle.exchange_when_ahead` (trade pieces not
+  pawns when ahead; keep pieces when attacking/behind); `pawn_majority` (a
+  flank a–c/f–h pawn majority) → `principle.pawn_majority_push` (advance the
+  majority, push the candidate first). Verified end-to-end: each triggering
+  position selects exactly its new entry (features → selector → guidance).
+  Not yet done: a move-feedback **pairwise A/B** (guidance off vs on) on a
+  capture/material-heavy scenario set to measure whether these entries move
+  the teaching-quality needle on the moves where the coach was weak — the
+  proper validation, deferred as the next measurement step. The
+  `favorable_capture` trigger is a heuristic (no full static-exchange eval);
+  the engine lines in the prompt remain the oracle for the actual move.
+
 ## Coaching-eval harness
 
 - **End-to-end game-coaching eval — SHIPPED (2026-07-30),

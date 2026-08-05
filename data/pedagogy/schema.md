@@ -78,6 +78,9 @@ The available names:
 | `isolated_pawn` | The side to move has an isolated pawn. |
 | `exposed_king` | The side to move's king is exposed (threshold-based). |
 | `open_file` | There is an open file relevant to the position. |
+| `material_lead` | The side to move is ahead in material (>= ~2 pawns). |
+| `pawn_majority` | The side to move has a pawn majority on a flank (a–c or f–h). |
+| `favorable_capture` | The side to move has a material-winning capture (higher-value or undefended victim). |
 
 An entry matches a position only when **every** feature it records is
 present in that position (Req 2.1), so prefer the smallest set of

@@ -20,11 +20,14 @@ from chess_coach.models import (
 from chess_coach.pedagogy.features import (
     EXPOSED_KING,
     EXPOSED_KING_THRESHOLD,
+    FAVORABLE_CAPTURE,
     FEATURE_VOCAB,
     HANGING_PIECE_OPPONENT,
     ISOLATED_PAWN,
+    MATERIAL_LEAD,
     OPEN_FILE,
     PASSED_PAWN,
+    PAWN_MAJORITY,
     PHASE_ENDGAME,
     PHASE_OPENING,
     TACTIC_BACK_RANK,
@@ -249,6 +252,46 @@ def test_seed_resource_features_are_covered_by_vocab() -> None:
     resource = load_resource(default_resource_path())
     used = frozenset().union(*(e.features for e in resource.entries))
     assert used <= FEATURE_VOCAB
+
+
+# ------------------------------------------- material / exchange features (BUG-015 content gap)
+
+# White (to move) is up a whole rook.
+MATERIAL_LEAD_FEN = "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"
+# Material equal, but White has a 3-vs-1 queenside pawn majority (a,b,c vs a).
+PAWN_MAJORITY_FEN = "4k3/p4pp1/8/8/8/8/PPP5/4K3 w - - 0 1"
+# White to move: e4xd5 wins an undefended knight with a pawn.
+FAVORABLE_CAPTURE_FEN = "4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1"
+
+
+def test_material_lead_detected_when_ahead() -> None:
+    assert MATERIAL_LEAD in extract_features(_report(MATERIAL_LEAD_FEN))
+
+
+def test_material_lead_absent_when_equal() -> None:
+    # The starting position is balanced — no material lead.
+    assert MATERIAL_LEAD not in extract_features(_report(START_FEN))
+
+
+def test_pawn_majority_detected_on_a_flank() -> None:
+    feats = extract_features(_report(PAWN_MAJORITY_FEN))
+    assert PAWN_MAJORITY in feats
+    # Material is equal here, so the majority is not confounded with a lead.
+    assert MATERIAL_LEAD not in feats
+
+
+def test_pawn_majority_absent_in_symmetric_start() -> None:
+    assert PAWN_MAJORITY not in extract_features(_report(START_FEN))
+
+
+def test_favorable_capture_detected_for_winning_capture() -> None:
+    # Pawn takes an undefended knight — a material-winning capture.
+    assert FAVORABLE_CAPTURE in extract_features(_report(FAVORABLE_CAPTURE_FEN))
+
+
+def test_favorable_capture_absent_in_quiet_start() -> None:
+    # No captures exist in the starting position.
+    assert FAVORABLE_CAPTURE not in extract_features(_report(START_FEN))
 
 
 # --------------------------------------------------------------- eco_context (2.3)

@@ -48,6 +48,13 @@ ISOLATED_PAWN = "isolated_pawn"
 EXPOSED_KING = "exposed_king"  # king_safety score below threshold
 OPEN_FILE = "open_file"  # a file with no pawns of either color
 
+# Material / exchange context — board-derived, keying the capture-value,
+# when-to-exchange, and pawn-push guidance the game-coaching test found the
+# knowledge bank was missing (weak coaching on material-winning moves).
+MATERIAL_LEAD = "material_lead"  # side to move is up material (>= threshold)
+PAWN_MAJORITY = "pawn_majority"  # side to move has a flank pawn majority
+FAVORABLE_CAPTURE = "favorable_capture"  # a material-winning capture exists
+
 # Tactical motifs are emitted as ``tactic:<normalized type>``. The set is
 # closed: the engine's known motif types plus the back-rank motif used in
 # the curated resource. A motif whose normalized name is not here is not
@@ -86,6 +93,9 @@ FEATURE_VOCAB: frozenset[str] = (
             ISOLATED_PAWN,
             EXPOSED_KING,
             OPEN_FILE,
+            MATERIAL_LEAD,
+            PAWN_MAJORITY,
+            FAVORABLE_CAPTURE,
         }
     )
     | TACTIC_FEATURES
@@ -109,6 +119,28 @@ EXPOSED_KING_THRESHOLD = -50
 # full-move number is still low, and the middlegame after that.
 ENDGAME_MAJOR_MINOR_MAX = 6
 OPENING_MAX_FULLMOVE = 10
+
+# Minimum material edge (in pawns) for ``material_lead`` to fire — roughly a
+# clear pawn-plus so it keys "simplify when ahead" only when there is a real
+# lead, not a fleeting half-pawn.
+MATERIAL_LEAD_MIN = 2
+
+# Standard piece values (king excluded) for the material and capture-value
+# derivations. Centipawn engine eval is separate; this is a simple, explainable
+# count used only to KEY guidance, never to evaluate a position.
+_PIECE_VALUES: dict[chess.PieceType, int] = {
+    chess.PAWN: 1,
+    chess.KNIGHT: 3,
+    chess.BISHOP: 3,
+    chess.ROOK: 5,
+    chess.QUEEN: 9,
+}
+
+# Flank files for the pawn-majority detection: queenside a–c, kingside f–h.
+# The central d/e files are excluded so a majority means a genuine wing
+# preponderance that can manufacture a passed pawn (the classic 3-vs-2).
+_QUEENSIDE_FILES = chess.BB_FILE_A | chess.BB_FILE_B | chess.BB_FILE_C
+_KINGSIDE_FILES = chess.BB_FILE_F | chess.BB_FILE_G | chess.BB_FILE_H
 
 
 def _side_to_move(fen: str) -> tuple[str, str]:
@@ -177,6 +209,51 @@ def _has_open_file(board: chess.Board) -> bool:
     return False
 
 
+def _material(board: chess.Board, color: chess.Color) -> int:
+    """Sum of standard piece values for ``color`` (king excluded)."""
+    return sum(value * len(board.pieces(pt, color)) for pt, value in _PIECE_VALUES.items())
+
+
+def _has_pawn_majority(board: chess.Board, color: chess.Color) -> bool:
+    """True when ``color`` has more pawns than the opponent on a flank (a–c or f–h)."""
+    mine = board.pieces_mask(chess.PAWN, color)
+    theirs = board.pieces_mask(chess.PAWN, not color)
+    for wing in (_QUEENSIDE_FILES, _KINGSIDE_FILES):
+        if chess.popcount(mine & wing) > chess.popcount(theirs & wing):
+            return True
+    return False
+
+
+def _has_favorable_capture(board: chess.Board) -> bool:
+    """True when the side to move has a capture that wins material.
+
+    A capture wins material when it takes a higher-value piece than the
+    capturer (winning the exchange even after a recapture) or takes a piece
+    the opponent does not defend at all. Board-derived and used only to KEY
+    the capture-value guidance — it is a heuristic trigger, not a claim that a
+    specific capture is best (the engine lines in the prompt remain the oracle
+    for the actual move).
+    """
+    opponent = not board.turn
+    for move in board.legal_moves:
+        if not board.is_capture(move):
+            continue
+        if board.is_en_passant(move):
+            victim_val = _PIECE_VALUES[chess.PAWN]
+        else:
+            victim = board.piece_at(move.to_square)
+            if victim is None:
+                continue
+            victim_val = _PIECE_VALUES.get(victim.piece_type, 0)
+        attacker = board.piece_at(move.from_square)
+        attacker_val = _PIECE_VALUES.get(attacker.piece_type, 0) if attacker is not None else 0
+        if victim_val > attacker_val:
+            return True
+        if not board.attackers(opponent, move.to_square):
+            return True
+    return False
+
+
 def _normalize_tactic(motif_type: str) -> str:
     """Map a raw ``TacticalMotif.type`` to its ``tactic:`` feature name.
 
@@ -206,6 +283,12 @@ def extract_features(report: PositionReport) -> frozenset[str]:
         features.add(_phase_feature(board))
         if _has_open_file(board):
             features.add(OPEN_FILE)
+        if _material(board, board.turn) - _material(board, not board.turn) >= MATERIAL_LEAD_MIN:
+            features.add(MATERIAL_LEAD)
+        if _has_pawn_majority(board, board.turn):
+            features.add(PAWN_MAJORITY)
+        if _has_favorable_capture(board):
+            features.add(FAVORABLE_CAPTURE)
 
     # Material safety from hanging_pieces (Req: undefended / opponent).
     if report.hanging_pieces.get(side):

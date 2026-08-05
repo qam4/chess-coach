@@ -321,3 +321,61 @@ entries:
     levels: [beginner, intermediate, advanced]
     features: [threat_present]
     citation: "Heisman, The Improving Chess Thinker, prophylactic thinking / 'what does my opponent threaten?' (unverified locus)"
+
+  # ---------------------------------------------------------------
+  # Batch 3 — capture value, exchanging, and pushing pawns. These are
+  # the concrete material/exchange moments the end-to-end game-coaching
+  # test found the resource did NOT cover (the coach was weak exactly on
+  # good captures and trades). Keyed to the material features
+  # (favorable_capture, material_lead, pawn_majority). how_to_apply
+  # states the IDEA and what to look for; the concrete move still comes
+  # from the engine lines already in the coach prompt.
+  # ---------------------------------------------------------------
+
+  - id: principle.capture_value
+    type: principle
+    theme: capture value
+    focus: >
+      When you win material, how you take it matters. Capture with your
+      least valuable attacker, and when you recapture, take with the
+      piece that also improves your position.
+    how_to_apply: >
+      Before making a capture, check which of your attackers is cheapest
+      — winning a knight with a pawn is a better deal than with a queen.
+      On a recapture, prefer the piece that ends up more active or points
+      toward the center, all else being equal.
+    levels: [beginner, intermediate]
+    features: [favorable_capture]
+    citation: "Capablanca, Chess Fundamentals, relative piece values and exchanges (unverified locus)"
+
+  - id: principle.exchange_when_ahead
+    type: principle
+    theme: when to exchange
+    focus: >
+      Trading pieces when you are ahead in material simplifies the game
+      toward a winning endgame; trade pieces (not pawns) to reach a
+      position where your extra material decides.
+    how_to_apply: >
+      With a material lead, welcome fair trades of pieces and steer toward
+      an endgame, but keep your pawns on the board. If you are attacking
+      or behind, do the opposite — keep pieces on to preserve your chances
+      rather than trading into a lost or drawn ending.
+    levels: [beginner, intermediate, advanced]
+    features: [material_lead]
+    citation: "Capablanca, Chess Fundamentals, ch. on simplification when ahead (unverified locus)"
+
+  - id: principle.pawn_majority_push
+    type: principle
+    theme: pawn majority
+    focus: >
+      A pawn majority on one wing — more pawns than the opponent there —
+      can be advanced to manufacture a passed pawn, a lasting asset that
+      grows in the endgame.
+    how_to_apply: >
+      Advance the majority as a unit, and push the candidate (the pawn
+      with no enemy pawn directly in front of it) first so it can pass.
+      Support the advance with your king in the endgame, and do not rush a
+      pawn the opponent can comfortably blockade.
+    levels: [intermediate, advanced]
+    features: [pawn_majority]
+    citation: "Silman, Silman's Complete Endgame Course, creating a passed pawn from a majority (unverified locus)"
