@@ -344,4 +344,24 @@ anecdotes.*
 - **Proposed fix**: extend the objective fidelity checks to piece-type on
   captures and a few geometry/pawn-structure adjectives; keep the judge
   `grounded` criterion as the backstop.
-- **Status**: OPEN.
+- **Status**: FIXED (checker extension) — `verify.py` gained three
+  precision-first checks, each anchored to an explicit square or a legal
+  capture move so it never guesses which piece/square a loose phrase means:
+  - `piece_type`: a capture described as taking the wrong piece (e.g. "capture
+    the pawn with dxe3" when dxe3 takes a knight). Fires only when the legal
+    captures named in the text agree on a single victim type; the "win(s)"
+    verb is excluded so the "wins a pawn" material idiom is not misread.
+  - `pawn_structure`: "isolated pawn on <sq>" when a friendly pawn stands on
+    an adjacent file (isolation computed from the board).
+  - `geometry`: a piece "on <sq> ... central" (or "central … <piece> on
+    <sq>") when <sq> is outside the central region (files c–f, ranks 3–6) —
+    catches the `Kc1` "central" case. Plan-talk ("central control", "fight for
+    the center") is not flagged because it lacks the piece+square anchor.
+  The "supporting the knight on b1 (no knight there)" case was already caught
+  by the existing `placement` check. All three are **diagnostic-only** (they
+  populate `ObjectiveResult.fidelity_counts` and flow through the game-coaching
+  eval's per-turn counts automatically, but do NOT feed `factual_score`, which
+  stays comparable across runs) — the same treatment as `off_menu`/
+  `unsound_move`. Tests: `tests/test_fidelity.py` (positive + false-positive
+  guards for each). Bounded recall by design (only explicit, anchored claims);
+  the frontier judge `grounded` criterion remains the backstop.

@@ -189,8 +189,9 @@ class Violation:
     """One detected contradiction in coaching text.
 
     ``kind`` is one of ``illegal_move`` / ``unsound_move`` / ``off_menu`` /
-    ``placement`` / ``development`` / ``empty_source``; ``text`` is the
-    offending fragment; ``detail`` explains why it is wrong.
+    ``placement`` / ``development`` / ``empty_source`` / ``piece_type`` /
+    ``pawn_structure`` / ``geometry``; ``text`` is the offending fragment;
+    ``detail`` explains why it is wrong.
     """
 
     kind: str
@@ -380,6 +381,143 @@ def _check_empty_source(text: str, board: chess.Board) -> list[Violation]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# BUG-015 extensions: piece-type on captures, pawn-structure & geometry claims.
+# Each is anchored to an explicit square or a legal capture move so the checker
+# never guesses which piece/square a loose phrase refers to (precision-first).
+# ---------------------------------------------------------------------------
+
+_PIECE_NOUN = r"(pawn|knight|bishop|rook|queen)"
+
+# "captures/takes/grabs [the] <piece>" — a claim about WHICH piece was taken.
+# "win(s)" is deliberately excluded: "wins a pawn" is idiomatic for a material
+# edge, not necessarily capturing a pawn, and would false-positive.
+_CAPTURE_CLAIM_RE = re.compile(
+    rf"\b(?:captur\w*|tak\w*|grab\w*)\s+(?:the\s+|a\s+|an\s+|your\s+|his\s+|her\s+|their\s+|my\s+)?{_PIECE_NOUN}\b",
+    re.IGNORECASE,
+)
+
+# "isolated ... pawn ... on <sq>" and the reversed "pawn on <sq> ... isolated".
+_ISOLATED_RE = re.compile(r"\bisolated\b[^.!?]{0,40}?\bpawn\b[^.!?]{0,25}?\bon\s+([a-h][1-8])\b", re.IGNORECASE)
+_ISOLATED_REV_RE = re.compile(r"\bpawn\s+on\s+([a-h][1-8])\b[^.!?]{0,40}?\bisolated\b", re.IGNORECASE)
+
+# "central[ized] <piece> on <sq>" and "<piece> on <sq> is ... central[ized]".
+# Anchored to a piece + explicit square so plan-talk ("central control",
+# "fight for the center") is never flagged.
+_PIECES = r"pawn|knight|bishop|rook|queen|king"
+_CENTRAL_RE = re.compile(
+    rf"\bcentral(?:ized|ised)?\b\s+(?:\w+\s+){{0,2}}?(?:{_PIECES})\s+on\s+([a-h][1-8])\b", re.IGNORECASE
+)
+_CENTRAL_REV_RE = re.compile(
+    rf"\b(?:{_PIECES})\s+on\s+([a-h][1-8])\b[^.!?]{{0,20}}?\bis\b[^.!?]{{0,15}}?\bcentral(?:ized|ised)?\b",
+    re.IGNORECASE,
+)
+_CENTER_FILES = set("cdef")
+_CENTER_RANKS = set("3456")
+
+
+def _captured_piece_types(text: str, board: chess.Board) -> set[str]:
+    """Piece-type names captured by the legal capture moves named in ``text``."""
+    types: set[str] = set()
+    for m in _SAN_RE.finditer(text):
+        token = m.group(1)
+        if "x" not in token:
+            continue
+        try:
+            move = board.parse_san(token)
+        except (chess.InvalidMoveError, chess.IllegalMoveError, chess.AmbiguousMoveError, ValueError):
+            continue
+        if not board.is_capture(move):
+            continue
+        if board.is_en_passant(move):
+            types.add("pawn")
+        else:
+            victim = board.piece_at(move.to_square)
+            if victim is not None:
+                types.add(chess.piece_name(victim.piece_type))
+    return types
+
+
+def _check_capture_piece_type(text: str, board: chess.Board) -> list[Violation]:
+    """Flag a capture described as taking the wrong piece type.
+
+    Only fires when the legal capture moves named in the text agree on a
+    single victim type, so the claim is unambiguous; a capture phrase naming a
+    different piece is then a piece-type error. Bails on zero or multiple
+    distinct victim types to stay precision-first.
+    """
+    victims = _captured_piece_types(text, board)
+    if len(victims) != 1:
+        return []
+    (actual,) = tuple(victims)
+    out: list[Violation] = []
+    seen: set[str] = set()
+    for m in _CAPTURE_CLAIM_RE.finditer(text):
+        claimed = m.group(1).lower()
+        if claimed == actual or claimed in seen:
+            continue
+        seen.add(claimed)
+        out.append(Violation("piece_type", m.group(0), f"the captured piece is a {actual}, not a {claimed}"))
+    return out
+
+
+def _pawn_is_isolated(board: chess.Board, square: str) -> bool | None:
+    """True/False if a pawn on ``square`` is isolated, None if no pawn there.
+
+    Isolated = no friendly pawn on either adjacent file. Computed directly from
+    the board so it is independent of the engine's pawn-structure fields.
+    """
+    try:
+        sq = chess.parse_square(square)
+    except ValueError:
+        return None
+    piece = board.piece_at(sq)
+    if piece is None or piece.piece_type != chess.PAWN:
+        return None
+    file_idx = chess.square_file(sq)
+    for adj in (file_idx - 1, file_idx + 1):
+        if 0 <= adj <= 7:
+            for rank in range(8):
+                p = board.piece_at(chess.square(adj, rank))
+                if p is not None and p.piece_type == chess.PAWN and p.color == piece.color:
+                    return False
+    return True
+
+
+def _check_pawn_structure(text: str, board: chess.Board) -> list[Violation]:
+    """Flag an 'isolated pawn on <sq>' claim the board denies."""
+    out: list[Violation] = []
+    seen: set[str] = set()
+    for rx in (_ISOLATED_RE, _ISOLATED_REV_RE):
+        for m in rx.finditer(text):
+            square = m.group(1).lower()
+            if _pawn_is_isolated(board, square) is not False or square in seen:
+                continue
+            seen.add(square)
+            out.append(
+                Violation(
+                    "pawn_structure",
+                    m.group(0),
+                    f"the pawn on {square} is not isolated (a friendly pawn stands on an adjacent file)",
+                )
+            )
+    return out
+
+
+def _check_geometry(text: str, board: chess.Board) -> list[Violation]:
+    """Flag a piece on <sq> called 'central' when <sq> is not a central square."""
+    out: list[Violation] = []
+    seen: set[str] = set()
+    for rx in (_CENTRAL_RE, _CENTRAL_REV_RE):
+        for m in rx.finditer(text):
+            square = m.group(1).lower()
+            if (square[0] in _CENTER_FILES and square[1] in _CENTER_RANKS) or square in seen:
+                continue
+            seen.add(square)
+            out.append(Violation("geometry", m.group(0), f"{square} is not a central square"))
+    return out
+
+
 def _run_fidelity_checks(text: str, board: chess.Board, menu: list[MenuMove]) -> list[Violation]:
     """Run every fidelity pass over a parsed board and dedupe the result.
 
@@ -393,6 +531,9 @@ def _run_fidelity_checks(text: str, board: chess.Board, menu: list[MenuMove]) ->
     violations.extend(_check_placement(text, board))
     violations.extend(_check_development(text, board))
     violations.extend(_check_empty_source(text, board))
+    violations.extend(_check_capture_piece_type(text, board))
+    violations.extend(_check_pawn_structure(text, board))
+    violations.extend(_check_geometry(text, board))
 
     # Collapse the same fact reported by two phrasings (e.g. "from b8 to a6"
     # matching both the coordinate-move and the bare-"from" empty-source

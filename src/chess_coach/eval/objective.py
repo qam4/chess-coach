@@ -215,10 +215,11 @@ class ObjectiveResult:
     coverage_total: int
     factual_score: float
     # Full menu-aware fidelity breakdown by violation kind (placement,
-    # development, empty_source, illegal_move, unsound_move) — a diagnostic
-    # metric recorded for the A/B; it does NOT feed factual_score (which stays
-    # comparable across runs). ``unsound_move`` requires the engine move menu,
-    # so it is only populated here, not by the standalone helpers.
+    # development, empty_source, illegal_move, unsound_move, off_menu,
+    # piece_type, pawn_structure, geometry) — a diagnostic metric recorded for
+    # the A/B; it does NOT feed factual_score (which stays comparable across
+    # runs). ``unsound_move`` requires the engine move menu, so it is only
+    # populated here, not by the standalone helpers.
     fidelity_counts: dict[str, int] = field(default_factory=dict)
 
     @property

@@ -209,6 +209,74 @@ def test_property_checker_is_total(text: str) -> None:
     assert isinstance(result, list)
 
 
+# ---------------------------------------------------------------------------
+# BUG-015: piece-type on captures, pawn-structure & geometry claims.
+# ---------------------------------------------------------------------------
+
+# Black to move; the black d4 pawn can capture the white knight on e3 (dxe3).
+CAPTURE_FEN = "4k3/8/8/8/3p4/4N3/8/4K3 b - - 0 1"
+# White pawns on c4 and d4 (adjacent files) -> c4 is NOT isolated.
+ADJACENT_PAWNS_FEN = "4k3/8/8/8/2PP4/8/8/4K3 w - - 0 1"
+# A lone white c4 pawn -> genuinely isolated.
+LONE_PAWN_FEN = "4k3/8/8/8/2P5/8/8/4K3 w - - 0 1"
+# White king on c1 (queenside back rank — not central).
+KING_C1_FEN = "4k3/8/8/8/8/8/8/2K5 w - - 0 1"
+
+
+def test_capture_wrong_piece_type_is_flagged() -> None:
+    # dxe3 captures a KNIGHT; calling it a pawn is a piece-type error.
+    text = "Nice — you capture the pawn with dxe3."
+    v = check_coaching_fidelity(text, _report(CAPTURE_FEN), [])
+    assert _kinds(v) == ["piece_type"]
+    assert "knight" in v[0].detail and "pawn" in v[0].detail
+
+
+def test_capture_correct_piece_type_not_flagged() -> None:
+    text = "Good, you take the knight with dxe3."
+    v = check_coaching_fidelity(text, _report(CAPTURE_FEN), [])
+    assert "piece_type" not in _kinds(v)
+
+
+def test_capture_win_idiom_not_flagged() -> None:
+    # "wins a pawn" is a material idiom, not a claim about the captured piece;
+    # the "win" verb is deliberately excluded to avoid this false positive.
+    text = "dxe3 and you win a pawn."
+    v = check_coaching_fidelity(text, _report(CAPTURE_FEN), [])
+    assert "piece_type" not in _kinds(v)
+
+
+def test_pawn_falsely_called_isolated_is_flagged() -> None:
+    text = "The isolated pawn on c4 is a long-term weakness."
+    v = check_coaching_fidelity(text, _report(ADJACENT_PAWNS_FEN), [])
+    assert _kinds(v) == ["pawn_structure"]
+
+
+def test_truly_isolated_pawn_not_flagged() -> None:
+    text = "The isolated pawn on c4 needs defending."
+    v = check_coaching_fidelity(text, _report(LONE_PAWN_FEN), [])
+    assert "pawn_structure" not in _kinds(v)
+
+
+def test_noncentral_square_called_central_is_flagged() -> None:
+    for text in ("Your king on c1 is nicely central.", "The central king on c1 feels exposed."):
+        v = check_coaching_fidelity(text, _report(KING_C1_FEN), [])
+        assert _kinds(v) == ["geometry"], text
+
+
+def test_central_square_claim_not_flagged() -> None:
+    # d4 is a central square, so calling a piece there central is fine.
+    text = "Your knight on d4 is a strong central outpost."
+    v = check_coaching_fidelity(text, _report(), [])
+    assert "geometry" not in _kinds(v)
+
+
+def test_center_plan_talk_not_flagged_as_geometry() -> None:
+    # No piece+square anchor -> plan-talk about the center must not flag.
+    text = "Fight for central control and castle to safety."
+    v = check_coaching_fidelity(text, _report(), ITALIAN_MENU)
+    assert "geometry" not in _kinds(v)
+
+
 @given(st.text(max_size=200))
 def test_property_checker_is_deterministic(text: str) -> None:
     assert check_coaching_fidelity(text, _report(), ITALIAN_MENU) == check_coaching_fidelity(
