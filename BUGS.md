@@ -365,3 +365,69 @@ anecdotes.*
   `unsound_move`. Tests: `tests/test_fidelity.py` (positive + false-positive
   guards for each). Bounded recall by design (only explicit, anchored claims);
   the frontier judge `grounded` criterion remains the backstop.
+
+
+## Coaching-Quality Issues (found via the game-coaching test RE-RUN, 2026-08-05)
+
+*After fixing BUG-013/14/15 we re-ran the end-to-end game-coaching pairwise
+(qwen3:14b, sonnet judge via kiro-cli) on a fresh seed (2 games, 60 coaching
+scenarios). Both arms now carry the BUG-013/14 prompt fixes, so any recurrence
+or new defect shows up in the per-move critiques. Mining the 60 rationales
+surfaced one clear regression (BUG-016) and two issues worth tracking.*
+
+### BUG-016: Sound-move affirmation suppressed a genuinely better move (regression from BUG-014)
+- **Observed**: On `Qd4` (`d1d4`), an engine **inaccuracy** (37cp drop) where
+  the clearly better idea was `Kf1` (king safety), the coach affirmed the move
+  and **omitted the better move** — flagged by the judge in BOTH games
+  (g1p16, g2p16, both ties: "both responses incorrectly praise an inaccuracy
+  as solid/safe without mentioning the missed king safety move (Kf1)").
+- **Impact**: The student is told a borderline inaccuracy is fine and never
+  learns the stronger idea — the opposite failure of BUG-014 (there, the coach
+  invented a correction; here, it withholds a real one).
+- **Root cause**: BUG-014's `_MOVE_EVAL_INSTRUCTIONS_SOUND` told the coach to
+  "do NOT suggest a different or better move" for any move within the sound
+  eval-drop band. But a *sound-but-not-best* move (by definition not the top
+  move) has a genuinely better move available — the engine best, already shown
+  in the prompt — and the instruction wrongly suppressed it. (The exact-best
+  BEST branch is correct: there, no better move exists.)
+- **Not the cause / explicitly avoided**: coupling the branch to the engine's
+  `classification` label. Blunder's inaccuracy/mistake thresholds are the
+  engine's to change, so the coach's logic must not depend on them. The branch
+  stays keyed on our own client constant `SOUND_MAX_DROP_CP` applied to the raw
+  `eval_drop_cp` measurement.
+- **Status**: FIXED — rewrote `_MOVE_EVAL_INSTRUCTIONS_SOUND`: affirm the sound
+  move and teach its idea, and *if the engine's top move differs, briefly point
+  it out and its idea as a refinement — affirm first, never imply the move was
+  bad*. Keeps BUG-014's intent (no fabricated corrections; the exact-best case
+  still forbids inventing a better move) while restoring grounded better-move
+  teaching for sound-but-not-best moves. Regression test
+  `tests/test_prompts.py::TestPlayedBestMove::test_sound_move_affirms_but_may_note_stronger_move`
+  and the branch-aware property test updated. All logic remains client-side
+  (no dependency on the engine's classification label).
+
+### BUG-017: Ungrounded positional justifications persist (broader than BUG-013)
+- **Observed**: The losing arm still invented ungrounded *positional* claims on
+  eval-drop-0 moves — "opening lines for the bishop", "far superior to
+  alternatives" (g1p12, g2p12) — distinct from the invented *move
+  continuations* BUG-013 constrained.
+- **Impact**: Confident positional assertions the engine data does not support.
+- **Why open**: BUG-013's rule targets "and then…" move sequences; free-form
+  positional justification is harder to constrain in the prompt without
+  over-suppressing legitimate explanation, and the deterministic checker can't
+  judge positional claims. The frontier judge catches it; a prompt tightening
+  needs care not to make coaching vaguer.
+- **Status**: OPEN (logged; fix needs design — tighten grounding without
+  flattening explanations).
+
+### BUG-018: Isolated-pawn misidentification still generated (detection ≠ prevention)
+- **Observed**: The coach wrote "isolated pawn on c4" where it was factually
+  questionable (g1p42), even though BUG-015 added a `pawn_structure` check for
+  exactly this.
+- **Impact**: A wrong structural label in otherwise fluent prose.
+- **Why open**: the BUG-015 checker *detects* this class but (a) it is not
+  wired into the move-feedback pairwise generation path (that path judges raw
+  output; the checker runs in the objective/judge-free harness), and (b)
+  detection is not prevention — the model still generates the claim. Options:
+  surface checker violations back into a regeneration/repair step, or add a
+  grounded pawn-structure fact block to the prompt so the model doesn't guess.
+- **Status**: OPEN (logged).

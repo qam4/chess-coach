@@ -256,15 +256,16 @@ class TestPlayedBestMove:
         assert "Explain why the best move is stronger" not in prompt
         assert "what the move failed to address" not in prompt
 
-    def test_sound_move_affirms_without_pushing_alternative(self) -> None:
-        # user != best, but a small eval drop (within the sound band): a strong
-        # move that scores well in the multi-line PV. Affirm, don't second-guess.
+    def test_sound_move_affirms_but_may_note_stronger_move(self) -> None:
+        # user != best, small eval drop (within the sound band): affirm the
+        # move, and since a genuinely better move exists (the engine best), the
+        # prompt permits pointing it out as a refinement rather than suppressing
+        # it the way the old wording did (BUG-016).
         report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=30)
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-        assert "strong, sound move" in prompt
-        assert "do NOT nitpick or imply the student" in prompt
-        # It must NOT claim "no better move exists" (the engine's top line is
-        # marginally higher) nor fall back to the gap framing.
+        assert "sound, reasonable move" in prompt
+        assert "as a refinement" in prompt  # may note the engine's stronger move
+        # Not the exact-best "no better move" claim, and not the harsh gap framing.
         assert "there is no better move here" not in prompt
         assert "Explain why the best move is stronger" not in prompt
 
@@ -273,7 +274,7 @@ class TestPlayedBestMove:
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
         assert "Explain why the best move is stronger" in prompt
         assert "there is no better move here" not in prompt
-        assert "strong, sound move" not in prompt
+        assert "sound, reasonable move" not in prompt
 
 
 # --------------------------------------------------------------------------

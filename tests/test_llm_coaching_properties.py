@@ -475,11 +475,15 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     # the sound band), the prompt AFFIRMS instead and must not push a "better"
     # alternative (BUG-014). Assert the branch-appropriate instructions.
     played_best = report.user_move == report.best_move
-    if played_best or report.eval_drop_cp <= SOUND_MAX_DROP_CP:
-        assert "do not suggest a different" in prompt_lower, (
-            "Affirming branch must forbid suggesting a different/better move"
-        )
-        assert "teach the idea behind it" in prompt_lower, "Affirming branch must instruct to teach the idea"
+    if played_best:
+        # exact best move -> affirm, no better move exists (BUG-014).
+        assert "there is no better move here" in prompt_lower
+        assert "teach the idea behind it" in prompt_lower
+    elif report.eval_drop_cp <= SOUND_MAX_DROP_CP:
+        # sound but not the top move -> affirm, may note the stronger move as a
+        # refinement (BUG-016) rather than the harsh gap framing.
+        assert "sound, reasonable move" in prompt_lower
+        assert "teach the idea behind it" in prompt_lower
     else:
         # Explain what the move failed to address (Req 3.1)
         assert "failed to address" in prompt_lower or "what the move" in prompt_lower or "allowed" in prompt_lower, (
