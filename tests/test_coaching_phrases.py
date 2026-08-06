@@ -21,6 +21,7 @@ from chess_coach.coaching_phrases import (
     describe_king_safety,
     describe_move_menu,
     describe_pawn_structure,
+    describe_pawn_structure_from_board,
     describe_placement,
     describe_tactic,
     describe_threat,
@@ -155,6 +156,29 @@ def test_pawn_structure_none_when_unremarkable() -> None:
     assert describe_pawn_structure(PawnFeatures([], [], []), "white") is None
     s = describe_pawn_structure(PawnFeatures(["d"], [], ["e"]), "white")
     assert s is not None and "isolated" in s and "passed" in s
+
+
+def test_pawn_structure_from_board_flags_isolated_and_doubled() -> None:
+    # White: a2 isolated (no b-pawn); c-file doubled (c2, c3) but NOT isolated
+    # because d2 is on the adjacent file. Black: e7, f7 adjacent -> neither
+    # isolated, no doubles.
+    board = chess.Board("4k3/4pp2/8/8/8/2P5/P1PP4/4K3 w - - 0 1")
+    text = describe_pawn_structure_from_board(board)
+    assert "White: isolated pawns: a2; doubled pawns: c-file" in text
+    assert "Black: isolated pawns: none; doubled pawns: none" in text
+
+
+def test_pawn_structure_from_board_not_isolated_when_neighbor_present() -> None:
+    # c4 has a friendly b-pawn on the adjacent b-file -> NOT isolated (the
+    # BUG-018 case: the coach must not call c4 isolated).
+    board = chess.Board("4k3/8/8/8/1P6/2P5/8/4K3 w - - 0 1")
+    text = describe_pawn_structure_from_board(board)
+    assert "isolated pawns: none" in text.split("White:", 1)[1].split("Black:", 1)[0]
+
+
+def test_pawn_structure_from_board_empty_when_no_pawns_or_bad() -> None:
+    assert describe_pawn_structure_from_board(None) == ""
+    assert describe_pawn_structure_from_board(chess.Board("4k3/8/8/8/8/8/8/4K3 w - - 0 1")) == ""
 
 
 def test_eval_summary_directions() -> None:

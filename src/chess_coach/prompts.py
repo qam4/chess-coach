@@ -11,6 +11,7 @@ from chess_coach.coaching_phrases import (
     describe_king_safety,
     describe_move_menu,
     describe_pawn_structure,
+    describe_pawn_structure_from_board,
     describe_placement,
     describe_tactic,
     describe_threat,
@@ -453,6 +454,17 @@ def _format_placement(fen: str) -> str | None:
     if not text:
         return None
     return "--- Board (piece placement) ---\n" + text
+
+
+def _format_pawn_structure_grounding(fen: str) -> str | None:
+    """Board-derived isolated/doubled pawn facts, or None if unavailable.
+
+    Grounds the coach's pawn-structure claims (isolated/doubled) so it states
+    the fact instead of guessing — the move-eval ComparisonReport carries no
+    pawn-structure data, so it is composed from the board here (BUG-018).
+    """
+    text = describe_pawn_structure_from_board(_safe_board(fen))
+    return text or None
 
 
 def _format_pawn_structure(report: PositionReport) -> str:
@@ -914,6 +926,12 @@ def build_rich_move_evaluation_prompt(
     placement_section = _format_placement(report.fen)
     if placement_section is not None:
         sections.append(placement_section)
+
+    # Board-derived pawn-structure facts so the coach grounds isolated/doubled
+    # claims instead of guessing (BUG-018) — the ComparisonReport carries none.
+    pawn_structure_section = _format_pawn_structure_grounding(report.fen)
+    if pawn_structure_section is not None:
+        sections.append(pawn_structure_section)
 
     # Conditionally-present sections
     missed_section = _format_missed_tactics(report)

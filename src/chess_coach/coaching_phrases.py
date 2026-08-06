@@ -257,6 +257,41 @@ def describe_pawn_structure(pf: PawnFeatures, side: str) -> str | None:
     return _cap(f"{label} has {'; '.join(parts)}.")
 
 
+def describe_pawn_structure_from_board(board: chess.Board | None) -> str:
+    """Board-derived isolated/doubled pawn facts for both sides, as text.
+
+    Composed directly from ``python-chess`` (never the engine's ``PawnFeatures``
+    or any engine-tunable label), so the coach can state which pawns are
+    isolated/doubled instead of guessing — the same grounding idea as the
+    placement block, which stopped piece-location hallucinations. A pawn is
+    *isolated* when no friendly pawn stands on either adjacent file; a file is
+    *doubled* when it holds two or more friendly pawns.
+
+    Returns an empty string for a missing/invalid board or a pawnless position
+    (the caller then omits the section). Otherwise always lists both sides —
+    including an explicit "none" — so the model is told what is NOT weak, too.
+    """
+    if board is None:
+        return ""
+    if not (board.pieces(chess.PAWN, chess.WHITE) or board.pieces(chess.PAWN, chess.BLACK)):
+        return ""
+    lines = ["--- Pawn structure (from the board) ---"]
+    for color in (chess.WHITE, chess.BLACK):
+        squares = sorted(board.pieces(chess.PAWN, color))
+        files = [chess.square_file(sq) for sq in squares]
+        isolated = [
+            chess.square_name(sq)
+            for sq in squares
+            if (chess.square_file(sq) - 1) not in files and (chess.square_file(sq) + 1) not in files
+        ]
+        doubled = sorted({chess.FILE_NAMES[f] for f in files if files.count(f) >= 2})
+        label = "White" if color == chess.WHITE else "Black"
+        iso = ", ".join(isolated) if isolated else "none"
+        dbl = ", ".join(f"{f}-file" for f in doubled) if doubled else "none"
+        lines.append(f"{label}: isolated pawns: {iso}; doubled pawns: {dbl}")
+    return "\n".join(lines)
+
+
 _MINOR_START_SQUARES = {
     (chess.WHITE, chess.KNIGHT): {chess.B1, chess.G1},
     (chess.WHITE, chess.BISHOP): {chess.C1, chess.F1},

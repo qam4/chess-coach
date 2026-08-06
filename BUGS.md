@@ -424,10 +424,24 @@ surfaced one clear regression (BUG-016) and two issues worth tracking.*
   questionable (g1p42), even though BUG-015 added a `pawn_structure` check for
   exactly this.
 - **Impact**: A wrong structural label in otherwise fluent prose.
-- **Why open**: the BUG-015 checker *detects* this class but (a) it is not
-  wired into the move-feedback pairwise generation path (that path judges raw
-  output; the checker runs in the objective/judge-free harness), and (b)
-  detection is not prevention — the model still generates the claim. Options:
-  surface checker violations back into a regeneration/repair step, or add a
-  grounded pawn-structure fact block to the prompt so the model doesn't guess.
-- **Status**: OPEN (logged).
+- **Why it happened**: the move-feedback prompt fed the board *placement*
+  (piece locations) but no pawn-structure facts — the `ComparisonReport` carries
+  none — so the coach guessed isolation. (The position-coaching prompt already
+  had an engine-based `--- Pawn Structure ---` section; the move-eval prompt did
+  not.)
+- **Status**: FIXED (prevention) — added a board-derived pawn-structure
+  grounding block to `build_rich_move_evaluation_prompt`:
+  `coaching_phrases.describe_pawn_structure_from_board(board)` lists each side's
+  isolated and doubled pawns computed directly from `python-chess` (a pawn is
+  isolated when no friendly pawn is on either adjacent file; a file is doubled
+  with ≥2 friendly pawns). Deliberately board-derived, **not** from the engine's
+  `PawnFeatures` or any engine-tunable label — same grounding idea as the
+  placement block that stopped piece-location hallucinations. The block always
+  lists both sides (including an explicit "none") so the model is told what is
+  NOT weak, too, and won't invent an isolated pawn. The BUG-015 `pawn_structure`
+  checker remains the deterministic backstop. Tests:
+  `tests/test_coaching_phrases.py` (isolated+doubled, the not-isolated-with-
+  neighbor case, empty/pawnless) and
+  `tests/test_prompts.py::test_move_eval_prompt_grounds_pawn_structure`.
+  Note: passed pawns were left out for now (isolated + doubled cover the
+  observed error; passed-pawn detection is more involved).

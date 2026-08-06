@@ -277,6 +277,18 @@ class TestPlayedBestMove:
         assert "sound, reasonable move" not in prompt
 
 
+def test_move_eval_prompt_grounds_pawn_structure() -> None:
+    # BUG-018: the move-eval prompt must carry board-derived pawn-structure
+    # facts so the coach grounds isolated/doubled claims instead of guessing.
+    # White: a2 isolated, c-file doubled (c2,c3); a legal white move exists.
+    fen = "4k3/4pp2/8/8/8/2P5/P1P1PP2/4K3 w - - 0 1"
+    report = _move_eval_report(fen, "e2e4", "c3c4")
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "--- Pawn structure (from the board) ---" in prompt
+    assert "isolated pawns: a2" in prompt
+    assert "doubled pawns: c-file" in prompt
+
+
 # --------------------------------------------------------------------------
 # Socratic mode: the prompt must ask guiding questions and must NOT leak the
 # answer (best move, top lines, or the evaluation).
