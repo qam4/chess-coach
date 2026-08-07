@@ -416,14 +416,18 @@ surfaced one clear regression (BUG-016) and two issues worth tracking.*
   over-suppressing legitimate explanation, and the deterministic checker can't
   judge positional claims. The frontier judge catches it; a prompt tightening
   needs care not to make coaching vaguer.
-- **Status**: PARKED (decision 2026-08-05) — deliberately not fixing now. It is
-  low-frequency (a couple of the 60 re-run scenarios), fuzzy, and the frontier
-  judge already flags it, so a speculative prompt/judge change risks flattening
-  the coaching for little gain. **Revisit trigger:** if a future end-to-end
-  game-coaching run flags ungrounded positional claims *often* (a recurring
-  share of turns, not one-offs), treat it as a real blocker and design the fix
-  then — likely a judge criterion that penalizes positional assertions
-  unsupported by the engine data, measured before any prompt change.
+- **Status**: ACTIVE (un-parked 2026-08-05 — revisit trigger met). The coach
+  report card (single-mode holistic review) flagged fabricated/ungrounded causal
+  analysis as **the single most damaging problem**, with ~5 cited instances
+  (e.g. "Bc4 allows Black to capture on d4" — invented; "a3 supports d4" — wrong
+  square; "a2 is isolated" offered as a3's reason — guessed) corroborated by 13
+  deterministic off_menu/unsound violations in the transcript. That is the
+  "flagged often" bar we set, so this is now a real blocker and the next
+  coaching lever: constrain the coach strictly to engine-stated facts (eval
+  drop, specific squares, concrete move consequences) and forbid inventing
+  causal chains it cannot verify. Measured before/after with the report card
+  (same seed), one lever at a time. (Was PARKED 2026-08-05 as low-frequency; the
+  report card promoted it.)
 
 ### BUG-018: Isolated-pawn misidentification still generated (detection ≠ prevention)
 - **Observed**: The coach wrote "isolated pawn on c4" where it was factually

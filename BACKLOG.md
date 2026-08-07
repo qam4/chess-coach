@@ -1106,3 +1106,37 @@ next; the report card is now the instrument to measure whether it moves the
 Also fixed: the review driver reconfigures stdout to UTF-8 so the final console
 print of the review can't crash on cp1252 (the UTF-8 `review.md` was always
 written; only the terminal echo failed — same class as BUG-012, in the script).
+
+
+### Coach report card — lever 1 (remove the always-on principles crib) — 2026-08-05
+
+First measured coaching change under the report card. **Lever 1 (one lever, for
+clean attribution): removed the static "CHESS PRINCIPLES" crib list from
+`SYSTEM_PROMPT_V2`** (opening-centric, injected on every turn — the suspected
+driver of recycled generic advice and phase-blindness). Re-ran the report card
+at the SAME seed (7) → identical game (44 turns, same phase/quality mix), so a
+clean before/after.
+
+| metric | baseline | crib removed |
+|---|---|---|
+| judge score | 3.5 | 4.2 |
+| off_menu | 8 | 8 |
+| unsound_move | 4 | 5 |
+| placement | 1 | 1 |
+
+**Read:** the judge's holistic score rose +0.7 (less pure genericness), but the
+**deterministic fabrication counts are flat** — removing the crib did not touch
+off-menu/unsound. Caveats: n=1 per condition, so +0.7 is directional (the flat
+deterministic counts are the trustworthy part); no regression, low risk (the
+guidance layer supplies principles), so lever 1 is kept.
+
+**The measurement re-prioritized the roadmap.** With genericness reduced, the
+judge's #1 concern shifted to **fabricated/ungrounded causal analysis** ("Bc4
+allows Black to capture on d4" — invented; "a3 supports d4" — wrong square;
+"a2 isolated" as a3's reason — guessed), calling it "the single most damaging
+problem … a coach that confabulates is worse than no coach." This **meets the
+BUG-017 revisit trigger** (flagged often: ~5 cited instances + 13 deterministic
+off_menu/unsound). So BUG-017 is un-parked and becomes lever 2: constrain the
+coach strictly to engine-stated facts (eval drop, specific squares, concrete
+consequences) and forbid inventing causal chains it cannot verify — measured
+the same way (report card, same seed) before/after.
