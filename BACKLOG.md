@@ -1057,3 +1057,52 @@ _(Cleared — the repo migrated from tox to [uv](https://docs.astral.sh/uv/).
 `uv sync` builds one `.venv` with runtime + dev deps, so the previously
 broken `.venv` and the `rich`-less typecheck env are both resolved;
 `uv run mypy src` is clean. CI now runs on uv too.)_
+
+
+## Coach report card — single-mode holistic review (2026-08-05)
+
+Built a **single-mode** review (not A/B) to answer "is the coach the teacher
+VISION describes?": `scripts/eval_coach_review.py` + pure core
+`src/chess_coach/eval/coach_review.py`. It plays one real game, coaches every
+student move with the shipping config (guidance on, qwen3:14b) timing each
+generation, appends curated endgame/tactic positions for phase coverage, then a
+frontier reviewer (sonnet via kiro-cli) gives ONE verdict: a 0–10 score against
+the bridge standard + honest critique + phase-fit. (Run artifacts under
+`output/` are gitignored, so the findings are recorded here.)
+
+**First run (1 game @ 1350/1500, 44 coached turns incl. 18 endgame): SCORE
+3.5/10 — "a position commentator that pads with chess-sounding phrases, not a
+teacher."** The instrument works; the verdict is a to-do list:
+
+1. **Principle (bridge end 1) is generic and recycled.** "Develop your pieces /
+   control the center / is my king safe?" recurs on ~16+ plies regardless of
+   context — same abstraction whether the student hung a bishop, played the
+   best move, or pushed a pawn in the endgame.
+2. **Concrete plan (bridge end 2) often missing or wrong on the moves that
+   matter most.** The biggest blunders got the weakest explanations — no "if
+   Kd1, Black plays … and wins the rook", just structural platitudes.
+3. **Praise on best moves is filler + near-duplicate text.** ~11 best-move
+   turns got "Great job — it's the best move!" + the same principle; several
+   endgame turns were word-for-word identical.
+4. **Phase blindness (confirms the product-owner's hunch that opening ≠
+   endgame).** Opening vocabulary ("develop your pieces") used in the endgame;
+   rook-and-king technique (the actual endgame here) never named. The reviewer's
+   recommendation: opening → name the specific opening principle at stake;
+   middlegame → concrete tactical calculation; endgame → named techniques
+   (opposition, rook behind the passer, Lucena/Philidor).
+5. **Verbosity/padding** — motivational sign-offs, ~2 sentences of content in a
+   5–6 sentence answer.
+6. Latency is fine (~5.8s mean/turn; a 32s ply-0 warmup skews the mean).
+
+**Highest-leverage change (the reviewer's, and the natural "consolidate the
+coaching" next step):** make the coach name ONE named, *phase-specific*
+principle per turn and show how the engine-best move instantiates it *in this
+position*, and ban the generic "develop your pieces / is my king safe?" fallback
+unless the position specifically calls for it. Trim the filler sign-offs. This
+is a coaching-prompt (and possibly pedagogy-content) change, to be designed
+next; the report card is now the instrument to measure whether it moves the
+3.5.
+
+Also fixed: the review driver reconfigures stdout to UTF-8 so the final console
+print of the review can't crash on cp1252 (the UTF-8 `review.md` was always
+written; only the terminal echo failed — same class as BUG-012, in the script).

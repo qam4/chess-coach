@@ -416,8 +416,14 @@ surfaced one clear regression (BUG-016) and two issues worth tracking.*
   over-suppressing legitimate explanation, and the deterministic checker can't
   judge positional claims. The frontier judge catches it; a prompt tightening
   needs care not to make coaching vaguer.
-- **Status**: OPEN (logged; fix needs design — tighten grounding without
-  flattening explanations).
+- **Status**: PARKED (decision 2026-08-05) — deliberately not fixing now. It is
+  low-frequency (a couple of the 60 re-run scenarios), fuzzy, and the frontier
+  judge already flags it, so a speculative prompt/judge change risks flattening
+  the coaching for little gain. **Revisit trigger:** if a future end-to-end
+  game-coaching run flags ungrounded positional claims *often* (a recurring
+  share of turns, not one-offs), treat it as a real blocker and design the fix
+  then — likely a judge criterion that penalizes positional assertions
+  unsupported by the engine data, measured before any prompt change.
 
 ### BUG-018: Isolated-pawn misidentification still generated (detection ≠ prevention)
 - **Observed**: The coach wrote "isolated pawn on c4" where it was factually

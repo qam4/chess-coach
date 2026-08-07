@@ -169,6 +169,15 @@ def _parse_board(fen: str) -> chess.Board | None:
         return None
 
 
+def phase_of_board(board: chess.Board) -> str:
+    """Public phase classifier — ``phase:opening`` / ``middlegame`` / ``endgame``.
+
+    Same heuristic the feature extractor uses; exposed so other tools (e.g. the
+    coach report card) can tag a position's phase without re-deriving it.
+    """
+    return _phase_feature(board)
+
+
 def _phase_feature(board: chess.Board) -> str:
     """Classify the game phase from material on the board and move number.
 

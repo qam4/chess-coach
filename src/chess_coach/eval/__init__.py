@@ -36,6 +36,12 @@ from .benchmark import (
     load_benchmark,
 )
 from .calibrate import AgreementReport, compute_agreement, load_seed_ratings
+from .coach_review import (
+    ReviewStats,
+    ReviewTurn,
+    aggregate_review,
+    build_coach_review_prompt,
+)
 from .judge import (
     JudgeRubric,
     JudgeVerdict,
@@ -95,12 +101,16 @@ __all__ = [
     "PairwiseSummary",
     "ProfileThresholds",
     "ResponseEval",
+    "ReviewStats",
+    "ReviewTurn",
     "RunConfig",
     "Scoreboard",
     "VerdictParseError",
     "aggregate_model",
+    "aggregate_review",
     "aggregate_runs",
     "aggregate_values",
+    "build_coach_review_prompt",
     "build_judge_prompt",
     "build_move_feedback_pairwise_prompt",
     "compare_metric",
