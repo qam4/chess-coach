@@ -23,7 +23,12 @@ import chess
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP, describe_tactic, select_tactics
+from chess_coach.coaching_phrases import (
+    DUBIOUS_MAX_DROP_CP,
+    SOUND_MAX_DROP_CP,
+    describe_tactic,
+    select_tactics,
+)
 from chess_coach.coaching_templates import (
     CAT_ASSESSMENT,
     CAT_PIECE_SAFETY,
@@ -469,36 +474,22 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     prompt = build_rich_move_evaluation_prompt(report, level=level)
     prompt_lower = prompt.lower()
 
-    # The "explain the gap / why the best move is stronger" instructions (Req
-    # 3.1-3.3) only apply when the move is inferior. On a move that is the
-    # engine's top move or scores well in the multi-line PV (eval drop within
-    # the sound band), the prompt AFFIRMS instead and must not push a "better"
-    # alternative (BUG-014). Assert the branch-appropriate instructions.
+    # Severity-tiered instructions (lever 3), keyed on OUR eval-drop bands:
+    # exact-best / sound (affirm), inaccuracy (brief redirect), serious (direct).
+    # Assert the branch-appropriate tier text; all tiers ban motivational
+    # sign-offs (the verbosity/filler fix).
     played_best = report.user_move == report.best_move
     if played_best:
-        # exact best move -> affirm, no better move exists (BUG-014).
-        assert "there is no better move here" in prompt_lower
-        assert "teach the idea behind it" in prompt_lower
+        assert "there is no better move here" in prompt_lower  # BUG-014
     elif report.eval_drop_cp <= SOUND_MAX_DROP_CP:
-        # sound but not the top move -> affirm, may note the stronger move as a
-        # refinement (BUG-016) rather than the harsh gap framing.
-        assert "sound, reasonable move" in prompt_lower
-        assert "teach the idea behind it" in prompt_lower
+        assert "sound, reasonable move" in prompt_lower  # BUG-016 (affirm)
+    elif report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
+        assert "slightly missed the mark" in prompt_lower  # inaccuracy tier
     else:
-        # Explain what the move failed to address (Req 3.1)
-        assert "failed to address" in prompt_lower or "what the move" in prompt_lower or "allowed" in prompt_lower, (
-            "Prompt must instruct LLM to explain what the move failed to address"
-        )
+        assert "serious mistake" in prompt_lower  # serious tier: direct
 
-        # Explain why best move is stronger (Req 3.2)
-        assert "stronger" in prompt_lower or "best move" in prompt_lower, (
-            "Prompt must instruct LLM to explain why best move is stronger"
-        )
-
-        # Constructive framing (Req 3.3)
-        assert "constructive" in prompt_lower or "acknowledge" in prompt_lower, (
-            "Prompt must contain constructive framing instruction"
-        )
+    # Every tier forbids filler sign-offs.
+    assert "no motivational sign-off" in prompt_lower
 
     # Grounding instruction (Req 3.5)
     assert "grounded" in prompt_lower or "only" in prompt_lower, "Prompt must contain grounding instruction"

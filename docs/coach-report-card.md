@@ -31,6 +31,7 @@ All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 | baseline | shipping config (guidance on) | 3.5 | 8 | 4 | 1 | — |
 | lever 1 | remove always-on opening "CHESS PRINCIPLES" crib from `SYSTEM_PROMPT_V2` | 4.2 | 8 | 5 | 1 | **yes** |
 | lever 2 | add grounding rule: don't invent causal chains ("allows/supports/weakens") | 4.5 | 9 | 4 | 1 | **reverted** |
+| lever 3 | severity-tiered response (tone + length by eval-drop band; no filler sign-offs) | 4.5 | **4** | **2** | 2 | **yes** |
 
 **Lever 1 (kept).** The static crib was injected on every turn and drove
 recycled generic advice ("develop your pieces / is my king safe?") even in the
@@ -45,6 +46,23 @@ No demonstrable benefit, so it was reverted to keep the prompt lean (a negative
 result is a valid finding: qwen3:14b doesn't reliably follow a negative
 constraint on causal reasoning the way it followed the concrete "no `and
 then...` continuations" rule).
+
+**Lever 3 (kept).** Severity-tiered move feedback — the response's directness
+and length scale with the eval-drop band (best/sound → short affirmation;
+inaccuracy → brief redirect; serious → direct "lead with the cost", no
+cushioning), keyed on OUR own bands (`SOUND_MAX_DROP_CP`/`DUBIOUS_MAX_DROP_CP`),
+never the engine's label (BUG-016). Score flat (+0.3, within noise) but the
+**trustworthy signal moved: off_menu + unsound roughly halved (13 → 6)** — the
+tighter, tiered responses give the model fewer openings to ramble into off-menu
+/ fabricated recommendations — and the judge now lists calibrated severity as a
+*strength*. Kept (measurable deterministic benefit, no regression), unlike
+lever 2. What it did NOT fix: the model under-delivers on the *length/depth*
+part from prompt text alone — still ~3-5 sentences on best moves, still opens
+with "Great job!", still platitudes on blunders. The judge's new #1: enforce
+depth differentiation by quality + phase (blunders longest/most specific;
+top-moves one sentence) and give opening moves a *named opening concept*. Two
+future levers: (a) enforce length/depth (prompt text isn't enough — likely
+per-tier generation limits); (b) opening-specific content.
 
 ## Stable qualitative findings (across all three runs — the real signal)
 

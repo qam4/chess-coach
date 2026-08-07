@@ -5,6 +5,7 @@ from __future__ import annotations
 import chess
 
 from chess_coach.coaching_phrases import (
+    DUBIOUS_MAX_DROP_CP,
     SOUND_MAX_DROP_CP,
     build_move_menu,
     describe_hanging,
@@ -337,54 +338,63 @@ What the best move achieves: {best_move_idea}
 Keep your response concise (under 100 words).\
 """
 
-# Instructions when the student's move was NOT the engine's best — explain the
-# gap and why the best move is stronger.
-_MOVE_EVAL_INSTRUCTIONS_INFERIOR = """\
-COACHING INSTRUCTIONS:
-- Constructive framing: Acknowledge what the student may have been trying to \
-do before explaining what was missed.
-- Explain what the move failed to address: What did the student's move allow \
-the opponent to do, or what problem did it leave unsolved?
-- Explain why the best move is stronger: What does it achieve or prevent, in \
-concrete terms (specific squares, pieces, threats)?
-- Stay grounded: Only reference facts present in the data above. Do not \
-invent analysis, piece placements, tactical ideas, or follow-up move \
-sequences ("and then...") that are not in the data.
-"""
+# Severity-tiered move-feedback instructions (lever 3). The response's
+# directness AND length scale with how far the move fell short, so a blunder and
+# a best move never read the same. Tiers are chosen from OUR own eval-drop bands
+# (SOUND_MAX_DROP_CP / DUBIOUS_MAX_DROP_CP) — never the engine's classification
+# label, whose thresholds are the engine's to change (BUG-016). No motivational
+# sign-offs in any tier (they were pure filler that diluted the signal).
 
-# Instructions when the student PLAYED the engine's top move — affirm it and
-# teach the idea; do NOT invent a "better" alternative (BUG-014).
+# Student PLAYED the engine's top move — affirm briefly, never invent a "better"
+# alternative (BUG-014).
 _MOVE_EVAL_INSTRUCTIONS_BEST = """\
 COACHING INSTRUCTIONS:
 - The student played the engine's top move — there is no better move here. \
-Do NOT suggest a different or "better" move, and do NOT imply the move was \
-merely okay or that a superior alternative exists.
-- Affirm the move clearly, then teach the idea behind it: what does it \
-achieve or prepare (specific squares, pieces, plans)?
-- Give the student a transferable principle they can reuse.
-- Stay grounded: Only reference facts present in the data above. Do not \
-invent analysis, piece placements, tactical ideas, or follow-up move \
-sequences ("and then...") that are not in the data.
+Do NOT suggest a different or "better" move, and do NOT imply a superior \
+alternative exists.
+- Keep it SHORT (1-2 sentences): affirm the move, then give one concrete idea \
+it achieves or prepares. No motivational sign-off.
+- Stay grounded: only facts in the data above; no invented analysis, \
+placements, tactics, or "and then..." continuations.
 """
 
-# Instructions when the student played a SOUND move — one that scores well in
-# the engine's multi-line PV (small eval drop from best), even if it is not the
-# single top move. Affirm it as a strong choice; do NOT second-guess it or push
-# a marginally-preferred alternative (BUG-014, broadened beyond the exact best
-# move). Distinct from _MOVE_EVAL_INSTRUCTIONS_BEST: we do not claim "no better
-# move exists" because the engine's top line scores slightly higher.
+# Student played a SOUND move (small eval drop, not the top move). Affirm; a
+# genuinely better move may be noted as a refinement, never a rebuke (BUG-016).
 _MOVE_EVAL_INSTRUCTIONS_SOUND = """\
 COACHING INSTRUCTIONS:
-- The student played a sound, reasonable move — affirm it and teach the idea \
-behind it (what it achieves or prepares: specific squares, pieces, plans). Do \
-NOT call it a mistake, and do NOT invent a correction the data does not support.
-- The engine's top move is shown above. If it differs from the student's move, \
-briefly point it out and the idea behind it as a refinement — affirm first, \
-and never imply the student's move was bad.
-- Give the student a transferable principle they can reuse.
-- Stay grounded: Only reference facts present in the data above. Do not \
-invent analysis, piece placements, tactical ideas, or follow-up move \
-sequences ("and then...") that are not in the data.
+- The student played a sound, reasonable move — do NOT call it a mistake or \
+invent a correction the data does not support.
+- Keep it SHORT (2-3 sentences): affirm it and give one idea it achieves. If \
+the engine's top move differs, you may briefly point it out as a refinement — \
+affirm first, never imply the move was bad. No motivational sign-off.
+- Stay grounded: only facts in the data above; no invented analysis, \
+placements, tactics, or "and then..." continuations.
+"""
+
+# Student's move was a small INACCURACY (eval drop within the dubious band).
+# A brief redirect — do not over-dramatize a small slip.
+_MOVE_EVAL_INSTRUCTIONS_INACCURACY = """\
+COACHING INSTRUCTIONS:
+- The student's move slightly missed the mark — a small inaccuracy, not a \
+disaster. Give a BRIEF redirect (2-3 sentences): acknowledge the intent in a \
+few words, then name the stronger move and the one concrete idea behind it. No \
+motivational sign-off.
+- Stay grounded: only facts in the data above; no invented analysis, \
+placements, tactics, or "and then..." continuations.
+"""
+
+# Student's move was a SERIOUS mistake (eval drop past the dubious band). Be
+# direct — the student must feel the severity; no cushioning praise.
+_MOVE_EVAL_INSTRUCTIONS_SERIOUS = """\
+COACHING INSTRUCTIONS:
+- This was a serious mistake — say so directly and plainly. Do NOT open with \
+praise or "great job". Lead with the cost: what does the move lose or allow? \
+Use the eval drop, the refutation line, and the threats shown.
+- Then give the concrete better move and the specific idea it achieves \
+(squares, pieces, threats). Be direct and specific, not generic. No \
+motivational sign-off.
+- Stay grounded: only facts in the data above; no invented analysis, \
+placements, tactics, or "and then..." continuations.
 """
 
 
@@ -947,23 +957,22 @@ def build_rich_move_evaluation_prompt(
     # Level-adaptive instructions
     level_instructions = _build_level_instructions(level)
 
-    # Choose the framing from OUR own eval-drop bands (client-owned
-    # SOUND_MAX_DROP_CP) and move identity — never from the engine's
-    # classification label, whose thresholds are the engine's to change
-    # (BUG-016). Three cases:
-    #   - exact top move -> affirm, "there is no better move here" (BUG-014:
-    #     never invent a superior alternative when they played the best move).
-    #   - sound move (small eval drop, but NOT the top move) -> affirm it, and
-    #     since a genuinely better move exists (the engine best, shown above),
-    #     it MAY be pointed out as a grounded refinement — not suppressed
-    #     (BUG-016) and not fabricated.
-    #   - otherwise (larger drop) -> explain the gap and the stronger move.
+    # Severity-tiered framing (lever 3), chosen from OUR own eval-drop bands
+    # (client-owned SOUND_MAX_DROP_CP / DUBIOUS_MAX_DROP_CP) and move identity —
+    # never from the engine's classification label, whose thresholds are the
+    # engine's to change (BUG-016). Directness and length scale with severity:
+    #   - exact top move            -> affirm, no better move (BUG-014).
+    #   - sound (drop <= SOUND)      -> affirm; a better move may be a refinement.
+    #   - inaccuracy (<= DUBIOUS)    -> brief redirect, don't over-dramatize.
+    #   - serious (> DUBIOUS)        -> direct: lead with the cost, no cushioning.
     if report.user_move == report.best_move:
         move_instructions = _MOVE_EVAL_INSTRUCTIONS_BEST
     elif report.eval_drop_cp <= SOUND_MAX_DROP_CP:
         move_instructions = _MOVE_EVAL_INSTRUCTIONS_SOUND
+    elif report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
+        move_instructions = _MOVE_EVAL_INSTRUCTIONS_INACCURACY
     else:
-        move_instructions = _MOVE_EVAL_INSTRUCTIONS_INFERIOR
+        move_instructions = _MOVE_EVAL_INSTRUCTIONS_SERIOUS
 
     return RICH_MOVE_EVALUATION_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,

@@ -252,29 +252,37 @@ class TestPlayedBestMove:
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
         assert "there is no better move here" in prompt
         assert 'Do NOT suggest a different or "better" move' in prompt
-        # The "what was missed / why the best move is stronger" framing must NOT appear.
-        assert "Explain why the best move is stronger" not in prompt
-        assert "what the move failed to address" not in prompt
+        assert "No motivational sign-off" in prompt  # severity/verbosity fix (lever 3)
+        # Not the mistake-tier framing.
+        assert "serious mistake" not in prompt
+        assert "slightly missed the mark" not in prompt
 
     def test_sound_move_affirms_but_may_note_stronger_move(self) -> None:
-        # user != best, small eval drop (within the sound band): affirm the
-        # move, and since a genuinely better move exists (the engine best), the
-        # prompt permits pointing it out as a refinement rather than suppressing
-        # it the way the old wording did (BUG-016).
+        # user != best, small eval drop (within the sound band): affirm the move,
+        # a genuinely better move may be a refinement (BUG-016), kept short.
         report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=30)
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
         assert "sound, reasonable move" in prompt
-        assert "as a refinement" in prompt  # may note the engine's stronger move
-        # Not the exact-best "no better move" claim, and not the harsh gap framing.
+        assert "as a refinement" in prompt
         assert "there is no better move here" not in prompt
-        assert "Explain why the best move is stronger" not in prompt
+        assert "serious mistake" not in prompt
 
-    def test_inferior_move_uses_gap_framing(self) -> None:
-        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6")  # drop 70 > sound band
+    def test_inaccuracy_uses_brief_redirect(self) -> None:
+        # drop in (SOUND, DUBIOUS] -> inaccuracy tier: brief, not dramatized.
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=70)
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-        assert "Explain why the best move is stronger" in prompt
-        assert "there is no better move here" not in prompt
+        assert "slightly missed the mark" in prompt
+        assert "serious mistake" not in prompt
         assert "sound, reasonable move" not in prompt
+
+    def test_serious_mistake_is_direct(self) -> None:
+        # drop past the dubious band -> serious tier: direct, lead with the cost.
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
+        prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+        assert "serious mistake" in prompt
+        assert "Lead with the cost" in prompt
+        assert "slightly missed the mark" not in prompt
+        assert "No motivational sign-off" in prompt
 
 
 def test_move_eval_prompt_grounds_pawn_structure() -> None:
@@ -429,7 +437,7 @@ def test_rich_prompts_forbid_invented_continuations() -> None:
 
     move_eval = build_rich_move_evaluation_prompt(_move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6"), "intermediate")
     assert "inventing concrete continuations" in move_eval  # shared system rule
-    assert "follow-up move" in move_eval  # reinforced in the move-eval instructions
+    assert '"and then..." continuations' in move_eval  # reinforced in the move-eval tier
 
 
 def test_rich_prompt_no_menu_no_sourcing_rule_when_lines_empty() -> None:
