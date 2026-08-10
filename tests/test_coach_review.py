@@ -90,6 +90,17 @@ def test_aggregate_reports_rates_and_phase_breakdown() -> None:
     assert stats.fidelity_by_phase == {PHASE_ENDGAME: {"off_menu": 1}}
 
 
+def test_prompt_uci_leak_is_counted() -> None:
+    # The second guard for silent SAN fallbacks: surface leakage in the stats we
+    # actually read every run (a log warning is not a guard).
+    clean = _turn(0, PHASE_OPENING)
+    clean = ReviewTurn(**{**clean.__dict__, "prompt": "Best move: Nf3 — Top lines: Nf3 e5"})
+    leaky = _turn(2, PHASE_OPENING)
+    leaky = ReviewTurn(**{**leaky.__dict__, "prompt": "Top lines: f6g4 f2f4"})
+    stats = aggregate_review([clean, leaky])
+    assert stats.prompt_uci_leaks == 1
+
+
 def test_aggregate_empty_is_safe() -> None:
     stats = aggregate_review([])
     assert stats.n_turns == 0

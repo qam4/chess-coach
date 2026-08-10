@@ -50,6 +50,7 @@ from chess_coach.models import (
     ThreatMapEntry,
 )
 from chess_coach.prompts import (
+    _uci_line_to_san,
     build_coaching_prompt,
     build_rich_coaching_prompt,
     build_rich_move_evaluation_prompt,
@@ -516,12 +517,22 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
             expected = describe_tactic(tactic, board)
             assert expected in prompt, f"Composed missed-tactic sentence must appear: {expected!r}"
 
-    # The opponent's immediate reply is surfaced when a refutation exists (Req
-    # 3.4). Only the first ply is rendered now (a single move, not the PV), so
-    # assert the "Opponent's reply" section is present.
+    # The opponent's immediate reply is surfaced when a refutation exists AND
+    # its first ply is replayable from the position after the student's move
+    # (Req 3.4). Only that first ply is rendered (a single move, not the PV);
+    # when it cannot be converted to SAN the section is omitted rather than
+    # showing raw coordinates, so gate the assertion on convertibility.
+    first_reply_san = ""
     if report.refutation_line:
+        probe = chess.Board(report.fen)
+        try:
+            probe.push_uci(report.user_move)
+            first_reply_san = _uci_line_to_san(probe.fen(), report.refutation_line[:1])
+        except (ValueError, AssertionError):
+            first_reply_san = ""
+    if first_reply_san:
         assert "Opponent's reply" in prompt or "strongest reply" in prompt.lower(), (
-            "Opponent's-reply section must appear when refutation_line is non-empty"
+            "Opponent's-reply section must appear when the first refutation ply is replayable"
         )
 
 

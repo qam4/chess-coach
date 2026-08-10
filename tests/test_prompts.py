@@ -219,10 +219,16 @@ class TestUciToSan:
         # b8c6 (Nc6) then f1c4 (Bc4) is a legal sequence from this position.
         assert _uci_line_to_san(BLACK_TO_MOVE_FEN, ["b8c6", "f1c4"]) == "Nc6 Bc4"
 
-    def test_line_falls_back_at_illegal_move(self) -> None:
-        # First move legal (Nc6), second illegal -> remainder emitted raw.
+    def test_line_truncates_at_unreplayable_move(self) -> None:
+        # First move legal (Nc6), second unreplayable -> TRUNCATE with an
+        # ellipsis. Raw coordinates must never reach the prompt: they are
+        # unreadable for a student and invite the model to guess a piece.
         out = _uci_line_to_san(BLACK_TO_MOVE_FEN, ["b8c6", "z9z9"])
-        assert out == "Nc6 z9z9"
+        assert out == "Nc6 ..."
+
+    def test_line_empty_when_nothing_converts(self) -> None:
+        # Not even the first move replays -> empty, so callers omit the section.
+        assert _uci_line_to_san(BLACK_TO_MOVE_FEN, ["z9z9", "b8c6"]) == ""
 
 
 class TestMoveEvaluationUsesSan:
@@ -346,6 +352,64 @@ def test_refutation_states_captured_piece() -> None:
     prompt = build_rich_move_evaluation_prompt(report, "intermediate")
     assert "Opponent's reply" in prompt
     assert "capturing your knight on g5" in prompt
+
+
+def test_sentinel_no_raw_uci_survives_in_move_eval_prompt() -> None:
+    # SENTINEL (CI guard): _uci_line_to_san degrades to raw UCI when handed the
+    # wrong base position, silently. A log warning is not a guard — nobody reads
+    # logs — so assert here that NO bare UCI token (e.g. "f6g4") survives in a
+    # rendered comparison prompt, across every severity tier.
+    import re
+
+    uci_token = re.compile(r"\b[a-h][1-8][a-h][1-8][qrbn]?\b")
+    fen = "r1bqkb1r/pppp1ppp/4pn2/4n1N1/2B5/4P3/PPPP1PPP/RNBQK2R w KQkq - 2 5"
+    for drop in (0, 30, 70, 300):
+        report = ComparisonReport(
+            fen=fen,
+            user_move="b2b3",
+            user_eval_cp=-183,
+            best_move="g5f3",  # a legal white move in this position
+            best_eval_cp=-45,
+            eval_drop_cp=drop,
+            classification="mistake",
+            nag="?",
+            best_move_idea="piece activity",
+            refutation_line=["f6g4", "f2f4"],
+            missed_tactics=[],
+            top_lines=[PVLine(depth=11, eval_cp=183, moves=["f6g4", "f2f4"], theme="general play")],
+            critical_moment=False,
+            critical_reason=None,
+        )
+        prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+        leaked = uci_token.findall(prompt)
+        assert not leaked, f"raw UCI leaked into the prompt (drop={drop}): {leaked}"
+
+
+def test_comparison_top_lines_render_san_not_uci() -> None:
+    # Regression (found via the report card): a ComparisonReport's top_lines
+    # describe the position AFTER the student's move, so converting from
+    # report.fen made the first move illegal and dumped the whole line as raw
+    # UCI ("f6g4 f2f4 ..."). The coach then parroted coordinates and invented
+    # what the move did. Real position + line from the v14 transcript.
+    report = ComparisonReport(
+        fen="r1bqkb1r/pppp1ppp/4pn2/4n1N1/2B5/4P3/PPPP1PPP/RNBQK2R w KQkq - 2 5",
+        user_move="b2b3",  # the student's mistake
+        user_eval_cp=-183,
+        best_move="f1e2",
+        best_eval_cp=-45,
+        eval_drop_cp=138,
+        classification="mistake",
+        nag="?",
+        best_move_idea="piece activity",
+        refutation_line=None,
+        missed_tactics=[],
+        top_lines=[PVLine(depth=11, eval_cp=183, moves=["f6g4", "f2f4"], theme="general play")],
+        critical_moment=False,
+        critical_reason=None,
+    )
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "Nfg4" in prompt  # SAN, from the post-move position
+    assert "f6g4" not in prompt  # raw coordinates gone
 
 
 def test_refutation_clause_describes_non_captures() -> None:

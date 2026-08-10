@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import chess
 
 from chess_coach.coaching_phrases import (
@@ -27,6 +29,8 @@ from chess_coach.models import (
 )
 from chess_coach.pedagogy.inject import format_guidance_block
 from chess_coach.pedagogy.resource import GuidanceEntry
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_board(fen: str) -> chess.Board | None:
@@ -459,15 +463,23 @@ def move_feedback_max_tokens(report: ComparisonReport) -> int:
 def _uci_line_to_san(fen: str, ucis: list[str]) -> str:
     """Convert a UCI move sequence to a space-joined SAN line from ``fen``.
 
-    Walks the position move by move; if any move is illegal/unparseable from
-    the running position, that move and the remainder are emitted as raw UCI
-    rather than guessing a wrong piece. Returns the original space-joined UCI
-    if the base position itself is invalid.
+    **Never emits raw UCI.** Walks the position move by move and TRUNCATES at the
+    first move that is illegal/unparseable from the running position, appending
+    ``...`` to show the line was cut. Raw coordinates are unreadable for a
+    student and invite the model to guess the wrong piece, so a short valid SAN
+    prefix is strictly better than a long broken one.
+
+    Truncation happens for real reasons beyond a caller mistake: the engine can
+    emit an internally inconsistent PV (observed: ``... c6b4 e8g8 ...`` — two
+    Black moves in a row, a missing White ply), so the tail genuinely cannot be
+    replayed. Returns ``""`` when not even the first move converts; callers omit
+    the section rather than print an empty line.
     """
     try:
         board = chess.Board(fen)
     except (ValueError, AssertionError):
-        return " ".join(ucis)
+        logger.warning("SAN conversion skipped: invalid base FEN %r (%d moves dropped)", fen, len(ucis))
+        return ""
     out: list[str] = []
     for i, uci in enumerate(ucis):
         try:
@@ -478,7 +490,14 @@ def _uci_line_to_san(fen: str, ucis: list[str]) -> str:
                 continue
         except (ValueError, AssertionError):
             pass
-        out.extend(ucis[i:])  # couldn't convert — emit this move and rest raw
+        logger.warning(
+            "SAN line truncated at move %d (%r) from %r — unreplayable (engine PV inconsistency?)",
+            i,
+            uci,
+            fen,
+        )
+        if out:
+            out.append("...")
         break
     return " ".join(out)
 
@@ -930,7 +949,9 @@ def _format_refutation_line(report: ComparisonReport) -> str | None:
         board = None
     base_fen = board.fen() if board is not None else report.fen
     first_uci = report.refutation_line[0]
-    reply_san = _uci_line_to_san(base_fen, [first_uci])
+    reply_san = _uci_line_to_san(base_fen, [first_uci]).removesuffix(" ...").strip()
+    if not reply_san:
+        return None  # can't name the reply honestly — omit the section
     # Deterministically state WHAT the reply captures (verified from the board),
     # so the coach voices "capturing your knight on g5" instead of a vague
     # "winning material" it might get wrong. Composed, never derived by the LLM.
@@ -1010,10 +1031,28 @@ def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str
 
 
 def _format_comparison_top_lines(report: ComparisonReport) -> str:
-    """Format the top engine lines from a ComparisonReport."""
-    lines = ["--- Top Engine Lines ---"]
+    """Format the top engine lines from a ComparisonReport, in SAN.
+
+    A ``ComparisonReport``'s ``top_lines`` describe the position AFTER the
+    student's move (they open with the opponent's reply), so SAN must be
+    rendered from that position — converting from ``report.fen`` makes the first
+    move illegal and silently falls the WHOLE line back to raw UCI. That is how
+    coordinate strings like ``f6g4`` reached the coach, which then parroted the
+    coordinates and invented what the move did (the correct SAN is ``Nfg4`` — a
+    knight move, matching the piece-type errors the fidelity checker flagged).
+    """
+    base_fen = report.fen
+    try:
+        board = chess.Board(report.fen)
+        board.push_uci(report.user_move)
+        base_fen = board.fen()
+    except (ValueError, AssertionError):
+        base_fen = report.fen
+    lines = ["--- Top Engine Lines (from the position after your move) ---"]
     for i, pv in enumerate(report.top_lines, 1):
-        moves_str = _uci_line_to_san(report.fen, pv.moves)
+        moves_str = _uci_line_to_san(base_fen, pv.moves)
+        if not moves_str:
+            continue  # nothing replayable — omit rather than show coordinates
         lines.append(f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}")
     return "\n".join(lines)
 

@@ -20,6 +20,7 @@ Design rules (see ``.kiro/specs/client-side-coaching-text``):
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import chess
@@ -32,6 +33,8 @@ from chess_coach.models import (
     TacticalMotif,
     Threat,
 )
+
+logger = logging.getLogger(__name__)
 
 # Below this many pieces on the board, king-safety commentary is noise
 # (middlegame heuristics do not apply in a bare endgame) — see BUG-009 and
@@ -99,10 +102,15 @@ def uci_to_san(fen: str, uci: str) -> str:
     """Convert a single UCI move to SAN for the given position.
 
     Models read SAN — which names the piece (e.g. ``Ke7``, ``O-O``, ``Qg4``) —
-    far more reliably than raw coordinates like ``e1g1``. Falls back to the raw
-    UCI string if the move can't be parsed or is illegal, so a bad datum
-    degrades gracefully instead of raising. Shared by the prompt renderer and
-    the move menu so there is one converter.
+    far more reliably than raw coordinates like ``e1g1``. Shared by the prompt
+    renderer and the move menu so there is one converter.
+
+    Unlike a move *line* (which is truncated at the first unreplayable move
+    rather than showing coordinates), a single move usually fills a required
+    field — the student's move, the engine's best move — so there is nothing
+    better to show than the raw UCI if it cannot be converted. That fallback is
+    kept, but WARNS: it means the move is illegal in the given position, i.e.
+    the caller passed the wrong base position or the engine sent a bad datum.
     """
     try:
         board = chess.Board(fen)
@@ -111,6 +119,7 @@ def uci_to_san(fen: str, uci: str) -> str:
             return board.san(move)
     except (ValueError, AssertionError):
         pass
+    logger.warning("uci_to_san could not convert %r in %r — emitting raw coordinates", uci, fen)
     return uci
 
 

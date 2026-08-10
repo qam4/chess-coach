@@ -455,3 +455,36 @@ surfaced one clear regression (BUG-016) and two issues worth tracking.*
   `tests/test_prompts.py::test_move_eval_prompt_grounds_pawn_structure`.
   Note: passed pawns were left out for now (isolated + doubled cover the
   observed error; passed-pawn detection is more involved).
+
+
+## Engine Issues (found via the coach report card, 2026-08-10)
+
+### BUG-019: Engine emits an internally inconsistent PV (missing ply / wrong side to move)
+- **Observed**: `get_comparison_report` on the starting position with the
+  student move `g1f3` returns a top line whose moves cannot all be replayed:
+  `['b8c6', 'b1c3', 'g8f6', 'e2e3', 'e7e6', 'f1d3', 'c6b4', 'e8g8', 'b4d3',
+  'c2d3']`. Walking it from the position after `g1f3` (Black to move) gives
+  `c6b4` (Black) immediately followed by `e8g8` (Black castling) — **two Black
+  moves in a row**, i.e. a missing White ply. Replay: 7 of 10 moves legal from
+  the correct base position, 0 of 10 from the pre-move position.
+- **Impact**: the client cannot render the tail of the line. Before it was
+  fixed, our SAN converter degraded to raw UCI for the remainder, so
+  coordinates like `e8g8 b4d3 c2d3` reached the coach, which then parroted a
+  coordinate and invented what the move did (this is how the ply-8 "the
+  opponent plays f6g4, gaining a strong central pawn" error arose — the correct
+  SAN is `Nfg4`, a knight move).
+- **Likely cause**: PV extraction from the transposition table without
+  verifying move legality along the reconstructed line — a classic source of
+  PV corruption (a TT hit splices in a move from a different position/parity).
+- **Client-side mitigation (done)**: `prompts._uci_line_to_san` now TRUNCATES a
+  line at the first unreplayable move (appending `...`) and never emits raw
+  coordinates; a line whose first move does not replay is omitted entirely.
+  A `prompt_uci_leaks` metric in the report card and a sentinel test guard
+  against regressions. So the coach no longer sees the corrupt tail — but the
+  engine is still sending it.
+- **Proposed engine fix**: validate each PV move against the running position
+  while extracting the PV and stop at the first illegal move, so the engine
+  emits a short valid line instead of a long corrupt one.
+- **Status**: OPEN (engine side). Mitigated client-side; low urgency because
+  truncation makes it harmless to coaching, but the engine should not emit
+  illegal continuations.

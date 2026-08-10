@@ -88,6 +88,11 @@ class ReviewStats:
     principle_connection_rate: float = 0.0
     # Fidelity violations broken down by phase (where to focus composer work).
     fidelity_by_phase: dict[str, dict[str, int]] = field(default_factory=dict)
+    # Turns whose PROMPT still contained a raw UCI token (e.g. "f6g4"). SAN
+    # conversion degrades to raw UCI silently when handed the wrong base
+    # position; a log warning is not a guard, so this is surfaced in the stats
+    # block of every run (and to the frontier reviewer). Should be 0.
+    prompt_uci_leaks: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -102,6 +107,7 @@ class ReviewStats:
             "specificity_rate": round(self.specificity_rate, 4),
             "principle_connection_rate": round(self.principle_connection_rate, 4),
             "fidelity_by_phase": {k: dict(v) for k, v in self.fidelity_by_phase.items()},
+            "prompt_uci_leaks": self.prompt_uci_leaks,
         }
 
 
@@ -117,6 +123,9 @@ def _percentile(sorted_vals: list[float], pct: float) -> float:
 
 # A square reference (a1..h8) anywhere in the text.
 _SQUARE_RE = re.compile(r"\b[a-h][1-8]\b")
+# A bare UCI move token ("f6g4"): should never appear in a rendered prompt, since
+# every move is meant to be SAN. Detects silent SAN-conversion fallbacks.
+_UCI_TOKEN_RE = re.compile(r"\b[a-h][1-8][a-h][1-8][qrbn]?\b")
 # Principle keywords the coaching is expected to name (the pedagogy themes).
 _PRINCIPLE_WORDS = (
     "development",
@@ -204,6 +213,7 @@ def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
         specificity_rate=(sum(1 for t in turns if is_specific(t)) / n) if n else 0.0,
         principle_connection_rate=(sum(1 for t in turns if connects_principle(t)) / n) if n else 0.0,
         fidelity_by_phase={k: dict(v) for k, v in by_phase.items()},
+        prompt_uci_leaks=sum(1 for t in turns if t.prompt and _UCI_TOKEN_RE.search(t.prompt)),
     )
 
 
@@ -267,6 +277,7 @@ def _fmt_stats(stats: ReviewStats) -> str:
         f"Principle-connection rate (principle named near a square): "
         f"{stats.principle_connection_rate:.0%}\n"
         f"Empty feedback turns: {stats.empty_feedback}\n"
+        f"Prompts still containing raw UCI (should be 0): {stats.prompt_uci_leaks}\n"
         f"Generation latency (s): mean {stats.latency_mean_s:.1f}, "
         f"p90 {stats.latency_p90_s:.1f}, max {stats.latency_max_s:.1f}"
     )

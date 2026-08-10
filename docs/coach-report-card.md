@@ -286,6 +286,33 @@ before-numbers for items 2-4.
    measurement or add curated blunder/refutation positions (as we did for
    endgame coverage), or those levers risk the same "no-op / can't tell"
    outcome.
+
+   **2b. [bug] Raw UCI was still reaching the coach — found while validating 2,
+   now FIXED.** Chasing "why didn't item 2 move anything" uncovered a much
+   bigger defect: a `ComparisonReport`'s `top_lines` describe the position AFTER
+   the student's move (they open with the opponent's reply), but
+   `_format_comparison_top_lines` converted SAN from `report.fen` (before it).
+   The first move was illegal there, and `_uci_line_to_san`'s **silent**
+   fault-tolerant fallback emitted the WHOLE line as raw coordinates —
+   `f6g4 f2f4 e5c4 ...` — which the coach parroted and then invented a meaning
+   for ("gaining a strong central pawn"; the correct SAN is `Nfg4`, a knight
+   move). So the documented SAN migration was real but silently degraded in
+   exactly one section. Root cause of the *remaining* leaks after the base-FEN
+   fix turned out to be an **engine bug** (BUG-019: inconsistent PV, two Black
+   moves in a row), so the converter genuinely could not replay the tail.
+   Fix, in three parts: (a) correct base position; (b) `_uci_line_to_san` now
+   **truncates** at the first unreplayable move with `...` and NEVER emits
+   coordinates — an unconvertible first move omits the section entirely;
+   (c) two guards, because a log warning is not a guard: a **CI sentinel test**
+   (no bare UCI token in any rendered comparison prompt, all tiers) and a
+   **`prompt_uci_leaks` metric** in every report-card run's stats.
+   Measured: **prompt_uci_leaks 27/44 -> 19/44 -> 0/44**; total fidelity
+   violations 9 -> 8; specificity/principle-connection unchanged (25% / 34%).
+   **Still open (next):** SAN fixed readability, not *side attribution* — at
+   ply 8 the coach still says "the opponent plays f4" when `f4` is White's
+   (the student's own) move, the second ply of the line. The PV is a bare SAN
+   sequence with no whose-move markers, so the model grabs the wrong ply. Fix
+   by numbering/labelling the line (e.g. `1...Nfg4 2.f4 Nxc4`).
 3. **[composer] Compose the best-move "why" from the board** — replace the
    category label with a position-specific string derived via python-chess (what
    the piece now attacks/defends, what it vacates, whether it answers a threat).
