@@ -1009,6 +1009,102 @@ def _format_refutation_line(report: ComparisonReport) -> str | None:
     return f"--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is {reply_san}{capture_clause}."
 
 
+def _move_effect_clause(board: chess.Board | None, uci: str, *, target_possessive: str) -> str:
+    """A verified clause describing what a move DOES, or '' if nothing is certain.
+
+    Everything is computed from ``board`` (the position the move is played in),
+    so the result is a fact the model only has to voice — never an inference it
+    has to make. ``target_possessive`` is the wording for the pieces the move
+    acts against (``"your "`` when the opponent is moving, ``"their "`` when the
+    student is). Priority: capture, then fork, then check/attack, then escaping
+    an attack, then defending an attacked piece.
+
+    Pawns and the king are excluded as *named targets*: an early version turned
+    a real check into a pawn inventory ("giving check and hitting your pawn on
+    b2 and your pawn on h2").
+    """
+    if board is None:
+        return ""
+    try:
+        move = chess.Move.from_uci(uci)
+    except ValueError:
+        return ""
+    if move not in board.legal_moves:
+        return ""
+
+    mover = board.turn
+    if board.is_capture(move):
+        if board.is_en_passant(move):
+            cap_sq = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
+            return f", capturing {target_possessive}pawn on {chess.square_name(cap_sq)}"
+        victim = board.piece_at(move.to_square)
+        if victim is not None:
+            name = chess.piece_name(victim.piece_type)
+            return f", capturing {target_possessive}{name} on {chess.square_name(move.to_square)}"
+        return ""
+
+    moved = board.piece_at(move.from_square)
+    was_attacked = bool(board.attackers(not mover, move.from_square))
+    after = board.copy(stack=False)
+    after.push(move)
+    check = after.is_check()
+
+    targets: list[tuple[int, str]] = []
+    for sq in after.attacks(move.to_square):
+        piece = after.piece_at(sq)
+        if piece is None or piece.color == mover or piece.piece_type in (chess.KING, chess.PAWN):
+            continue
+        undefended = not after.attackers(not mover, sq)
+        adj = "undefended " if undefended else ""
+        label = f"{target_possessive}{adj}{chess.piece_name(piece.piece_type)} on {chess.square_name(sq)}"
+        targets.append((piece.piece_type, label))
+    targets.sort(key=lambda t: t[0], reverse=True)
+
+    if len(targets) >= 2:
+        two = " and ".join(t[1].replace("undefended ", "") for t in targets[:2])
+        return f", giving check and hitting {two}" if check else f", hitting {two}"
+    if targets:
+        phrase = targets[0][1]
+        return f", giving check and attacking {phrase}" if check else f", attacking {phrase}"
+    if check:
+        return ", giving check"
+
+    # Defensive motives, in the mover's own terms.
+    if was_attacked and not after.attackers(not mover, move.to_square) and moved is not None:
+        name = chess.piece_name(moved.piece_type)
+        return f", moving your {name} off {chess.square_name(move.from_square)} where it was attacked"
+    for sq in after.attacks(move.to_square):
+        piece = after.piece_at(sq)
+        if piece is None or piece.color != mover or piece.piece_type == chess.KING:
+            continue
+        if after.attackers(not mover, sq) and len(after.attackers(mover, sq)) == 1:
+            name = chess.piece_name(piece.piece_type)
+            return f", defending your {name} on {chess.square_name(sq)}"
+    return ""
+
+
+def _best_move_achievement(report: ComparisonReport) -> str:
+    """What the engine's best move achieves — position-specific where possible.
+
+    The engine's ``best_move_idea`` is a CATEGORY LABEL, not a fact: across a
+    44-turn game there were only 10 distinct values ("king safety — repositioning
+    the king" x13, "rook activity — improving rook placement" x8). Voicing a
+    label can only produce category sentences, which is the mechanical cause of
+    the generic best-move explanations the report card kept flagging.
+
+    So prepend a concrete, board-derived clause when one can be verified (what
+    the move captures / attacks / defends / escapes), and keep the label as the
+    theme. Composed, never derived — if nothing is verifiable, the label alone
+    is returned unchanged.
+    """
+    board = _safe_board(report.fen)
+    effect = _move_effect_clause(board, report.best_move, target_possessive="their ")
+    if not effect:
+        return report.best_move_idea
+    concrete = effect.removeprefix(", ").strip()
+    return f"{concrete} ({report.best_move_idea})"
+
+
 def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str:
     """A verified clause describing what the opponent's reply DOES, or ''.
 
@@ -1022,62 +1118,11 @@ def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str
     Without this, non-capture refutations reached the coach as a bare move and
     the model invented the "why" (e.g. calling the knight move f6g4 "gaining a
     strong central pawn"). Returns '' when nothing can be verified.
+
+    Thin wrapper over :func:`_move_effect_clause` so the opponent's reply and
+    the engine's best move share one verified implementation (no drift).
     """
-    if board is None:
-        return ""
-    try:
-        move = chess.Move.from_uci(first_uci)
-    except ValueError:
-        return ""
-    if move not in board.legal_moves:
-        return ""
-
-    if board.is_capture(move):
-        if board.is_en_passant(move):
-            cap_sq = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
-            return f", capturing your pawn on {chess.square_name(cap_sq)}"
-        victim = board.piece_at(move.to_square)
-        if victim is not None:
-            return f", capturing your {chess.piece_name(victim.piece_type)} on {chess.square_name(move.to_square)}"
-        return ""
-
-    # Non-capture: describe what the move hits, from the resulting position.
-    # Only PIECES (not pawns) count as targets worth naming — "attacking your
-    # pawn on h2" is noise on most quiet moves, and listing pawns turned real
-    # checks into pawn inventories.
-    after = board.copy(stack=False)
-    after.push(move)
-    student = not board.turn  # the side being coached
-    check = after.is_check()
-    targets: list[tuple[int, str, bool]] = []  # (piece_type, name+square, undefended)
-    for sq in after.attacks(move.to_square):
-        piece = after.piece_at(sq)
-        if piece is None or piece.color != student:
-            continue
-        if piece.piece_type in (chess.KING, chess.PAWN):
-            continue
-        targets.append(
-            (
-                piece.piece_type,
-                f"your {chess.piece_name(piece.piece_type)} on {chess.square_name(sq)}",
-                not after.attackers(student, sq),
-            )
-        )
-    # Most valuable first, so a fork names the pieces that matter.
-    targets.sort(key=lambda t: t[0], reverse=True)
-
-    if len(targets) >= 2:
-        two = " and ".join(t[1] for t in targets[:2])
-        return f", giving check and hitting {two}" if check else f", hitting {two}"
-    if targets:
-        _, phrase, undefended = targets[0]
-        if undefended:
-            phrase = f"undefended {phrase[len('your ') :]}"
-            phrase = f"your {phrase}"
-        return f", giving check and attacking {phrase}" if check else f", attacking {phrase}"
-    if check:
-        return ", giving check"
-    return ""
+    return _move_effect_clause(board, first_uci, target_possessive="your ")
 
 
 def _format_comparison_top_lines(report: ComparisonReport) -> str:
@@ -1210,7 +1255,7 @@ def build_rich_move_evaluation_prompt(
         eval_drop_cp=report.eval_drop_cp,
         classification=report.classification,
         nag=report.nag,
-        best_move_idea=report.best_move_idea,
+        best_move_idea=_best_move_achievement(report),
         sections="\n\n".join(sections),
         move_instructions=move_instructions,
         level_instructions=level_instructions,

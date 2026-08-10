@@ -385,6 +385,47 @@ def test_sentinel_no_raw_uci_survives_in_move_eval_prompt() -> None:
         assert not leaked, f"raw UCI leaked into the prompt (drop={drop}): {leaked}"
 
 
+def test_best_move_achievement_is_position_specific() -> None:
+    # Item 3: best_move_idea is a category label ("pawn structure — improving
+    # pawn position"), so voicing it can only yield category sentences. Prepend
+    # a board-derived fact; keep the label as the theme. Real position from the
+    # game: a3 is best because it hits an undefended bishop on b4, which the
+    # label never says.
+    from chess_coach.prompts import _best_move_achievement
+
+    report = ComparisonReport(
+        fen="rn1qkb1r/pppp1ppp/4pn2/6N1/1b6/1P2P3/P1PP1PPP/RNBQKB1R w KQkq - 0 6",
+        user_move="d2d4",
+        user_eval_cp=0,
+        best_move="a2a3",
+        best_eval_cp=90,
+        eval_drop_cp=90,
+        classification="inaccuracy",
+        nag="?!",
+        best_move_idea="pawn structure — improving pawn position",
+        refutation_line=None,
+        missed_tactics=[],
+        top_lines=[],
+        critical_moment=False,
+        critical_reason=None,
+    )
+    # (the b4 bishop is defended by the f8 bishop along f8-b4, so it is
+    # "attacking their bishop", not "undefended" — verified against the board)
+    out = _best_move_achievement(report)
+    assert out == "attacking their bishop on b4 (pawn structure — improving pawn position)"
+    assert out in build_rich_move_evaluation_prompt(report, "intermediate")
+
+
+def test_best_move_achievement_falls_back_to_label_without_invention() -> None:
+    # Nothing verifiable about a quiet move -> return the label unchanged rather
+    # than inventing a concrete-sounding reason.
+    from chess_coach.prompts import _best_move_achievement
+
+    report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
+    report = dataclasses.replace(report, best_move_idea="pawn structure — improving pawn position")
+    assert _best_move_achievement(report) == "pawn structure — improving pawn position"
+
+
 def test_numbered_san_marks_whose_move_it_is() -> None:
     # A bare SAN sequence hid side: the coach read "Nfg4 f4" and announced "the
     # opponent plays f4" — f4 is the STUDENT's move. Numbering makes the

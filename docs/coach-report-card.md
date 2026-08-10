@@ -329,12 +329,33 @@ before-numbers for items 2-4.
    had been misreading which move, hence which piece, belonged to whom),
    specificity 25% -> 27%, principle-connection 34% (flat), leaks still 0. Best
    deterministic result of the series (baseline: 9 violations, 27 leaks).
-3. **[composer] Compose the best-move "why" from the board** — replace the
-   category label with a position-specific string derived via python-chess (what
-   the piece now attacks/defends, what it vacates, whether it answers a threat).
-   Fixes generic best-move explanations and starves the model's urge to fill the
-   "why" from priors. Moderate risk (per-category composer logic; start with the
-   top 4 categories by frequency).
+3. **[composer] Compose the best-move "why" from the board** — DONE, and the
+   **biggest single win of the series.** Evidence first: across the 44 turns
+   `best_move_idea` had only **10 distinct values** (`king safety —
+   repositioning the king` x13, `rook activity — improving rook placement` x8),
+   so voicing it could only ever produce category sentences.
+   `_best_move_achievement` now prepends a verified board-derived clause and
+   keeps the label as the theme; the opponent's-reply and best-move clauses were
+   unified into one `_move_effect_clause` (capture / fork / check / attack /
+   escaping an attack / defending) so they cannot drift. Coverage was measured
+   BEFORE spending a run: **31/44 (70%)** of best moves get a concrete clause;
+   the rest return the label unchanged rather than inventing.
+
+   **Measured (v17 -> v18): specificity 27% -> 66%, principle-connection
+   34% -> 64%** — both roughly doubled — with **no fidelity cost** (total
+   violations flat at 6, placement 1 -> 0, leaks still 0). The prose confirms the
+   mechanism: ply 8 went from "Nfg4, gaining a strong central presence" (vague)
+   to "Nfg4, **attacking your bishop on c4**" + "Be2, **moving your bishop to a
+   safe and active square**"; ply 66 from "repositioning your king for better
+   safety" to "repositioning your king to **target the opponent's rook on f4 and
+   bishop on g4**". The coach says *why* in board terms because it was handed
+   the fact.
+
+   Two guards caught mistakes during the refactor and are worth noting: an
+   existing test caught a word-order regression ("undefended your rook"), and
+   **mypy caught dead code** the refactor orphaned (an unreachable branch using
+   an undefined name). One "failure" was the test being wrong, not the code —
+   the b4 bishop really is defended by the f8 bishop.
 4. **[pedagogy] Instantiate the guidance block** — add an
    `instantiation_template` to each YAML entry with slots filled by the *board
    fact that made the feature fire* ("your Nb1 and Bc1 haven't moved yet — Be2
