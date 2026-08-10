@@ -44,6 +44,7 @@ All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 | lever 4 | enforce per-tier length (word limit + max_tokens) in builder/Coach/driver | 3.5 | 4 | 2 | 1 | **yes** |
 | lever 5 | tiers demand the concrete consequence (state the refutation line) | — | 7 | 6 | 1 | **reverted** |
 | lever 6 | concrete consequence done right: first reply only + opponent-aware checker | 4.5 | **3** | 2 | 1 | **yes** |
+| lever 7 | position→principle ordering (prompt directive; refined to anchor to data) | — | 4 | 3 | 2 | **reverted** |
 
 **Lever 1 (kept).** The static crib was injected on every turn and drove
 recycled generic advice ("develop your pieces / is my king safe?") even in the
@@ -122,6 +123,35 @@ the move-salad is gone and blunders now name the single concrete consequence
 degradation when no refutation is available (ply 34 hedged rather than
 fabricating). Kept.
 
+**Lever 7 (reverted — costs accuracy).** A prompt directive to lead with the
+concrete position point flipped the ordering nicely (blunders opened with "your
+opponent plays fxg5, winning material") but pushed the model to assert more
+board facts than it can ground: fidelity regressed (raw: illegal_move 0→1,
+placement/piece_type 1→2). Refining it to "only from the data shown, don't
+invent" fixed the worst (illegal_move back to 0, off_menu down) but the
+accuracy-critical categories stayed doubled (placement 1→2, piece_type 1→2).
+Per the rule "do not sacrifice accuracy," reverted.
+
+## The pattern across seven levers (the strategic lesson)
+
+Sorting the levers by outcome reveals a sharp, consistent rule:
+
+- **KEPT — levers 1, 3, 4, 6:** each either removed noise (drop the crib) or
+  **composed/constrained a verified fact deterministically and had the LLM
+  voice it** (severity bands from our eval-drop, per-tier length, the opponent's
+  first reply rendered from the refutation + an opponent-aware checker).
+- **REVERTED — levers 2, 5, 7:** each **asked the LLM to *derive* more** via a
+  prompt directive — "don't fabricate causal chains" (no effect), "state the
+  refutation line" (move-salad), "lead with the concrete point" (invented
+  facts). All regressed or did nothing.
+
+**Conclusion: we have hit the ceiling of prompt-directing the local model toward
+more concreteness. Every further teaching gain has to move the concreteness OUT
+of the LLM's derivation and INTO deterministic Layer-1 composition — compose the
+verified point, hand it over, and let the LLM only *voice* it.** That is the
+"Layer 1 facts → Layer 2 voice" principle, and it is what every kept lever
+already does.
+
 ## Stable qualitative findings (across all runs — the real signal)
 
 1. **Generic recycled principle.** A small rotating set of platitudes
@@ -141,16 +171,25 @@ fabricating). Kept.
    mechanism than a negative instruction (e.g. constraining named moves to the
    menu / a repair pass) — revisit after severity tiering.
 
-## Next: "position → principle" (the judge's evolved #1)
+## Next: the deterministic "lead" composer (Layer 1 → Layer 2 voice)
 
-With the concrete consequence now named (lever 6), the judge's highest-leverage
-ask shifted to *ordering*: **describe what is actually happening in the position
-first — the hanging piece, the weak square, the tactical pattern — then label
-the principle.** Right now the coach goes principle → vague gesture at the
-position; it should go position → principle. That is a prompt-ordering change
-(lead with the concrete feature from the engine data, then the transferable
-principle), measured the same way (report card, seed 7; qualitative read +
-deterministic counts).
+Lever 7 showed a prompt directive can't get position→principle ordering without
+inventing facts. The accuracy-safe way (and the one consistent with every kept
+lever) is to **compose the single concrete lead deterministically and have the
+coach open with it**, never derive it:
+
+- **Serious / inaccuracy:** compose "after your move, the opponent plays {first
+  refutation reply}, winning {the captured piece / the material}" — the reply
+  is already rendered (lever 6); add *what it wins* by reading the captured
+  piece off the board after the student's move (deterministic, verified).
+- **Good / best / sound:** open with the engine's `best_move_idea` (already a
+  structured field) or the key active feature from the placement/threats blocks.
+
+Hand this composed lead to the prompt as the sentence to open with; the LLM
+voices it + adds the principle. Because the lead is verified, the ordering flips
+with no new invention. This is a composer change (+ maybe a small engine field
+for "what the refutation wins"), not a prompt directive — measured the same way,
+with fidelity expected to stay at the v6 level.
 
 Deferred companion: opening-specific *content* (named openings / plans) — the
 opening phase stays the most generic and may need real content, not just
