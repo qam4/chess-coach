@@ -564,13 +564,21 @@ class Coach:
                 )
 
             guidance = None
+            guidance_facts: dict[str, str] | None = None
             if self.guidance and self._resource is not None:
+                from chess_coach.pedagogy.instantiate import feature_facts
+
                 try:
                     pos_report = self.engine.get_position_report(fen_before, multipv=self.top_moves)
                     guidance = self._select_guidance(pos_report, self.level)
+                    # Instantiate each selected theme with the board fact that
+                    # fired it, so the guidance is specific rather than abstract.
+                    guidance_facts = feature_facts(pos_report)
                 except Exception as e:
                     logger.warning("evaluate_move: guidance position report failed: %s", e)
-            prompt = build_rich_move_evaluation_prompt(report, level=self.level, guidance=guidance)
+            prompt = build_rich_move_evaluation_prompt(
+                report, level=self.level, guidance=guidance, guidance_facts=guidance_facts
+            )
 
             if self.template_only:
                 from chess_coach.coaching_templates import generate_move_coaching as _gen_move_coaching_tmpl

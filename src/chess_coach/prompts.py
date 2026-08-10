@@ -1161,6 +1161,7 @@ def build_rich_move_evaluation_prompt(
     report: ComparisonReport,
     level: str = "intermediate",
     guidance: list[GuidanceEntry] | None = None,
+    guidance_facts: dict[str, str] | None = None,
 ) -> str:
     """Build a rich move evaluation prompt from a ComparisonReport.
 
@@ -1190,7 +1191,9 @@ def build_rich_move_evaluation_prompt(
     # level-filtered. Inserted first so the move feedback LEADS with the
     # selected themes; the engine-grounding instructions below are untouched.
     # An empty selection adds nothing, so feedback is unchanged without guidance.
-    guidance_block = format_guidance_block(guidance or [], level=level)
+    # ``guidance_facts`` instantiates each theme with the board fact that fired
+    # it, so the model receives a specific reason instead of abstract prose.
+    guidance_block = format_guidance_block(guidance or [], level=level, facts=guidance_facts)
     if guidance_block:
         sections.append(guidance_block)
 

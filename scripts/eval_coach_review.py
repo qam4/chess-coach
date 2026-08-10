@@ -42,6 +42,7 @@ from chess_coach.eval.game_coaching import TurnRecord, play_game, student_moves 
 from chess_coach.llm import create_provider  # noqa: E402
 from chess_coach.llm.ollama import OllamaProvider  # noqa: E402
 from chess_coach.pedagogy.features import phase_of_board  # noqa: E402
+from chess_coach.pedagogy.instantiate import feature_facts  # noqa: E402
 from chess_coach.pedagogy.guard import guard_entries  # noqa: E402
 from chess_coach.pedagogy.resource import KnowledgeResource, default_resource_path, load_resource  # noqa: E402
 from chess_coach.pedagogy.selector import guidance_for_position  # noqa: E402
@@ -74,7 +75,9 @@ def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multip
     comparison = oracle.get_comparison_report(fen, move, depth=depth)
     pos_report = oracle.get_position_report(fen, multipv=multipv, depth=depth)
     guidance = guidance_for_position(resource, pos_report, level, guidance_max)
-    prompt = build_rich_move_evaluation_prompt(comparison, level=level, guidance=guidance)
+    prompt = build_rich_move_evaluation_prompt(
+        comparison, level=level, guidance=guidance, guidance_facts=feature_facts(pos_report)
+    )
     t0 = time.monotonic()
     text = model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0)
     latency = time.monotonic() - t0

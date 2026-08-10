@@ -356,12 +356,41 @@ before-numbers for items 2-4.
    **mypy caught dead code** the refactor orphaned (an unreachable branch using
    an undefined name). One "failure" was the test being wrong, not the code —
    the b4 bishop really is defended by the f8 bishop.
-4. **[pedagogy] Instantiate the guidance block** — add an
-   `instantiation_template` to each YAML entry with slots filled by the *board
-   fact that made the feature fire* ("your Nb1 and Bc1 haven't moved yet — Be2
-   develops toward the center"). Pure string composition; the LLM rephrases a
-   specific claim instead of deriving one. This is the fix for the named
-   architectural flaw.
+4. **[pedagogy] Instantiate the guidance block** — DONE (kept; mechanism right,
+   measurable gain small). Implemented leaner than the review proposed: instead
+   of adding an `instantiation_template` to all 20 YAML entries plus a
+   slot-filling mechanism, note that an entry fires *because* a board feature
+   was found — so `pedagogy/instantiate.feature_facts(report)` composes the fact
+   for that feature and `_render_entry` appends it as `HERE: ...`. No schema
+   change, no content authoring, and the fact comes from the report the selector
+   already matched against.
+
+   Two self-inflicted bugs caught before running, both the failure mode we keep
+   fighting: (a) the first version emitted "you are ahead in material" and "a
+   capture is available" **unconditionally** — false in the starting position —
+   so facts are now filtered to features actually present, with a regression
+   test; a fabricated "fact" is worse than the abstraction it replaces.
+   (b) The "pieces still at home" fact was keyed to `phase:opening`, which TWO
+   entries share, so it landed on the wrong theme ("center control … HERE: your
+   bishops have not moved"); that mapping was dropped — only semantically
+   matched facts are emitted. mypy also caught a typing error in the
+   wing-majority loop.
+
+   **Measured (v18 -> v19): fidelity is the cleanest of the series — total
+   violations 6 -> 5, and BOTH board-fact categories are now zero (placement 0,
+   piece_type 0)**; only constraint-adherence violations remain (off_menu 3,
+   unsound_move 2). But **principle-connection moved only 64% -> 66% and
+   specificity was flat at 66%** — within noise for one run, so no teaching win
+   is claimed. Inspection explains why: 39/44 prompts carried an instantiated
+   fact, but the model consistently preferred the **move-anchored** fact from
+   item 3 over the position-level guidance fact (offered "a fork involving
+   d5, c4", it voiced "attacking Black's knight on e5"). For move feedback that
+   is arguably correct — the coaching is *about a move* — and item 3's clauses
+   are simply more specific. Kept because the mechanism removes abstract-only
+   guidance (the named flaw), fidelity improved, and it cannot fabricate.
+   **Hypothesis worth testing later:** item 4 should pay off on the
+   *position-coaching* path (`chess-coach explain`), where there is no move to
+   anchor to — untested here.
 5. **[option, not a recommendation] Blunder-only second pass** — a short
    self-critique call on the ~9% of turns that are blunders. Violates the
    one-LLM-call rule and doubles latency there; only pursue if 2-4 leave blunder

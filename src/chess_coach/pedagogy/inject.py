@@ -62,33 +62,48 @@ def _level_filter(entries: list[GuidanceEntry], level: str | None) -> list[Guida
     return [entry for entry in entries if entry.applies_to_level(level)]
 
 
-def _render_entry(entry: GuidanceEntry) -> str:
+def _render_entry(entry: GuidanceEntry, facts: dict[str, str] | None = None) -> str:
     """Render one entry carrying both ends of the bridge (Req 3.2).
 
     Includes the named ``theme`` and the ``how_to_apply`` statement
     verbatim (plus the ``focus`` for context), so the coach prompt always
     contains both bridge ends for the entry.
+
+    When ``facts`` maps a feature this entry fired on to a verified board fact,
+    that fact is appended as ``HERE: ...``. Abstract prose alone is what the
+    model anchors to and echoes (the architecture review's named flaw), so the
+    entry arrives with the specific reason it was selected. Absent a fact, the
+    entry renders exactly as before.
     """
-    return f"{entry.theme} — {entry.focus} How to apply: {entry.how_to_apply}"
+    line = f"{entry.theme} — {entry.focus} How to apply: {entry.how_to_apply}"
+    if facts:
+        for feature in entry.features:
+            fact = facts.get(feature)
+            if fact:
+                return f"{line} HERE: {fact}."
+    return line
 
 
 def render_guidance_entries(
     entries: list[GuidanceEntry],
     level: str | None = None,
+    facts: dict[str, str] | None = None,
 ) -> list[str]:
     """Render the selected entries to a list of per-entry bullet lines.
 
     Applies the level filter (Req 3.3) and returns one ``"- ..."`` line
     per surviving entry. Returns an empty list when nothing survives, so
     callers (the template focus section and the prompt block) can decide
-    whether to emit a section header at all.
+    whether to emit a section header at all. ``facts`` instantiates each entry
+    with the board fact that fired it (see :func:`_render_entry`).
     """
-    return [f"- {_render_entry(entry)}" for entry in _level_filter(entries, level)]
+    return [f"- {_render_entry(entry, facts)}" for entry in _level_filter(entries, level)]
 
 
 def format_guidance_block(
     entries: list[GuidanceEntry],
     level: str | None = None,
+    facts: dict[str, str] | None = None,
 ) -> str:
     """Render the selected entries into the "What to focus on" block.
 
@@ -110,7 +125,7 @@ def format_guidance_block(
         The formatted guidance block, or ``""`` when there is nothing to
         inject.
     """
-    lines = render_guidance_entries(entries, level)
+    lines = render_guidance_entries(entries, level, facts)
     if not lines:
         return ""
     return "\n".join([GUIDANCE_BLOCK_HEADER, _GUIDANCE_INTRO, *lines])
