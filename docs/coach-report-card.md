@@ -308,11 +308,27 @@ before-numbers for items 2-4.
    **`prompt_uci_leaks` metric** in every report-card run's stats.
    Measured: **prompt_uci_leaks 27/44 -> 19/44 -> 0/44**; total fidelity
    violations 9 -> 8; specificity/principle-connection unchanged (25% / 34%).
-   **Still open (next):** SAN fixed readability, not *side attribution* — at
-   ply 8 the coach still says "the opponent plays f4" when `f4` is White's
-   (the student's own) move, the second ply of the line. The PV is a bare SAN
-   sequence with no whose-move markers, so the model grabs the wrong ply. Fix
-   by numbering/labelling the line (e.g. `1...Nfg4 2.f4 Nxc4`).
+   **2c. [fix] PV side attribution — DONE, and it worked.** SAN fixed
+   readability but not *whose move is whose*: at ply 8 the coach said "the
+   opponent plays f4" when `f4` was the student's own (White) move — the second
+   ply. A bare SAN sequence hides the alternation, so the model grabbed the
+   wrong ply. `_uci_line_to_numbered_san` now renders move numbers from the
+   board (`5...Nfg4 6.f4 Nxc4 7.bxc4`), and the section header names which
+   colour is the opponent. Scope was verified before building, not assumed:
+   this was the ONLY unlabelled multi-move surface (the refutation block,
+   tactics, move menu and move fields all already carry attribution, and the
+   position prompt has no raw PV since the move-menu work). A separate function
+   was added rather than changing `_uci_line_to_san`, to leave the
+   just-fixed refutation path untouched. Three off-by-one hazards were checked
+   against real boards first: Black-start (`5...`), truncation of the engine's
+   corrupt tail (numbering survives), and White-start (no spurious `...`).
+
+   **Measured (v16 -> v17):** the ply-8 sentence is now correct ("the opponent
+   plays **Nfg4**"), and the deterministic metrics improved — total violations
+   **8 -> 6**, `piece_type` **1 -> 0** (consistent with the mechanism: the coach
+   had been misreading which move, hence which piece, belonged to whom),
+   specificity 25% -> 27%, principle-connection 34% (flat), leaks still 0. Best
+   deterministic result of the series (baseline: 9 violations, 27 leaks).
 3. **[composer] Compose the best-move "why" from the board** — replace the
    category label with a position-specific string derived via python-chess (what
    the piece now attacks/defends, what it vacates, whether it answers a threat).

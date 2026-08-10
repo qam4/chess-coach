@@ -502,6 +502,56 @@ def _uci_line_to_san(fen: str, ucis: list[str]) -> str:
     return " ".join(out)
 
 
+def _uci_line_to_numbered_san(fen: str, ucis: list[str]) -> str:
+    """Like :func:`_uci_line_to_san` but with move numbers marking WHOSE move.
+
+    A bare SAN sequence hides side: given ``Nfg4 f4 Nxc4`` the model grabbed
+    ``f4`` — the STUDENT's move — and announced "the opponent plays f4".
+    Numbering makes the alternation explicit, using the standard convention
+    where a line starting on Black's move is written ``12...Nfg4 13.f4``.
+
+    The move number and side come from the board (``fullmove_number`` /
+    ``turn``), never inferred from position in the list — an off-by-one here
+    would be exactly the kind of silent wrongness this whole fix chased.
+    Truncation semantics match :func:`_uci_line_to_san`: stop at the first
+    unreplayable move, append ``...``, and return ``""`` if nothing converts.
+    """
+    try:
+        board = chess.Board(fen)
+    except (ValueError, AssertionError):
+        logger.warning("numbered SAN skipped: invalid base FEN %r (%d moves dropped)", fen, len(ucis))
+        return ""
+    out: list[str] = []
+    for i, uci in enumerate(ucis):
+        try:
+            move = chess.Move.from_uci(uci)
+            if move in board.legal_moves:
+                number = board.fullmove_number
+                white_to_move = board.turn == chess.WHITE
+                san = board.san(move)
+                if white_to_move:
+                    out.append(f"{number}.{san}")
+                elif not out:
+                    # Line opens on Black's move: "12...Nfg4".
+                    out.append(f"{number}...{san}")
+                else:
+                    out.append(san)
+                board.push(move)
+                continue
+        except (ValueError, AssertionError):
+            pass
+        logger.warning(
+            "numbered SAN line truncated at move %d (%r) from %r — unreplayable (engine PV inconsistency?)",
+            i,
+            uci,
+            fen,
+        )
+        if out:
+            out.append("...")
+        break
+    return " ".join(out)
+
+
 def _format_eval_breakdown(report: PositionReport) -> str:
     """Format the eval breakdown section."""
     eb = report.eval_breakdown
@@ -1048,9 +1098,14 @@ def _format_comparison_top_lines(report: ComparisonReport) -> str:
         base_fen = board.fen()
     except (ValueError, AssertionError):
         base_fen = report.fen
-    lines = ["--- Top Engine Lines (from the position after your move) ---"]
+    student_is_white = report.fen.split()[1] == "w" if len(report.fen.split()) > 1 else True
+    opp = "Black" if student_is_white else "White"
+    you = "White" if student_is_white else "Black"
+    lines = [
+        f"--- Top Engine Lines (from the position after your move; {opp} = your opponent, {you} = you) ---",
+    ]
     for i, pv in enumerate(report.top_lines, 1):
-        moves_str = _uci_line_to_san(base_fen, pv.moves)
+        moves_str = _uci_line_to_numbered_san(base_fen, pv.moves)
         if not moves_str:
             continue  # nothing replayable — omit rather than show coordinates
         lines.append(f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}")

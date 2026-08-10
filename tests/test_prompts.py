@@ -385,6 +385,40 @@ def test_sentinel_no_raw_uci_survives_in_move_eval_prompt() -> None:
         assert not leaked, f"raw UCI leaked into the prompt (drop={drop}): {leaked}"
 
 
+def test_numbered_san_marks_whose_move_it_is() -> None:
+    # A bare SAN sequence hid side: the coach read "Nfg4 f4" and announced "the
+    # opponent plays f4" — f4 is the STUDENT's move. Numbering makes the
+    # alternation explicit. Move numbers come from the board, so the Black-start
+    # convention and truncation must both stay correct (off-by-one hazard).
+    import chess
+
+    from chess_coach.prompts import _uci_line_to_numbered_san
+
+    after_b3 = chess.Board("r1bqkb1r/pppp1ppp/4pn2/4n1N1/2B5/4P3/PPPP1PPP/RNBQK2R w KQkq - 2 5")
+    after_b3.push_uci("b2b3")
+    assert _uci_line_to_numbered_san(after_b3.fen(), ["f6g4", "f2f4", "e5c4", "b3c4"]) == "5...Nfg4 6.f4 Nxc4 7.bxc4"
+
+    # White to move -> no "..." prefix.
+    assert _uci_line_to_numbered_san(chess.STARTING_FEN, ["e2e4", "e7e5", "g1f3"]) == "1.e4 e5 2.Nf3"
+
+    # Numbering survives truncation of the engine's corrupt tail (BUG-019).
+    after_nf3 = chess.Board(chess.STARTING_FEN)
+    after_nf3.push_uci("g1f3")
+    corrupt = ["b8c6", "b1c3", "g8f6", "e2e3", "e7e6", "f1d3", "c6b4", "e8g8", "b4d3"]
+    assert _uci_line_to_numbered_san(after_nf3.fen(), corrupt) == "1...Nc6 2.Nc3 Nf6 3.e3 e6 4.Bd3 Nb4 ..."
+
+    # Nothing convertible -> empty, so the caller omits the section.
+    assert _uci_line_to_numbered_san(chess.STARTING_FEN, ["z9z9"]) == ""
+
+
+def test_top_lines_section_names_which_side_is_the_opponent() -> None:
+    report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    # Student is Black here, so White is the opponent — stated explicitly.
+    assert "White = your opponent" in prompt
+    assert "Black = you" in prompt
+
+
 def test_comparison_top_lines_render_san_not_uci() -> None:
     # Regression (found via the report card): a ComparisonReport's top_lines
     # describe the position AFTER the student's move, so converting from
