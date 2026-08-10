@@ -335,7 +335,7 @@ What the best move achieves: {best_move_idea}
 {move_instructions}\
 {level_instructions}\
 {critical_section}\
-Keep your response concise (under 100 words).\
+Keep your response concise (under {word_limit} words).\
 """
 
 # Severity-tiered move-feedback instructions (lever 3). The response's
@@ -396,6 +396,49 @@ motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
+
+
+# Lever 4 — enforce response depth/length per severity tier (prompt text alone
+# under-delivered: the model wrote 3-5 sentences regardless). Each tier gets a
+# tight WORD LIMIT (the prominent final instruction the model follows) plus a
+# MAX_TOKENS ceiling (a mechanical backstop, sized well above the word target so
+# it caps runaway length without truncating a normal answer). A best move gets
+# one sentence; a serious mistake gets room to be specific.
+_TIER_INSTRUCTIONS = {
+    "best": _MOVE_EVAL_INSTRUCTIONS_BEST,
+    "sound": _MOVE_EVAL_INSTRUCTIONS_SOUND,
+    "inaccuracy": _MOVE_EVAL_INSTRUCTIONS_INACCURACY,
+    "serious": _MOVE_EVAL_INSTRUCTIONS_SERIOUS,
+}
+_TIER_WORD_LIMIT = {"best": 40, "sound": 55, "inaccuracy": 80, "serious": 120}
+_TIER_MAX_TOKENS = {"best": 120, "sound": 150, "inaccuracy": 200, "serious": 300}
+
+
+def _move_feedback_tier(report: ComparisonReport) -> str:
+    """Severity tier for a played move, from OUR own eval-drop bands (BUG-016).
+
+    ``best`` (played the engine's top move) / ``sound`` (small drop) /
+    ``inaccuracy`` (within the dubious band) / ``serious`` (past it). Shared by
+    the instruction, word-limit, and max-tokens selection so they never drift.
+    """
+    if report.user_move == report.best_move:
+        return "best"
+    if report.eval_drop_cp <= SOUND_MAX_DROP_CP:
+        return "sound"
+    if report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
+        return "inaccuracy"
+    return "serious"
+
+
+def move_feedback_max_tokens(report: ComparisonReport) -> int:
+    """Per-tier generation ceiling for move feedback (lever 4).
+
+    Callers (the runtime coach, the report-card driver) pass this as
+    ``max_tokens`` so a best-move reply is short and a serious-mistake reply has
+    room to be specific — enforcing the length differentiation the prompt text
+    alone did not achieve.
+    """
+    return _TIER_MAX_TOKENS[_move_feedback_tier(report)]
 
 
 # ---------------------------------------------------------------------------
@@ -957,22 +1000,18 @@ def build_rich_move_evaluation_prompt(
     # Level-adaptive instructions
     level_instructions = _build_level_instructions(level)
 
-    # Severity-tiered framing (lever 3), chosen from OUR own eval-drop bands
-    # (client-owned SOUND_MAX_DROP_CP / DUBIOUS_MAX_DROP_CP) and move identity —
-    # never from the engine's classification label, whose thresholds are the
-    # engine's to change (BUG-016). Directness and length scale with severity:
-    #   - exact top move            -> affirm, no better move (BUG-014).
-    #   - sound (drop <= SOUND)      -> affirm; a better move may be a refinement.
-    #   - inaccuracy (<= DUBIOUS)    -> brief redirect, don't over-dramatize.
-    #   - serious (> DUBIOUS)        -> direct: lead with the cost, no cushioning.
-    if report.user_move == report.best_move:
-        move_instructions = _MOVE_EVAL_INSTRUCTIONS_BEST
-    elif report.eval_drop_cp <= SOUND_MAX_DROP_CP:
-        move_instructions = _MOVE_EVAL_INSTRUCTIONS_SOUND
-    elif report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
-        move_instructions = _MOVE_EVAL_INSTRUCTIONS_INACCURACY
-    else:
-        move_instructions = _MOVE_EVAL_INSTRUCTIONS_SERIOUS
+    # Severity-tiered framing (lever 3) + per-tier length (lever 4), chosen from
+    # OUR own eval-drop bands (client-owned SOUND_MAX_DROP_CP /
+    # DUBIOUS_MAX_DROP_CP) and move identity — never the engine's classification
+    # label, whose thresholds are the engine's to change (BUG-016). Directness
+    # AND length scale with severity: best -> short affirm (BUG-014); sound ->
+    # affirm, a better move may be a refinement (BUG-016); inaccuracy -> brief
+    # redirect; serious -> direct, lead with the cost. The word limit is set per
+    # tier so a best move gets one sentence and a blunder gets room to be
+    # specific.
+    tier = _move_feedback_tier(report)
+    move_instructions = _TIER_INSTRUCTIONS[tier]
+    word_limit = _TIER_WORD_LIMIT[tier]
 
     return RICH_MOVE_EVALUATION_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,
@@ -991,4 +1030,5 @@ def build_rich_move_evaluation_prompt(
         move_instructions=move_instructions,
         level_instructions=level_instructions,
         critical_section=critical_section,
+        word_limit=word_limit,
     )

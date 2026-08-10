@@ -500,8 +500,12 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     # Best move idea present (Req 3.4)
     assert report.best_move_idea in prompt, "Prompt must contain best move idea"
 
-    # 100-word limit (Req 7.3)
-    assert "100 words" in prompt_lower or "100 word" in prompt_lower, "Prompt must contain 100-word limit instruction"
+    # A concise word-limit instruction is present (Req 7.3). The exact number
+    # is now per severity tier (lever 4), so assert the concise-limit line
+    # rather than a fixed 100.
+    assert "concise (under" in prompt_lower and "words)" in prompt_lower, (
+        "Prompt must contain a per-tier concise word-limit instruction"
+    )
 
     # Missed tactics present when non-empty (Req 3.4). They are composed from
     # the structured fields (never the engine prose `description`) and

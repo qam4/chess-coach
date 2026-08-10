@@ -11,14 +11,23 @@ critique and phase-fit. It answers "is the coach the teacher we envisioned?".
 - Run: `--seed 7` fixes the game so successive runs are a clean before/after.
 - Artifacts live under `output/` (gitignored); results are recorded here.
 
-## Two signals, different trust levels
+## Measurement philosophy (what to trust)
 
-- **Deterministic fidelity counts** (off_menu / unsound_move / placement) —
-  trustworthy, no noise.
-- **The 0–10 judge score** — good for *direction* but **noisy at n=1**; small
-  deltas (±0.3–0.7) are within noise. Its real value is the **qualitative
-  diagnosis**, which has been stable across runs. Do not over-read a single
-  score delta; corroborate with the deterministic counts and repeated themes.
+The 0–10 score is **noise-dominated at n=1** and must NOT be the optimization
+target. Proof: five runs of the *identical* game (seed 7) with monotonically
+refining prompts scored **3.5 → 4.2 → 4.5 → 4.5 → 3.5** — a ~1-point band, and
+the last run (lever 4) scored *below baseline* despite outputs that are
+demonstrably better differentiated. So we judge a lever by, in order of trust:
+
+1. **Deterministic fidelity counts** (off_menu / unsound_move / placement /
+   piece_type) — objective, no noise.
+2. **Direct inspection of the outputs** — did the change do what it was designed
+   to do (e.g. did best-move replies actually shorten)?
+3. **The judge's qualitative shortcomings** — the *prose* critique is stable and
+   informative across runs; that is the report card's real value.
+
+The 0–10 score is kept only as a rough directional band, never as the thing we
+tune against.
 
 All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 (10 opening / 16 middlegame / 18 endgame; 23 good / 9 inaccuracy / 8 mistake /
@@ -32,6 +41,7 @@ All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 | lever 1 | remove always-on opening "CHESS PRINCIPLES" crib from `SYSTEM_PROMPT_V2` | 4.2 | 8 | 5 | 1 | **yes** |
 | lever 2 | add grounding rule: don't invent causal chains ("allows/supports/weakens") | 4.5 | 9 | 4 | 1 | **reverted** |
 | lever 3 | severity-tiered response (tone + length by eval-drop band; no filler sign-offs) | 4.5 | **4** | **2** | 2 | **yes** |
+| lever 4 | enforce per-tier length (word limit + max_tokens) in builder/Coach/driver | 3.5 | 4 | 2 | 1 | **yes** |
 
 **Lever 1 (kept).** The static crib was injected on every turn and drove
 recycled generic advice ("develop your pieces / is my king safe?") even in the
@@ -64,7 +74,17 @@ top-moves one sentence) and give opening moves a *named opening concept*. Two
 future levers: (a) enforce length/depth (prompt text isn't enough — likely
 per-tier generation limits); (b) opening-specific content.
 
-## Stable qualitative findings (across all three runs — the real signal)
+**Lever 4 (kept — on direct evidence, NOT the score).** Per-tier word limit +
+`max_tokens`, wired into the prompt builder, the runtime `Coach`, and the
+report-card driver, via a shared `_move_feedback_tier` helper (bands are our
+own, per BUG-016). Direct inspection confirms it did its job: best-move replies
+dropped to ~23–35 words (from ~100+), blunder replies stayed longer and got
+more concrete ("Kd1 … allows Black to capture your knight on g5"); no
+truncation; deterministic fidelity held (off_menu 4 / unsound 2). The judge
+score fell to 3.5 — but that is the noise band (see above), contradicted by the
+direct evidence, so lever 4 is kept.
+
+## Stable qualitative findings (across all runs — the real signal)
 
 1. **Generic recycled principle.** A small rotating set of platitudes
    ("develop knights and bishops", "king safety", "improve your pawn
@@ -83,11 +103,20 @@ per-tier generation limits); (b) opening-specific content.
    mechanism than a negative instruction (e.g. constraining named moves to the
    menu / a repair pass) — revisit after severity tiering.
 
-## Next: lever 3
+## Next: lever 5 — voice the concrete consequence
 
-**Severity-tiered response protocol** — the judge's consistent #1. Differentiate
-the response by the engine's move classification: blunder/mistake → direct,
-specific correction with the concrete consequence; good/best → one short
-affirmation + one forward idea; inaccuracy → brief redirect. This attacks the
-flat-severity + verbosity themes directly and forces specificity on the moves
-that matter most. Measured with the report card (seed 7) before/after.
+The one shortcoming the judge names in **every** run (and which levers 1–4 —
+crib, fabrication, severity, length — never touched): *the coach names a
+principle but never the concrete consequence.* On a mistake it should name the
+engine's refutation line ("after Kd1, Black plays … winning the knight"); on a
+good move it should name the specific tactical/positional idea that makes it
+work here — not a generic label. This is the inverse of the failed lever 2 (not
+"don't fabricate" but "DO state the engine's actual line"), and it likely
+subsumes the opening genericness (the opening version is "name the specific
+plan/threat, not 'develop your pieces'"). It depends on the engine data
+actually carrying the line (refutation_line / best_move_idea / threats) and the
+prompt demanding the coach voice it. Measured by direct inspection + the judge's
+qualitative read (not the scalar).
+
+Deferred companion: opening-specific *content* (named openings / plans) if the
+concrete-consequence lever doesn't lift the opening phase enough on its own.

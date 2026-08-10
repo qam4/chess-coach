@@ -45,7 +45,7 @@ from chess_coach.pedagogy.features import phase_of_board  # noqa: E402
 from chess_coach.pedagogy.guard import guard_entries  # noqa: E402
 from chess_coach.pedagogy.resource import KnowledgeResource, default_resource_path, load_resource  # noqa: E402
 from chess_coach.pedagogy.selector import guidance_for_position  # noqa: E402
-from chess_coach.prompts import build_rich_move_evaluation_prompt  # noqa: E402
+from chess_coach.prompts import build_rich_move_evaluation_prompt, move_feedback_max_tokens  # noqa: E402
 from chess_coach.verify import check_coaching_fidelity  # noqa: E402
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -76,7 +76,7 @@ def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multip
     guidance = guidance_for_position(resource, pos_report, level, guidance_max)
     prompt = build_rich_move_evaluation_prompt(comparison, level=level, guidance=guidance)
     t0 = time.monotonic()
-    text = model.generate(prompt, max_tokens=512, temperature=0.0)
+    text = model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0)
     latency = time.monotonic() - t0
     menu = build_move_menu(pos_report)
     fid = Counter(v.kind for v in check_coaching_fidelity(text, pos_report, menu))

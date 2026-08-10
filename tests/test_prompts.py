@@ -285,6 +285,18 @@ class TestPlayedBestMove:
         assert "No motivational sign-off" in prompt
 
 
+def test_move_eval_word_limit_scales_with_severity() -> None:
+    # Lever 4: a best move gets a tight word limit; a serious mistake gets more
+    # room. Also expose the per-tier max_tokens ordering.
+    from chess_coach.prompts import move_feedback_max_tokens
+
+    best = _move_eval_report(BLACK_TO_MOVE_FEN, "b8c6", "b8c6")  # exact best
+    serious = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
+    assert "under 40 words" in build_rich_move_evaluation_prompt(best, "intermediate")
+    assert "under 120 words" in build_rich_move_evaluation_prompt(serious, "intermediate")
+    assert move_feedback_max_tokens(best) < move_feedback_max_tokens(serious)
+
+
 def test_move_eval_prompt_grounds_pawn_structure() -> None:
     # BUG-018: the move-eval prompt must carry board-derived pawn-structure
     # facts so the coach grounds isolated/doubled claims instead of guessing.

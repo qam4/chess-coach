@@ -23,6 +23,7 @@ from chess_coach.prompts import (
     build_rich_coaching_prompt,
     build_rich_move_evaluation_prompt,
     build_socratic_prompt,
+    move_feedback_max_tokens,
 )
 
 logger = logging.getLogger(__name__)
@@ -593,7 +594,9 @@ class Coach:
                 try:
                     feedback = self.llm.generate(
                         prompt,
-                        max_tokens=self.max_tokens,
+                        # Per-tier ceiling (lever 4): a serious mistake gets room
+                        # to be specific; a sound move is kept short.
+                        max_tokens=min(self.max_tokens, move_feedback_max_tokens(report)),
                         temperature=self.temperature,
                     )
                     if not feedback.strip():
