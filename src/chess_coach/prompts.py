@@ -352,8 +352,9 @@ COACHING INSTRUCTIONS:
 - The student played the engine's top move — there is no better move here. \
 Do NOT suggest a different or "better" move, and do NOT imply a superior \
 alternative exists.
-- Keep it SHORT (1-2 sentences): affirm the move, then give one concrete idea \
-it achieves or prepares. No motivational sign-off.
+- Keep it SHORT (1-2 sentences): affirm the move, then state the specific idea \
+it achieves — use "What the best move achieves" shown above (that is this \
+move) — not a generic principle. No motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -364,9 +365,11 @@ _MOVE_EVAL_INSTRUCTIONS_SOUND = """\
 COACHING INSTRUCTIONS:
 - The student played a sound, reasonable move — do NOT call it a mistake or \
 invent a correction the data does not support.
-- Keep it SHORT (2-3 sentences): affirm it and give one idea it achieves. If \
-the engine's top move differs, you may briefly point it out as a refinement — \
-affirm first, never imply the move was bad. No motivational sign-off.
+- Keep it SHORT (2-3 sentences): affirm it and state the specific idea it \
+achieves (use "What the best move achieves" shown above), not a generic \
+principle. If the engine's top move differs, you may briefly point it out as a \
+refinement — affirm first, never imply the move was bad. No motivational \
+sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -377,8 +380,9 @@ _MOVE_EVAL_INSTRUCTIONS_INACCURACY = """\
 COACHING INSTRUCTIONS:
 - The student's move slightly missed the mark — a small inaccuracy, not a \
 disaster. Give a BRIEF redirect (2-3 sentences): acknowledge the intent in a \
-few words, then name the stronger move and the one concrete idea behind it. No \
-motivational sign-off.
+few words, then name the stronger move and its specific idea — use "What the \
+best move achieves" shown above — not a generic principle. No motivational \
+sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """

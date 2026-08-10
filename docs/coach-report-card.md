@@ -46,6 +46,7 @@ All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 | lever 6 | concrete consequence done right: first reply only + opponent-aware checker | 4.5 | **3** | 2 | 1 | **yes** |
 | lever 7 | position→principle ordering (prompt directive; refined to anchor to data) | — | 4 | 3 | 2 | **reverted** |
 | lever 8 | opponent's-reply block states the captured piece (composed from board) | 4.5 | 3 | 2 | 1 | **yes** |
+| lever 9 | good-move tiers voice the engine's best_move_idea, not a generic principle | 4.5 | 3 | 2 | 1 | **yes** |
 
 **Lever 1 (kept).** The static crib was injected on every turn and drove
 recycled generic advice ("develop your pieces / is my king safe?") even in the
@@ -146,6 +147,17 @@ computed the truth (a white **bishop** sat on d4, captured by ...exd4) and the
 coach voiced "capturing your bishop on d4." **The composer corrected a model
 hallucination at no cost — exactly the pattern below.**
 
+**Lever 9 (kept).** The good-move tiers (best/sound/inaccuracy) now tell the
+coach to voice the engine's `best_move_idea` — the "What the best move achieves"
+field already in the prompt — instead of a generic principle. Composed, not
+derived, so accuracy-safe by construction. Good moves became position-specific
+("Nc3 focuses on rapid development, activating a knight toward the center";
+"Bc4 develops a bishop to a strong, active square, prepare for castling")
+rather than "develop your pieces". Fidelity stayed at the clean baseline except
+placement 1→2 — a single count within the series' 1↔2 noise band and not
+attributable at n=1 (voicing an engine field shouldn't cause a placement
+error). Kept.
+
 ## The pattern across levers (the strategic lesson)
 
 Sorting the levers by outcome reveals a sharp, consistent rule:
@@ -187,13 +199,10 @@ already does.
 
 ## Next: extend the composed-lead approach
 
-Lever 8 delivered the blunder side of the concrete lead (the verified captured
-piece). Two accuracy-safe extensions remain, both composed-not-derived:
+Levers 8 and 9 delivered the concrete lead on both sides (verified captured
+piece on blunders; the engine's idea on good moves). One accuracy-safe
+extension remains, plus the bigger deferred item:
 
-- **Good / best / sound moves:** the coach is still generic here ("develop your
-  pieces"). Surface the engine's `best_move_idea` (a structured field) more
-  prominently and have the coach voice *it* as the specific idea, rather than a
-  generic principle. Composed, so no invention risk.
 - **Non-capture refutations:** when the opponent's reply is a strong non-capture
   (a check, a fork, a quiet killer), the capture clause is empty. Consider
   composing the motif (from the engine's tactic/threat data for that reply) so

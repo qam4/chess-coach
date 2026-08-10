@@ -253,6 +253,8 @@ class TestPlayedBestMove:
         assert "there is no better move here" in prompt
         assert 'Do NOT suggest a different or "better" move' in prompt
         assert "No motivational sign-off" in prompt  # severity/verbosity fix (lever 3)
+        # Lever 9: voice the engine's specific idea, not a generic principle.
+        assert 'use "What the best move achieves"' in prompt
         # Not the mistake-tier framing.
         assert "serious mistake" not in prompt
         assert "slightly missed the mark" not in prompt
