@@ -312,6 +312,18 @@ def test_refutation_renders_only_first_reply() -> None:
     assert "name that single reply" in prompt  # serious tier voices one reply
 
 
+def test_move_eval_prompt_requires_named_principle_and_hook() -> None:
+    # Lever 10 (the judge's #1): replace the generic trailing maxim with a named
+    # principle + a transferable "next time..., ask yourself..." hook — end-1 of
+    # the bridge every turn. Applies across tiers (shared closing directive).
+    for drop in (0, 30, 70, 300):
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=drop)
+        prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+        assert "CLOSE with one transferable takeaway" in prompt
+        assert "ask yourself" in prompt
+        assert 'Do NOT end with "focus on developing your pieces"' in prompt
+
+
 def test_refutation_states_captured_piece() -> None:
     # Lever 8: the opponent's-reply block states WHAT the reply captures,
     # computed from the board (verified) — the coach voices it, never invents it.

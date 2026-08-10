@@ -333,6 +333,11 @@ What the best move achieves: {best_move_idea}
 {sections}
 
 {move_instructions}\
+CLOSE with one transferable takeaway, not a generic maxim: name the principle \
+in a few words, then a short "next time you see ..., ask yourself ..." hook the \
+student can reuse. Do NOT end with "focus on developing your pieces" or "focus \
+on king safety" unless that is the specific lesson of this move. (This is a \
+teaching heuristic, not a board fact — do not assert new pieces or squares in it.)
 {level_instructions}\
 {critical_section}\
 Keep your response concise (under {word_limit} words).\

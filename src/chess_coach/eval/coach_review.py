@@ -40,6 +40,9 @@ class ReviewTurn:
     coach_feedback: str
     latency_s: float
     fidelity_kinds: dict[str, int] = field(default_factory=dict)
+    # The exact prompt the local model received. Captured so an architecture
+    # review can critique the real design, not guess at it from outputs alone.
+    prompt: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -53,6 +56,7 @@ class ReviewTurn:
             "coach_feedback": self.coach_feedback,
             "latency_s": round(self.latency_s, 2),
             "fidelity_kinds": dict(self.fidelity_kinds),
+            "prompt": self.prompt,
         }
 
 
@@ -196,4 +200,87 @@ def build_coach_review_prompt(turns: list[ReviewTurn], stats: ReviewStats) -> st
         f"{transcript}\n\n"
         "=== YOUR REVIEW ===\n"
         f"{_REVIEW_TASK}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Architecture review — critique the DESIGN, not just the prose.
+# ---------------------------------------------------------------------------
+#
+# The report card above shows the reviewer only the coach's OUTPUT, so its advice
+# is necessarily blind to the system: it cannot know an engine composes verified
+# facts, that a deterministic fidelity checker exists, or that several of its
+# past suggestions were already tried and regressed. This mode hands over the
+# internals — the real rendered prompt, the architecture, the constraints, and
+# the full lever history — and asks for an engineering critique instead.
+
+_ARCH_TASK = """\
+You are a senior engineer + chess-teaching expert doing a DESIGN review of this
+system. You have its architecture, the exact prompt it sends, its outputs, and a
+full log of changes already tried (with results). Your job is NOT to suggest
+prose tweaks — several were already tried and regressed (see the lever log).
+
+Answer these, concretely and in priority order:
+
+1. FUNDAMENTAL SOUNDNESS: Is this architecture capable of producing the teacher
+   the standard describes? If there is a fundamental flaw in the approach — not
+   a bug, a *design* flaw — name it plainly. Say so if you think the current
+   split of responsibilities cannot get there.
+2. WHAT WE ARE GETTING WRONG: Given the prompt you can see and the outputs it
+   produced, what is the actual mechanism behind the recurring failures
+   (recycled templates, generic best-move explanations, invented piece
+   identities)? Diagnose cause, not symptom.
+3. HIGHEST-LEVERAGE DESIGN CHANGES: 2-4 changes to the SYSTEM (what is computed
+   deterministically vs left to the LLM, what data the engine should supply,
+   how work is decomposed, model choice/number of calls, caching, etc.).
+   For each: what it fixes, roughly how to implement it, and the risk.
+   Respect the constraints listed. Do NOT propose anything already marked
+   REVERTED in the lever log unless you explain why it failed and how to do it
+   differently.
+4. WHAT TO STOP DOING: which current efforts are dead ends we should abandon.
+5. MEASUREMENT: is our evaluation approach (this report card + deterministic
+   fidelity counts) actually measuring the right thing? How would you measure
+   teaching quality better?
+
+Be blunt and specific. If our whole premise (a small local model as the
+teaching voice over engine-composed facts) is the limiting factor, say so and
+say what you would do instead within the constraints.\
+"""
+
+
+def build_architecture_review_prompt(
+    *,
+    architecture: str,
+    constraints: str,
+    lever_log: str,
+    sample_prompt: str,
+    sample_turns: list[ReviewTurn],
+    stats: ReviewStats,
+) -> str:
+    """Compose a design-review request: internals + evidence + the ask.
+
+    ``sample_prompt`` is the exact prompt one turn received (ground truth about
+    what the model is told); ``sample_turns`` are representative outputs across
+    severities; ``lever_log`` is the kept/reverted change history so the
+    reviewer does not re-propose disproven ideas. Pure string assembly.
+    """
+    samples = "\n\n".join(_fmt_turn(t) for t in sample_turns)
+    return (
+        "=== THE STANDARD WE ARE BUILDING TO ===\n"
+        f"{_BRIDGE_STANDARD}\n\n"
+        "=== SYSTEM ARCHITECTURE (how coaching is produced) ===\n"
+        f"{architecture}\n\n"
+        "=== HARD CONSTRAINTS ===\n"
+        f"{constraints}\n\n"
+        "=== THE EXACT PROMPT SENT TO THE LOCAL MODEL (one real turn) ===\n"
+        f"{sample_prompt}\n"
+        "=== END OF PROMPT ===\n\n"
+        "=== CHANGES ALREADY TRIED (kept / reverted, with measured results) ===\n"
+        f"{lever_log}\n\n"
+        "=== OBJECTIVE RESULTS OF THE CURRENT BUILD ===\n"
+        f"{_fmt_stats(stats)}\n\n"
+        "=== REPRESENTATIVE OUTPUTS ===\n"
+        f"{samples}\n\n"
+        "=== YOUR DESIGN REVIEW ===\n"
+        f"{_ARCH_TASK}"
     )

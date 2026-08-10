@@ -91,6 +91,7 @@ def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multip
         coach_feedback=text,
         latency_s=latency,
         fidelity_kinds=dict(fid),
+        prompt=prompt,
     )
 
 
