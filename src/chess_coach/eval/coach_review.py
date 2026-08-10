@@ -15,6 +15,7 @@ live in the driver so the assembly + stats stay unit-testable with fakes.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -65,7 +66,10 @@ class ReviewStats:
     """Aggregate, objective facts about a coaching transcript.
 
     Deterministic (no judge) so they anchor the frontier review in numbers:
-    phase coverage, move-quality mix, fidelity-violation totals, latency.
+    phase coverage, move-quality mix, fidelity-violation totals, latency, and
+    the two *teaching* metrics below (specificity / principle-connection), which
+    measure how concrete correct coaching is — the fidelity counts only measure
+    what it gets wrong.
     """
 
     n_turns: int
@@ -76,6 +80,14 @@ class ReviewStats:
     latency_mean_s: float
     latency_p90_s: float
     latency_max_s: float
+    # Fraction of turns naming a position-specific square/piece beyond the moved
+    # piece itself — a proxy for "did it connect the principle to THIS position".
+    specificity_rate: float = 0.0
+    # Fraction of turns where a named principle keyword appears near a square
+    # reference — i.e. the principle was instantiated, not just echoed.
+    principle_connection_rate: float = 0.0
+    # Fidelity violations broken down by phase (where to focus composer work).
+    fidelity_by_phase: dict[str, dict[str, int]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -87,6 +99,9 @@ class ReviewStats:
             "latency_mean_s": round(self.latency_mean_s, 2),
             "latency_p90_s": round(self.latency_p90_s, 2),
             "latency_max_s": round(self.latency_max_s, 2),
+            "specificity_rate": round(self.specificity_rate, 4),
+            "principle_connection_rate": round(self.principle_connection_rate, 4),
+            "fidelity_by_phase": {k: dict(v) for k, v in self.fidelity_by_phase.items()},
         }
 
 
@@ -100,13 +115,83 @@ def _percentile(sorted_vals: list[float], pct: float) -> float:
     return sorted_vals[rank]
 
 
+# A square reference (a1..h8) anywhere in the text.
+_SQUARE_RE = re.compile(r"\b[a-h][1-8]\b")
+# Principle keywords the coaching is expected to name (the pedagogy themes).
+_PRINCIPLE_WORDS = (
+    "development",
+    "develop",
+    "center",
+    "central",
+    "king safety",
+    "castl",
+    "pawn structure",
+    "isolated",
+    "passed pawn",
+    "majority",
+    "fork",
+    "pin",
+    "back rank",
+    "material",
+    "capture",
+    "exchange",
+    "trade",
+    "activity",
+    "outpost",
+    "open file",
+    "opposition",
+    "threat",
+)
+# How close a principle word must be to a square reference to count as
+# "instantiated" rather than merely stated (characters).
+_CONNECTION_WINDOW = 120
+
+
+def is_specific(turn: ReviewTurn) -> bool:
+    """True if the response names a square/piece beyond the moved piece itself.
+
+    Deterministic proxy for "did the coach connect the principle to THIS
+    position". Squares mentioned by the student's own move or the engine best
+    move are discounted, so merely echoing the move names does not count.
+    """
+    text = turn.coach_feedback
+    if not text.strip():
+        return False
+    own = {s.lower() for s in _SQUARE_RE.findall(turn.student_move_san + " " + turn.best_move_san)}
+    return any(sq.lower() not in own for sq in _SQUARE_RE.findall(text))
+
+
+def connects_principle(turn: ReviewTurn) -> bool:
+    """True if a named principle appears near a square reference.
+
+    Measures whether the principle was *instantiated* on the board rather than
+    stated abstractly ("develop your pieces") — the recycled-template failure.
+    """
+    text = turn.coach_feedback.lower()
+    if not text.strip():
+        return False
+    squares = [m.start() for m in _SQUARE_RE.finditer(text)]
+    if not squares:
+        return False
+    for word in _PRINCIPLE_WORDS:
+        start = text.find(word)
+        while start != -1:
+            if any(abs(sq - start) <= _CONNECTION_WINDOW for sq in squares):
+                return True
+            start = text.find(word, start + 1)
+    return False
+
+
 def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
     """Roll a list of :class:`ReviewTurn` into deterministic :class:`ReviewStats`."""
     n = len(turns)
     latencies = sorted(t.latency_s for t in turns)
     fidelity: Counter[str] = Counter()
+    by_phase: dict[str, Counter[str]] = {}
     for t in turns:
         fidelity.update(t.fidelity_kinds)
+        if t.fidelity_kinds:
+            by_phase.setdefault(t.phase, Counter()).update(t.fidelity_kinds)
     return ReviewStats(
         n_turns=n,
         phase_counts=dict(Counter(t.phase for t in turns)),
@@ -116,6 +201,9 @@ def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
         latency_mean_s=(sum(latencies) / n) if n else 0.0,
         latency_p90_s=_percentile(latencies, 90),
         latency_max_s=(latencies[-1] if latencies else 0.0),
+        specificity_rate=(sum(1 for t in turns if is_specific(t)) / n) if n else 0.0,
+        principle_connection_rate=(sum(1 for t in turns if connects_principle(t)) / n) if n else 0.0,
+        fidelity_by_phase={k: dict(v) for k, v in by_phase.items()},
     )
 
 
@@ -161,11 +249,23 @@ def _fmt_stats(stats: ReviewStats) -> str:
     phases = ", ".join(f"{_PHASE_LABEL.get(k, k)}: {v}" for k, v in sorted(stats.phase_counts.items()))
     cls = ", ".join(f"{k}: {v}" for k, v in sorted(stats.classification_counts.items()))
     fid = ", ".join(f"{k}: {v}" for k, v in sorted(stats.fidelity_totals.items())) or "none"
+    by_phase = (
+        "; ".join(
+            f"{_PHASE_LABEL.get(ph, ph)}: " + ", ".join(f"{k} {v}" for k, v in sorted(kinds.items()))
+            for ph, kinds in sorted(stats.fidelity_by_phase.items())
+        )
+        or "none"
+    )
     return (
         f"Coached moves: {stats.n_turns}\n"
         f"Phase coverage: {phases or 'none'}\n"
         f"Move quality (engine): {cls or 'none'}\n"
         f"Deterministic fidelity violations: {fid}\n"
+        f"Fidelity by phase: {by_phase}\n"
+        f"Specificity rate (names a square/piece beyond the move itself): "
+        f"{stats.specificity_rate:.0%}\n"
+        f"Principle-connection rate (principle named near a square): "
+        f"{stats.principle_connection_rate:.0%}\n"
         f"Empty feedback turns: {stats.empty_feedback}\n"
         f"Generation latency (s): mean {stats.latency_mean_s:.1f}, "
         f"p90 {stats.latency_p90_s:.1f}, max {stats.latency_max_s:.1f}"

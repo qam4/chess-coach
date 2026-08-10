@@ -212,3 +212,89 @@ Deferred companion (bigger, and likely necessary): opening-specific *content*
 (named openings / plans) fed as data — the opening phase stays the most generic
 and needs real content, not ordering. This is a knowledge/engine-feature build,
 not a prompt change.
+
+## Architecture review (2026-08-10) — the design critique, and the action list
+
+After ten levers we hit the ceiling of interpreting an *output-only* judge: the
+report-card reviewer never saw the prompt, the composers, the pedagogy layer, or
+the lever history, so it kept re-proposing things we had already reverted. So we
+built `scripts/eval_architecture_review.py` (+ `build_architecture_review_prompt`),
+which hands a frontier model the **internals** — the exact rendered prompt, an
+architecture summary, the hard constraints, and this lever log — and asks for a
+DESIGN critique. Its verdict was materially more useful than any output review.
+
+**Soundness:** the architecture is right and "Layer 1 composes verified facts /
+Layer 2 voices them" is the correct load-bearing design (every kept lever
+confirms it). The ceiling is not the architecture — it is **how much we still
+leave the model to derive.**
+
+**The architectural flaw it named (new, and a root cause we had not identified):**
+the **pedagogy YAML layer is doing double duty it cannot do**. It is both the
+content source ("what principle applies here") and the teaching scaffold ("how to
+connect it to this position"), but a YAML entry can only supply an *abstract*
+principle. The prompt therefore hands the model generic prose, and — quoting —
+*"you cannot prompt your way out of this because the abstract text IS what the
+model anchors to when the position-specific signal is weak."* That explains the
+recycled-template problem we fought from lever 1 onward, and why levers 2/5/7/10
+kept producing a *new* template rather than fixing it.
+
+**Second root cause:** `best_move_idea` is a **category label**, not a fact
+("piece activity — improving piece placement"), so voicing it can only produce
+category sentences. Lever 9 was right to wire it in and wrong to stop there.
+
+**A concrete bug it caught:** non-capture refutations get **no** composed
+description (levers 6/8 handled captures only). On ply 8 the PV first move was
+`f6g4` (a knight move); the coach said "gaining a strong central pawn" and our
+`piece_type` counter fired.
+
+### Baseline for the new metrics (item 1 — DONE, measured on the v13 transcript)
+
+| metric | value | reading |
+|---|---|---|
+| specificity rate | **25%** | only 1 turn in 4 names a square/piece beyond the move itself — the "hollow second end of the bridge", quantified |
+| principle-connection rate | **39%** | the principle is instantiated on the board in under half of turns; the rest is abstract recycling |
+| fidelity by phase | endgame 5, opening 3, middlegame 1 | **overturns the review's guess** that the endgame would be cleanest and the opening worst — composer work should target the ENDGAME first |
+
+That last row is why these metrics matter: a plausible narrative from the
+reviewer was wrong, and a zero-noise count caught it. Both rates are the
+before-numbers for items 2-4.
+
+### Action items (in execution order)
+
+1. **[metrics] Add deterministic teaching metrics to the report card** — DONE —
+   *specificity rate* (does the response name a position-specific square/piece
+   beyond the moved piece?) and *principle-to-position connection rate* (does a
+   fired principle appear near a square reference?), plus a **per-phase fidelity
+   breakdown**. Regex-checkable, zero-noise, and they measure the bridge
+   directly — better than the noisy 0-10. Do this FIRST so the remaining levers
+   are judged on stable numbers.
+2. **[composer] Non-capture refutation description** — for a non-capture first
+   refutation ply, compose one clause from data we already have: gives check /
+   attacks an undefended piece / forks. Fixes the observed bug above. Low risk.
+3. **[composer] Compose the best-move "why" from the board** — replace the
+   category label with a position-specific string derived via python-chess (what
+   the piece now attacks/defends, what it vacates, whether it answers a threat).
+   Fixes generic best-move explanations and starves the model's urge to fill the
+   "why" from priors. Moderate risk (per-category composer logic; start with the
+   top 4 categories by frequency).
+4. **[pedagogy] Instantiate the guidance block** — add an
+   `instantiation_template` to each YAML entry with slots filled by the *board
+   fact that made the feature fire* ("your Nb1 and Bc1 haven't moved yet — Be2
+   develops toward the center"). Pure string composition; the LLM rephrases a
+   specific claim instead of deriving one. This is the fix for the named
+   architectural flaw.
+5. **[option, not a recommendation] Blunder-only second pass** — a short
+   self-critique call on the ~9% of turns that are blunders. Violates the
+   one-LLM-call rule and doubles latency there; only pursue if 2-4 leave blunder
+   quality unacceptable, with a hard fallback to pass 1.
+
+### Stop doing (per the review)
+
+- **Stop tuning the grounding rules** — lever 2 proved negative constraints on
+  this model's causal reasoning have no measurable effect; the section is
+  already long.
+- **Stop leaning on `best_move_idea` as-is** — replace the label with a composed
+  fact rather than voicing it harder.
+- **Stop iterating on prompt ordering** — lever 7 showed available facts outweigh
+  what the model is told to lead with. Revisit ordering only after grounding
+  improves.

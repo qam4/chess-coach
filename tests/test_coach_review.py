@@ -56,6 +56,40 @@ def test_aggregate_counts_and_latency() -> None:
     assert stats.latency_mean_s <= stats.latency_p90_s <= stats.latency_max_s
 
 
+def test_specificity_discounts_the_move_squares() -> None:
+    from chess_coach.eval.coach_review import is_specific
+
+    # Only names squares already in the move names -> not specific.
+    echo = _turn(0, PHASE_OPENING, played="Bc4", best="Nc3", feedback="Bc4 is fine; Nc3 was better.")
+    assert is_specific(echo) is False
+    # Names another square -> specific.
+    concrete = _turn(0, PHASE_OPENING, played="Bc4", best="Nc3", feedback="Bc4 eyes the f7 pawn.")
+    assert is_specific(concrete) is True
+    assert is_specific(_turn(0, PHASE_OPENING, feedback="   ")) is False
+
+
+def test_principle_connection_requires_principle_near_a_square() -> None:
+    from chess_coach.eval.coach_review import connects_principle
+
+    # Abstract principle, no square -> not connected (the recycled-template case).
+    assert connects_principle(_turn(0, PHASE_OPENING, feedback="Focus on development.")) is False
+    # Principle named alongside a concrete square -> connected.
+    assert connects_principle(_turn(0, PHASE_OPENING, feedback="Development: your knight on b1 is home.")) is True
+    # A square with no principle keyword -> not connected.
+    assert connects_principle(_turn(0, PHASE_OPENING, feedback="The pawn sits on e4.")) is False
+
+
+def test_aggregate_reports_rates_and_phase_breakdown() -> None:
+    turns = [
+        _turn(0, PHASE_OPENING, played="Bc4", best="Bc4", feedback="Development: your knight on b1 is still home."),
+        _turn(2, PHASE_ENDGAME, played="Kg3", best="Kg3", feedback="Focus on king safety.", fidelity={"off_menu": 1}),
+    ]
+    stats = aggregate_review(turns)
+    assert stats.specificity_rate == 0.5  # only the first names another square
+    assert stats.principle_connection_rate == 0.5
+    assert stats.fidelity_by_phase == {PHASE_ENDGAME: {"off_menu": 1}}
+
+
 def test_aggregate_empty_is_safe() -> None:
     stats = aggregate_review([])
     assert stats.n_turns == 0
