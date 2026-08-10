@@ -388,8 +388,9 @@ placements, tactics, or "and then..." continuations.
 _MOVE_EVAL_INSTRUCTIONS_SERIOUS = """\
 COACHING INSTRUCTIONS:
 - This was a serious mistake — say so directly and plainly. Do NOT open with \
-praise or "great job". Lead with the cost: what does the move lose or allow? \
-Use the eval drop, the refutation line, and the threats shown.
+praise or "great job". Lead with the cost: if an "Opponent's reply" is shown, \
+name that single reply ("after your move, the opponent plays X") and what it \
+wins, using the eval and threats shown. Do NOT list a longer sequence of moves.
 - Then give the concrete better move and the specific idea it achieves \
 (squares, pieces, threats). Be direct and specific, not generic. No \
 motivational sign-off.
@@ -901,12 +902,17 @@ def _format_missed_tactics(report: ComparisonReport) -> str | None:
 
 
 def _format_refutation_line(report: ComparisonReport) -> str | None:
-    """Format refutation line section, or return None if not present."""
-    if report.refutation_line is None:
+    """Render the opponent's IMMEDIATE punishing reply (a single move), or None.
+
+    Only the FIRST ply of the refutation is surfaced. Handing the model the full
+    multi-move PV made it recite move-salad ("Black plays fxg5, fxg5, Ne5, ...")
+    that read badly and tripped the fidelity checks; the concrete-consequence
+    coaching only needs the opponent's one immediate reply — the coach conveys
+    "why it hurts" from the eval and threats. Rendered in SAN from the position
+    AFTER the student's move (falling back to ``report.fen`` if it can't apply).
+    """
+    if not report.refutation_line:
         return None
-    # The refutation is the opponent's reply to the student's move, so render it
-    # in SAN from the position AFTER that move; fall back to report.fen if the
-    # student's move can't be applied.
     base_fen = report.fen
     try:
         board = chess.Board(report.fen)
@@ -914,8 +920,8 @@ def _format_refutation_line(report: ComparisonReport) -> str | None:
         base_fen = board.fen()
     except (ValueError, AssertionError):
         base_fen = report.fen
-    moves_str = _uci_line_to_san(base_fen, report.refutation_line)
-    return f"--- Refutation Line ---\nOpponent's punishing response: {moves_str}"
+    reply_san = _uci_line_to_san(base_fen, report.refutation_line[:1])
+    return f"--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is {reply_san}."
 
 
 def _format_comparison_top_lines(report: ComparisonReport) -> str:

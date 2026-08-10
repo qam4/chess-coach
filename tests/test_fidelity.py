@@ -18,7 +18,7 @@ from chess_coach.models import (
     PawnFeatures,
     PositionReport,
 )
-from chess_coach.verify import Violation, check_coaching_fidelity
+from chess_coach.verify import Violation, check_coaching_fidelity, check_text_fidelity
 
 # Black to move. Black minors developed: Nc6, Nf6, Bc5. b8/g8 empty. e4 is a
 # White pawn defended by Nc3 and the d3 pawn — so Nxe4 drops the knight.
@@ -275,6 +275,28 @@ def test_center_plan_talk_not_flagged_as_geometry() -> None:
     text = "Fight for central control and castle to safety."
     v = check_coaching_fidelity(text, _report(), ITALIAN_MENU)
     assert "geometry" not in _kinds(v)
+
+
+# White to move; "fxg5" is illegal for White (no White f-pawn reaches g5).
+_WHITE_TO_MOVE = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+
+def test_opponent_reply_move_not_flagged_illegal() -> None:
+    # The coach names the OPPONENT's punishing reply (the refutation), which is
+    # not a legal STUDENT move — it must not be counted as an illegal move.
+    for text in (
+        "After your move, Black plays fxg5, winning material.",
+        "Then the opponent plays fxg5 and you're worse.",
+        "Black can respond with fxg5.",
+    ):
+        v = check_text_fidelity(text, _WHITE_TO_MOVE)
+        assert "illegal_move" not in [x.kind for x in v], text
+
+
+def test_illegal_move_still_flagged_without_opponent_attribution() -> None:
+    # No opponent attribution -> a move the coach tells the student to play.
+    v = check_text_fidelity("You should play fxg5 here.", _WHITE_TO_MOVE)
+    assert "illegal_move" in [x.kind for x in v]
 
 
 @given(st.text(max_size=200))

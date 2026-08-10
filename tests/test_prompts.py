@@ -285,6 +285,31 @@ class TestPlayedBestMove:
         assert "No motivational sign-off" in prompt
 
 
+def test_refutation_renders_only_first_reply() -> None:
+    # The opponent's reply section surfaces only the FIRST ply (a single move),
+    # not the whole PV — feeding the full line made the model recite move-salad.
+    report = ComparisonReport(
+        fen="rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+        user_move="e1e2",  # Ke2, a mistake
+        user_eval_cp=-100,
+        best_move="g1f3",
+        best_eval_cp=20,
+        eval_drop_cp=120,  # serious tier
+        classification="mistake",
+        nag="?",
+        best_move_idea="develop a piece",
+        refutation_line=["d8h4", "e2e1"],  # Qh4 then a second ply that must NOT be rendered
+        missed_tactics=[],
+        top_lines=[],
+        critical_moment=False,
+        critical_reason=None,
+    )
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "Opponent's reply" in prompt
+    assert "strongest reply is Qh4" in prompt  # single move rendered
+    assert "name that single reply" in prompt  # serious tier voices one reply
+
+
 def test_move_eval_word_limit_scales_with_severity() -> None:
     # Lever 4: a best move gets a tight word limit; a serious mistake gets more
     # room. Also expose the per-tier max_tokens ordering.

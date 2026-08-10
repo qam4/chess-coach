@@ -516,13 +516,12 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
             expected = describe_tactic(tactic, board)
             assert expected in prompt, f"Composed missed-tactic sentence must appear: {expected!r}"
 
-    # Refutation line present when non-None (Req 3.4). Moves are rendered in
-    # SAN (named piece) rather than raw UCI coordinates, so assert the section
-    # is present rather than the exact coordinate strings (SAN vs UCI fallback
-    # depends on move legality from the post-move position).
+    # The opponent's immediate reply is surfaced when a refutation exists (Req
+    # 3.4). Only the first ply is rendered now (a single move, not the PV), so
+    # assert the "Opponent's reply" section is present.
     if report.refutation_line:
-        assert "Refutation Line" in prompt or "punishing response" in prompt.lower(), (
-            "Refutation line section must appear when refutation_line is non-empty"
+        assert "Opponent's reply" in prompt or "strongest reply" in prompt.lower(), (
+            "Opponent's-reply section must appear when refutation_line is non-empty"
         )
 
 

@@ -184,6 +184,47 @@ def _warned_against(text: str, start: int) -> bool:
     return any(cue in window for cue in _WARN_CUES)
 
 
+# Verbs that mark a move as the OPPONENT's reply rather than a move the coach
+# is telling the student to play.
+_REPLY_VERBS = (
+    "plays",
+    "play",
+    "can",
+    "could",
+    "will",
+    "replies",
+    "reply",
+    "responds",
+    "respond",
+    "threatens",
+    "threaten",
+    "takes",
+    "captures",
+    "answers",
+    "meets",
+)
+
+
+def _attributed_to_opponent(text: str, start: int, board: chess.Board) -> bool:
+    """True if the move at ``start`` is framed as the OPPONENT's reply.
+
+    The fidelity checker validates named moves against the position as given —
+    where it is the STUDENT to move — so a move the coach attributes to the
+    opponent ("after your move, Black plays fxg5") is not a legal student move
+    and would be a false ``illegal_move``. When such an attribution cue appears
+    just before the move we skip it entirely: the coach is naming the engine's
+    refutation reply (grounded), not recommending a move the student should
+    play. Precision-first: recall is bounded (a fabricated opponent move is not
+    caught here — the judge remains the backstop), but we stop punishing correct
+    "the opponent plays X" coaching.
+    """
+    window = text[max(0, start - 45) : start].lower()
+    if "opponent" in window or "after your move" in window or "in reply" in window:
+        return True
+    opp = "black" if board.turn == chess.WHITE else "white"
+    return any(f"{opp} {verb}" in window for verb in _REPLY_VERBS)
+
+
 @dataclasses.dataclass(frozen=True)
 class Violation:
     """One detected contradiction in coaching text.
@@ -267,6 +308,8 @@ def _check_named_moves(
 
     # Coordinate form is unambiguously a move.
     for m in _COORD_RE.finditer(text):
+        if _attributed_to_opponent(text, m.start(), board):
+            continue  # the opponent's reply, not a student move — validated against the wrong side
         frm, to = m.group(1).lower(), m.group(2).lower()
         try:
             src = chess.parse_square(frm)
@@ -286,6 +329,8 @@ def _check_named_moves(
     # SAN form — only judge tokens that are unmistakably a move (a bare pawn
     # token like "e5" may be a square reference, so it is left alone).
     for m in _SAN_RE.finditer(text):
+        if _attributed_to_opponent(text, m.start(), board):
+            continue  # the opponent's reply, not a student move — validated against the wrong side
         token = m.group(1)
         clearly_a_move = token[0] in "KQRBNO" or "x" in token
         try:

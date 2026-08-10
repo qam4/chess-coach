@@ -43,6 +43,7 @@ All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 | lever 3 | severity-tiered response (tone + length by eval-drop band; no filler sign-offs) | 4.5 | **4** | **2** | 2 | **yes** |
 | lever 4 | enforce per-tier length (word limit + max_tokens) in builder/Coach/driver | 3.5 | 4 | 2 | 1 | **yes** |
 | lever 5 | tiers demand the concrete consequence (state the refutation line) | — | 7 | 6 | 1 | **reverted** |
+| lever 6 | concrete consequence done right: first reply only + opponent-aware checker | 4.5 | **3** | 2 | 1 | **yes** |
 
 **Lever 1 (kept).** The static crib was injected on every turn and drove
 recycled generic advice ("develop your pieces / is my king safe?") even in the
@@ -108,6 +109,19 @@ reply* (the first move of the refutation line), tersely — never the whole PV;
 (b) make the checker **opponent-move-aware** so a correctly-attributed reply
 isn't counted illegal. Deferred as a small feature.
 
+**Lever 6 (kept — the proper concrete-consequence feature).** Three parts that
+fixed what lever 5 broke: (a) `_format_refutation_line` renders only the
+opponent's FIRST reply (a single move), never the PV; (b) the SERIOUS tier
+voices that one reply and forbids listing a sequence; (c) the fidelity checker
+is opponent-move-aware (`_attributed_to_opponent`) so a correctly-attributed
+"the opponent plays X" reply isn't counted as an illegal student move. Result —
+the best deterministic run of the series and the lever-5 regression gone:
+**illegal_move 5 → 0, off_menu 7 → 3** (lowest yet), unsound 6 → 2. Qualitatively
+the move-salad is gone and blunders now name the single concrete consequence
+("the opponent plays fxg5, winning material"; "exd4, winning a pawn"). Graceful
+degradation when no refutation is available (ply 34 hedged rather than
+fabricating). Kept.
+
 ## Stable qualitative findings (across all runs — the real signal)
 
 1. **Generic recycled principle.** A small rotating set of platitudes
@@ -127,20 +141,17 @@ isn't counted illegal. Deferred as a small feature.
    mechanism than a negative instruction (e.g. constraining named moves to the
    menu / a repair pass) — revisit after severity tiering.
 
-## Next: concrete-consequence, done properly (lever 5 rework)
+## Next: "position → principle" (the judge's evolved #1)
 
-Lever 5 proved the direction is right but a prompt tweak is not enough. The
-proper version is a small feature:
-1. **Prompt:** on a mistake, name only the opponent's *single immediate reply*
-   (the first move of the refutation line) — "after your move, Black plays X,
-   winning the knight" — never recite the whole PV (that is move-salad and
-   re-opens BUG-013).
-2. **Checker:** make the fidelity checker opponent-move-aware so a correctly
-   attributed opponent reply ("Black plays X") is not flagged as an illegal
-   student move (the lever-5 illegal_move spike was mostly this artifact).
-3. Consider having the composer surface just the first refutation ply (SAN) as
-   a dedicated field, so the coach voices a vetted single move rather than
-   parsing the rendered line.
+With the concrete consequence now named (lever 6), the judge's highest-leverage
+ask shifted to *ordering*: **describe what is actually happening in the position
+first — the hanging piece, the weak square, the tactical pattern — then label
+the principle.** Right now the coach goes principle → vague gesture at the
+position; it should go position → principle. That is a prompt-ordering change
+(lead with the concrete feature from the engine data, then the transferable
+principle), measured the same way (report card, seed 7; qualitative read +
+deterministic counts).
 
-Deferred companion: opening-specific *content* (named openings / plans) if the
-concrete-consequence work doesn't lift the opening phase enough on its own.
+Deferred companion: opening-specific *content* (named openings / plans) — the
+opening phase stays the most generic and may need real content, not just
+ordering.
