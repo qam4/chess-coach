@@ -348,6 +348,31 @@ def test_refutation_states_captured_piece() -> None:
     assert "capturing your knight on g5" in prompt
 
 
+def test_refutation_clause_describes_non_captures() -> None:
+    # Item 2: non-capture refutations previously reached the coach as a bare
+    # move, so the model invented the "why". Now the clause is composed from the
+    # board. Positions verified against python-chess; black (opponent) to move.
+    import chess
+
+    from chess_coach.prompts import _refutation_capture_clause
+
+    fork = chess.Board("7k/8/8/6Q1/5R2/8/8/K5n1 b - - 0 1")
+    assert _refutation_capture_clause(fork, "g1h3") == ", hitting your queen on g5 and your rook on f4"
+
+    undefended = chess.Board("7k/8/8/8/5R2/8/8/K5n1 b - - 0 1")
+    assert _refutation_capture_clause(undefended, "g1h3") == ", attacking your undefended rook on f4"
+
+    check_only = chess.Board("4k2q/8/8/8/8/8/PPPP2PP/4K3 b - - 0 1")
+    assert _refutation_capture_clause(check_only, "h8e5") == ", giving check"
+
+    # A quiet move that hits nothing yields no invented clause.
+    quiet = chess.Board("4k3/8/8/8/8/8/8/K5n1 b - - 0 1")
+    assert _refutation_capture_clause(quiet, "g1e2") == ""
+    # Captures still take precedence and keep their wording.
+    cap = chess.Board("4k3/8/5p2/6N1/8/8/8/4K3 b - - 0 1")
+    assert _refutation_capture_clause(cap, "f6g5") == ", capturing your knight on g5"
+
+
 def test_move_eval_word_limit_scales_with_severity() -> None:
     # Lever 4: a best move gets a tight word limit; a serious mistake gets more
     # room. Also expose the per-tier max_tokens ordering.

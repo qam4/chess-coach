@@ -939,11 +939,18 @@ def _format_refutation_line(report: ComparisonReport) -> str | None:
 
 
 def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str:
-    """', capturing your <piece> on <square>' for a capturing reply, else ''.
+    """A verified clause describing what the opponent's reply DOES, or ''.
 
-    Reads the captured piece off the position AFTER the student's move (the
-    opponent is to move), so it is a verified fact — not something the model
-    infers. Returns '' when the reply is not a legal capture from that position.
+    Everything here is computed from the position AFTER the student's move (the
+    opponent is to move), so it is a fact, never a model inference. Covers:
+    - captures: ", capturing your <piece> on <square>" (en-passant aware);
+    - checks: ", giving check";
+    - attacks on an undefended piece: ", attacking your undefended <piece> on
+      <square>";
+    - forks: ", hitting your <piece> on <sq> and <piece> on <sq>".
+    Without this, non-capture refutations reached the coach as a bare move and
+    the model invented the "why" (e.g. calling the knight move f6g4 "gaining a
+    strong central pawn"). Returns '' when nothing can be verified.
     """
     if board is None:
         return ""
@@ -951,15 +958,55 @@ def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str
         move = chess.Move.from_uci(first_uci)
     except ValueError:
         return ""
-    if move not in board.legal_moves or not board.is_capture(move):
+    if move not in board.legal_moves:
         return ""
-    if board.is_en_passant(move):
-        cap_sq = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
-        return f", capturing your pawn on {chess.square_name(cap_sq)}"
-    victim = board.piece_at(move.to_square)
-    if victim is None:
+
+    if board.is_capture(move):
+        if board.is_en_passant(move):
+            cap_sq = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
+            return f", capturing your pawn on {chess.square_name(cap_sq)}"
+        victim = board.piece_at(move.to_square)
+        if victim is not None:
+            return f", capturing your {chess.piece_name(victim.piece_type)} on {chess.square_name(move.to_square)}"
         return ""
-    return f", capturing your {chess.piece_name(victim.piece_type)} on {chess.square_name(move.to_square)}"
+
+    # Non-capture: describe what the move hits, from the resulting position.
+    # Only PIECES (not pawns) count as targets worth naming — "attacking your
+    # pawn on h2" is noise on most quiet moves, and listing pawns turned real
+    # checks into pawn inventories.
+    after = board.copy(stack=False)
+    after.push(move)
+    student = not board.turn  # the side being coached
+    check = after.is_check()
+    targets: list[tuple[int, str, bool]] = []  # (piece_type, name+square, undefended)
+    for sq in after.attacks(move.to_square):
+        piece = after.piece_at(sq)
+        if piece is None or piece.color != student:
+            continue
+        if piece.piece_type in (chess.KING, chess.PAWN):
+            continue
+        targets.append(
+            (
+                piece.piece_type,
+                f"your {chess.piece_name(piece.piece_type)} on {chess.square_name(sq)}",
+                not after.attackers(student, sq),
+            )
+        )
+    # Most valuable first, so a fork names the pieces that matter.
+    targets.sort(key=lambda t: t[0], reverse=True)
+
+    if len(targets) >= 2:
+        two = " and ".join(t[1] for t in targets[:2])
+        return f", giving check and hitting {two}" if check else f", hitting {two}"
+    if targets:
+        _, phrase, undefended = targets[0]
+        if undefended:
+            phrase = f"undefended {phrase[len('your ') :]}"
+            phrase = f"your {phrase}"
+        return f", giving check and attacking {phrase}" if check else f", attacking {phrase}"
+    if check:
+        return ", giving check"
+    return ""
 
 
 def _format_comparison_top_lines(report: ComparisonReport) -> str:

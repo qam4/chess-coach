@@ -268,9 +268,24 @@ before-numbers for items 2-4.
    breakdown**. Regex-checkable, zero-noise, and they measure the bridge
    directly — better than the noisy 0-10. Do this FIRST so the remaining levers
    are judged on stable numbers.
-2. **[composer] Non-capture refutation description** — for a non-capture first
-   refutation ply, compose one clause from data we already have: gives check /
-   attacks an undefended piece / forks. Fixes the observed bug above. Low risk.
+2. **[composer] Non-capture refutation description** — DONE (kept, but
+   UNMEASURED end-to-end). `_refutation_capture_clause` now describes any
+   opponent reply from the board: capture ("capturing your knight on g5",
+   en-passant aware), fork ("hitting your queen on g5 and your rook on f4",
+   most valuable first), single undefended ("attacking your undefended rook on
+   f4"), check-only ("giving check"), else empty (never an invented "why").
+   Pawns/king are excluded as named targets — an early version turned a real
+   check into a pawn inventory, caught by testing against real boards.
+   **Honest caveat:** the seed-7 game contains only **3** refutation-bearing
+   turns and **all 3 are captures**, so the new branch never fired and the run
+   metrics were byte-identical to v13. Unit tests verify all four branches on
+   real positions; the change is strictly additive (empty when nothing is
+   verifiable), so it is kept — but no measured game-level win is claimed.
+   **Harness lesson:** one game cannot validate blunder/refutation-focused
+   levers (3 of 44 turns). Before items 3-4, either run 2-3 seeds per
+   measurement or add curated blunder/refutation positions (as we did for
+   endgame coverage), or those levers risk the same "no-op / can't tell"
+   outcome.
 3. **[composer] Compose the best-move "why" from the board** — replace the
    category label with a position-specific string derived via python-chess (what
    the piece now attacks/defends, what it vacates, whether it answers a threat).
