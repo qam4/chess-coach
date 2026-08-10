@@ -913,15 +913,44 @@ def _format_refutation_line(report: ComparisonReport) -> str | None:
     """
     if not report.refutation_line:
         return None
-    base_fen = report.fen
+    board: chess.Board | None = None
     try:
         board = chess.Board(report.fen)
         board.push_uci(report.user_move)
-        base_fen = board.fen()
     except (ValueError, AssertionError):
-        base_fen = report.fen
-    reply_san = _uci_line_to_san(base_fen, report.refutation_line[:1])
-    return f"--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is {reply_san}."
+        board = None
+    base_fen = board.fen() if board is not None else report.fen
+    first_uci = report.refutation_line[0]
+    reply_san = _uci_line_to_san(base_fen, [first_uci])
+    # Deterministically state WHAT the reply captures (verified from the board),
+    # so the coach voices "capturing your knight on g5" instead of a vague
+    # "winning material" it might get wrong. Composed, never derived by the LLM.
+    capture_clause = _refutation_capture_clause(board, first_uci)
+    return f"--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is {reply_san}{capture_clause}."
+
+
+def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str:
+    """', capturing your <piece> on <square>' for a capturing reply, else ''.
+
+    Reads the captured piece off the position AFTER the student's move (the
+    opponent is to move), so it is a verified fact — not something the model
+    infers. Returns '' when the reply is not a legal capture from that position.
+    """
+    if board is None:
+        return ""
+    try:
+        move = chess.Move.from_uci(first_uci)
+    except ValueError:
+        return ""
+    if move not in board.legal_moves or not board.is_capture(move):
+        return ""
+    if board.is_en_passant(move):
+        cap_sq = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
+        return f", capturing your pawn on {chess.square_name(cap_sq)}"
+    victim = board.piece_at(move.to_square)
+    if victim is None:
+        return ""
+    return f", capturing your {chess.piece_name(victim.piece_type)} on {chess.square_name(move.to_square)}"
 
 
 def _format_comparison_top_lines(report: ComparisonReport) -> str:

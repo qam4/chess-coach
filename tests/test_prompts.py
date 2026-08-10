@@ -310,6 +310,30 @@ def test_refutation_renders_only_first_reply() -> None:
     assert "name that single reply" in prompt  # serious tier voices one reply
 
 
+def test_refutation_states_captured_piece() -> None:
+    # Lever 8: the opponent's-reply block states WHAT the reply captures,
+    # computed from the board (verified) — the coach voices it, never invents it.
+    report = ComparisonReport(
+        fen="4k3/8/5p2/6N1/8/8/8/3K4 w - - 0 1",  # White Ng5; Black f6 pawn can take it
+        user_move="d1c1",  # a quiet king move that leaves the knight hanging
+        user_eval_cp=-300,
+        best_move="g5f3",  # save the knight
+        best_eval_cp=0,
+        eval_drop_cp=300,
+        classification="blunder",
+        nag="??",
+        best_move_idea="save the knight",
+        refutation_line=["f6g5"],  # ...fxg5 captures the knight
+        missed_tactics=[],
+        top_lines=[],
+        critical_moment=False,
+        critical_reason=None,
+    )
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "Opponent's reply" in prompt
+    assert "capturing your knight on g5" in prompt
+
+
 def test_move_eval_word_limit_scales_with_severity() -> None:
     # Lever 4: a best move gets a tight word limit; a serious mistake gets more
     # room. Also expose the per-tier max_tokens ordering.

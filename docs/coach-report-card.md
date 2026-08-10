@@ -45,6 +45,7 @@ All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 | lever 5 | tiers demand the concrete consequence (state the refutation line) | — | 7 | 6 | 1 | **reverted** |
 | lever 6 | concrete consequence done right: first reply only + opponent-aware checker | 4.5 | **3** | 2 | 1 | **yes** |
 | lever 7 | position→principle ordering (prompt directive; refined to anchor to data) | — | 4 | 3 | 2 | **reverted** |
+| lever 8 | opponent's-reply block states the captured piece (composed from board) | 4.5 | 3 | 2 | 1 | **yes** |
 
 **Lever 1 (kept).** The static crib was injected on every turn and drove
 recycled generic advice ("develop your pieces / is my king safe?") even in the
@@ -132,7 +133,20 @@ invent" fixed the worst (illegal_move back to 0, off_menu down) but the
 accuracy-critical categories stayed doubled (placement 1→2, piece_type 1→2).
 Per the rule "do not sacrifice accuracy," reverted.
 
-## The pattern across seven levers (the strategic lesson)
+**Lever 8 (kept — the Layer-1→Layer-2 lesson, proven).** After lever 7 showed a
+prompt directive can't add concreteness without inventing, lever 8 does it the
+composed way: `_refutation_capture_clause` computes what the opponent's reply
+captures — reading the piece off the board *after* the student's move — and the
+"Opponent's reply" block states it verbatim ("capturing your knight on g5").
+Result: deterministic fidelity identical to the clean v6 baseline (off_menu 3,
+unsound 2, placement 1, piece_type 1, illegal 0) — **zero accuracy cost** — while
+blunders gained a concrete, verified consequence. Decisive evidence: at ply 30
+the model's own guess in earlier runs was "winning a pawn"; the composer
+computed the truth (a white **bishop** sat on d4, captured by ...exd4) and the
+coach voiced "capturing your bishop on d4." **The composer corrected a model
+hallucination at no cost — exactly the pattern below.**
+
+## The pattern across levers (the strategic lesson)
 
 Sorting the levers by outcome reveals a sharp, consistent rule:
 
@@ -171,26 +185,21 @@ already does.
    mechanism than a negative instruction (e.g. constraining named moves to the
    menu / a repair pass) — revisit after severity tiering.
 
-## Next: the deterministic "lead" composer (Layer 1 → Layer 2 voice)
+## Next: extend the composed-lead approach
 
-Lever 7 showed a prompt directive can't get position→principle ordering without
-inventing facts. The accuracy-safe way (and the one consistent with every kept
-lever) is to **compose the single concrete lead deterministically and have the
-coach open with it**, never derive it:
+Lever 8 delivered the blunder side of the concrete lead (the verified captured
+piece). Two accuracy-safe extensions remain, both composed-not-derived:
 
-- **Serious / inaccuracy:** compose "after your move, the opponent plays {first
-  refutation reply}, winning {the captured piece / the material}" — the reply
-  is already rendered (lever 6); add *what it wins* by reading the captured
-  piece off the board after the student's move (deterministic, verified).
-- **Good / best / sound:** open with the engine's `best_move_idea` (already a
-  structured field) or the key active feature from the placement/threats blocks.
+- **Good / best / sound moves:** the coach is still generic here ("develop your
+  pieces"). Surface the engine's `best_move_idea` (a structured field) more
+  prominently and have the coach voice *it* as the specific idea, rather than a
+  generic principle. Composed, so no invention risk.
+- **Non-capture refutations:** when the opponent's reply is a strong non-capture
+  (a check, a fork, a quiet killer), the capture clause is empty. Consider
+  composing the motif (from the engine's tactic/threat data for that reply) so
+  those blunders also get a concrete "why", not just the move.
 
-Hand this composed lead to the prompt as the sentence to open with; the LLM
-voices it + adds the principle. Because the lead is verified, the ordering flips
-with no new invention. This is a composer change (+ maybe a small engine field
-for "what the refutation wins"), not a prompt directive — measured the same way,
-with fidelity expected to stay at the v6 level.
-
-Deferred companion: opening-specific *content* (named openings / plans) — the
-opening phase stays the most generic and may need real content, not just
-ordering.
+Deferred companion (bigger, and likely necessary): opening-specific *content*
+(named openings / plans) fed as data — the opening phase stays the most generic
+and needs real content, not ordering. This is a knowledge/engine-feature build,
+not a prompt change.
