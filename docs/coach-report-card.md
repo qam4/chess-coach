@@ -42,6 +42,7 @@ All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 | lever 2 | add grounding rule: don't invent causal chains ("allows/supports/weakens") | 4.5 | 9 | 4 | 1 | **reverted** |
 | lever 3 | severity-tiered response (tone + length by eval-drop band; no filler sign-offs) | 4.5 | **4** | **2** | 2 | **yes** |
 | lever 4 | enforce per-tier length (word limit + max_tokens) in builder/Coach/driver | 3.5 | 4 | 2 | 1 | **yes** |
+| lever 5 | tiers demand the concrete consequence (state the refutation line) | — | 7 | 6 | 1 | **reverted** |
 
 **Lever 1 (kept).** The static crib was injected on every turn and drove
 recycled generic advice ("develop your pieces / is my king safe?") even in the
@@ -84,6 +85,29 @@ truncation; deterministic fidelity held (off_menu 4 / unsound 2). The judge
 score fell to 3.5 — but that is the noise band (see above), contradicted by the
 direct evidence, so lever 4 is kept.
 
+**Lever 5 (reverted — backfired).** Sharpening the tiers to "state the
+Refutation Line explicitly" made the coach dump the raw multi-move PV as
+move-salad — ply 20: "After Kd1, Black plays fxg5, fxg5, Ne5, Bb2, d6, Bxe5,
+dxe5, Nd2" — *worse* than lever 4's clean "allows Black to capture your knight
+on g5", and `illegal_move` spiked 0 → 5 (off_menu 4→7, unsound 2→6). Two
+insights it surfaced:
+1. **It re-opened BUG-013.** "Voice the line" fights the "don't narrate
+   `and then...` continuations" rule; the model recites a long, partly-garbled
+   PV.
+2. **The illegal_move spike is largely a checker artifact.** The coach now
+   names the *opponent's* reply ("Black plays fxg5"), but the fidelity checker
+   validates every named move against the pre-move position where it's the
+   *student* to move — so a correctly-attributed opponent reply is flagged
+   illegal. The checker can't tell "opponent's punishing reply" from "a move I
+   recommend the student play."
+
+The concrete-consequence direction is still right (ply 34's "After Ke2, Black
+plays ...Qa5, targeting your king" is exactly it), but it needs a **proper
+design, not a prompt tweak**: (a) name only the opponent's *single immediate
+reply* (the first move of the refutation line), tersely — never the whole PV;
+(b) make the checker **opponent-move-aware** so a correctly-attributed reply
+isn't counted illegal. Deferred as a small feature.
+
 ## Stable qualitative findings (across all runs — the real signal)
 
 1. **Generic recycled principle.** A small rotating set of platitudes
@@ -103,20 +127,20 @@ direct evidence, so lever 4 is kept.
    mechanism than a negative instruction (e.g. constraining named moves to the
    menu / a repair pass) — revisit after severity tiering.
 
-## Next: lever 5 — voice the concrete consequence
+## Next: concrete-consequence, done properly (lever 5 rework)
 
-The one shortcoming the judge names in **every** run (and which levers 1–4 —
-crib, fabrication, severity, length — never touched): *the coach names a
-principle but never the concrete consequence.* On a mistake it should name the
-engine's refutation line ("after Kd1, Black plays … winning the knight"); on a
-good move it should name the specific tactical/positional idea that makes it
-work here — not a generic label. This is the inverse of the failed lever 2 (not
-"don't fabricate" but "DO state the engine's actual line"), and it likely
-subsumes the opening genericness (the opening version is "name the specific
-plan/threat, not 'develop your pieces'"). It depends on the engine data
-actually carrying the line (refutation_line / best_move_idea / threats) and the
-prompt demanding the coach voice it. Measured by direct inspection + the judge's
-qualitative read (not the scalar).
+Lever 5 proved the direction is right but a prompt tweak is not enough. The
+proper version is a small feature:
+1. **Prompt:** on a mistake, name only the opponent's *single immediate reply*
+   (the first move of the refutation line) — "after your move, Black plays X,
+   winning the knight" — never recite the whole PV (that is move-salad and
+   re-opens BUG-013).
+2. **Checker:** make the fidelity checker opponent-move-aware so a correctly
+   attributed opponent reply ("Black plays X") is not flagged as an illegal
+   student move (the lever-5 illegal_move spike was mostly this artifact).
+3. Consider having the composer surface just the first refutation ply (SAN) as
+   a dedicated field, so the coach voices a vetted single move rather than
+   parsing the rendered line.
 
 Deferred companion: opening-specific *content* (named openings / plans) if the
-concrete-consequence lever doesn't lift the opening phase enough on its own.
+concrete-consequence work doesn't lift the opening phase enough on its own.
