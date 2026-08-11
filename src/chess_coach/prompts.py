@@ -27,6 +27,7 @@ from chess_coach.models import (
     ComparisonReport,
     PositionReport,
 )
+from chess_coach.pedagogy.features import PHASE_ENDGAME, phase_of_board
 from chess_coach.pedagogy.inject import format_guidance_block
 from chess_coach.pedagogy.instantiate import feature_facts
 from chess_coach.pedagogy.resource import GuidanceEntry
@@ -1085,7 +1086,99 @@ def _move_effect_clause(board: chess.Board | None, uci: str, *, target_possessiv
         if after.attackers(not mover, sq) and len(after.attackers(mover, sq)) == 1:
             name = chess.piece_name(piece.piece_type)
             return f", defending your {name} on {chess.square_name(sq)}"
+    return _quiet_move_clause(board, after, move)
+
+
+def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move) -> str:
+    """Describe a move that captures, attacks and defends nothing.
+
+    Measured on one game: 13 of 44 best moves reached this point and got only the
+    engine's category label ("rook activity — improving rook placement"), which
+    the coach can do nothing with but restate. A label is the *name* of an idea;
+    these clauses are the facts on the board that the name stands for, which is
+    the difference between "Kf3 improves your king's activity" and "your king
+    steps to f3, one square closer to the centre".
+
+    Deliberately says nothing about mere centralisation on its own: "toward the
+    centre" was the biggest bucket in that measurement and is just another label,
+    and we already flag the coach elsewhere for calling non-central squares
+    central. Every branch here states squares, counts or a file — things a student
+    can check on the board.
+    """
+    mover = board.turn
+    piece = board.piece_at(move.from_square)
+    if piece is None:
+        return ""
+    from_name = chess.square_name(move.from_square)
+    to_name = chess.square_name(move.to_square)
+
+    if board.is_castling(move):
+        side = "short" if chess.square_file(move.to_square) > chess.square_file(move.from_square) else "long"
+        return f", castling {side} to tuck your king onto {to_name} and connect your rooks"
+
+    # A rook or queen reaching a file with no pawns in the way.
+    if piece.piece_type in (chess.ROOK, chess.QUEEN):
+        file_index = chess.square_file(move.to_square)
+        mask = chess.BB_FILES[file_index]
+        own_pawns = after.pieces_mask(chess.PAWN, mover) & mask
+        their_pawns = after.pieces_mask(chess.PAWN, not mover) & mask
+        file_name = chess.FILE_NAMES[file_index]
+        name = chess.piece_name(piece.piece_type)
+        if not own_pawns and not their_pawns:
+            return f", moving your {name} to {to_name} on the open {file_name}-file"
+        if not own_pawns:
+            return f", moving your {name} to {to_name} on the half-open {file_name}-file"
+
+    # A piece that had almost nowhere to go and now has somewhere. The counts are
+    # the point: the student can recount them on the board.
+    #
+    # Both sides of the comparison must be the SAME measurement — squares the
+    # piece attacks that its own side does not occupy. A first version counted
+    # legal moves before and attacked squares after, which compares two different
+    # things. The king is excluded: it may not move into check, so an attacked-
+    # square count overstates where it can actually go, and the move that
+    # triggered this (an early Ke2 after losing castling rights) is usually forced
+    # rather than an improvement.
+    if piece.piece_type != chess.KING:
+        before_squares = _reachable_count(board, move.from_square, mover)
+        after_squares = _reachable_count(after, move.to_square, mover)
+        if before_squares <= 2 and after_squares >= before_squares + 3:
+            name = chess.piece_name(piece.piece_type)
+            return (
+                f", moving your {name} from {from_name} to {to_name}, where it covers "
+                f"{after_squares} squares instead of {before_squares}"
+            )
+
+    # An endgame king walking in. Gated on the project's own endgame test, NOT on
+    # castling rights: a first probe used "has no castling rights", which called
+    # an early-game Ke2 king activity — false, and usually the move is forced.
+    if piece.piece_type == chess.KING and phase_of_board(board) == PHASE_ENDGAME:
+        before_dist = _centre_distance(move.from_square)
+        after_dist = _centre_distance(move.to_square)
+        if after_dist < before_dist:
+            return f", walking your king from {from_name} to {to_name}, closer to the centre"
+
+    # Adding a defender to something already under attack. Weaker than the
+    # single-defender case handled above, so it comes last and says so.
+    for sq in after.attacks(move.to_square):
+        defended = after.piece_at(sq)
+        if defended is None or defended.color != mover or defended.piece_type == chess.KING:
+            continue
+        if after.attackers(not mover, sq):
+            name = chess.piece_name(defended.piece_type)
+            return f", adding a defender to your {name} on {chess.square_name(sq)}"
     return ""
+
+
+def _reachable_count(board: chess.Board, square: int, color: chess.Color) -> int:
+    """Squares the piece on ``square`` attacks that ``color`` does not occupy."""
+    return chess.popcount(int(board.attacks(square)) & ~board.occupied_co[color])
+
+
+def _centre_distance(square: int) -> int:
+    """Chebyshev distance from ``square`` to the nearest of d4/d5/e4/e5."""
+    file_index, rank = chess.square_file(square), chess.square_rank(square)
+    return max(min(abs(file_index - 3), abs(file_index - 4)), min(abs(rank - 3), abs(rank - 4)))
 
 
 def _best_move_achievement(report: ComparisonReport) -> str:
@@ -1130,35 +1223,81 @@ def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str
     return _move_effect_clause(board, first_uci, target_possessive="your ")
 
 
+def _line_base_fen(report: ComparisonReport, moves: list[str]) -> str | None:
+    """Which position does this PV line start from — before or after the move?
+
+    It has to be decided per line, because the engine's ``top_lines`` field means
+    two different things depending on the move played (verified against a live
+    engine, and visible in ``MoveComparator::compare``, which ends with
+    ``report.top_lines = multipv_results`` after a second search may have
+    overwritten that variable):
+
+    * student played the engine's best move -> the MultiPV lines are for the
+      position BEFORE the move, and open with the student's own alternatives;
+    * student played anything else -> they are for the position AFTER the move,
+      open with the opponent's reply, and match ``refutation_line``.
+
+    Assuming one base cost us the whole section: on the 14 turns of a 44-turn
+    game where the student found the best move, every line was discarded and the
+    coach was handed an empty "Top Engine Lines" block while the instructions
+    told it to grind only on facts from that block.
+
+    So try the pre-move position first, fall back to the post-move one, and
+    return ``None`` when the line replays in neither (genuine engine PV
+    inconsistency — BUG-019). A line is only ever rendered from a base it
+    actually replays in, which cannot be wrong whatever the engine changes to.
+    """
+    if not moves:
+        return None
+    try:
+        pre = chess.Board(report.fen)
+    except ValueError:
+        return None
+    try:
+        first = chess.Move.from_uci(moves[0])
+    except ValueError:
+        return None
+    if first in pre.legal_moves:
+        return report.fen
+    post = pre.copy(stack=False)
+    try:
+        post.push_uci(report.user_move)
+    except (ValueError, AssertionError):
+        return None
+    return post.fen() if first in post.legal_moves else None
+
+
 def _format_comparison_top_lines(report: ComparisonReport) -> str:
     """Format the top engine lines from a ComparisonReport, in SAN.
 
-    A ``ComparisonReport``'s ``top_lines`` describe the position AFTER the
-    student's move (they open with the opponent's reply), so SAN must be
-    rendered from that position — converting from ``report.fen`` makes the first
-    move illegal and silently falls the WHOLE line back to raw UCI. That is how
-    coordinate strings like ``f6g4`` reached the coach, which then parroted the
-    coordinates and invented what the move did (the correct SAN is ``Nfg4`` — a
-    knight move, matching the piece-type errors the fidelity checker flagged).
+    The base position is chosen per line by :func:`_line_base_fen`, because the
+    engine's ``top_lines`` are relative to the position before the student's move
+    in some cases and after it in others. Rendering from the wrong base makes the
+    first move illegal, which used to fall the WHOLE line back to raw UCI —
+    coordinate strings like ``f6g4`` reached the coach, which parroted them and
+    invented what the move did (the correct SAN is ``Nfg4``, a knight move). It
+    now truncates instead, so a wrong base silently costs the line entirely.
     """
-    base_fen = report.fen
-    try:
-        board = chess.Board(report.fen)
-        board.push_uci(report.user_move)
-        base_fen = board.fen()
-    except (ValueError, AssertionError):
-        base_fen = report.fen
     student_is_white = report.fen.split()[1] == "w" if len(report.fen.split()) > 1 else True
     opp = "Black" if student_is_white else "White"
     you = "White" if student_is_white else "Black"
-    lines = [
-        f"--- Top Engine Lines (from the position after your move; {opp} = your opponent, {you} = you) ---",
-    ]
+    header_shown = False
+    lines: list[str] = []
     for i, pv in enumerate(report.top_lines, 1):
+        base_fen = _line_base_fen(report, pv.moves)
+        if base_fen is None:
+            continue  # replays from neither position — omit rather than mislead
         moves_str = _uci_line_to_numbered_san(base_fen, pv.moves)
         if not moves_str:
             continue  # nothing replayable — omit rather than show coordinates
-        lines.append(f"Line {i} (depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}")
+        # Say which position the line starts from: a line of the student's own
+        # alternatives and a line of the opponent's refutation read identically
+        # otherwise, and the coach has no way to tell them apart.
+        whose = "after your move" if base_fen != report.fen else "from the position you were in"
+        if not header_shown:
+            lines.append(f"--- Top Engine Lines ({opp} = your opponent, {you} = you) ---")
+            header_shown = True
+        lines.append(f"Line {i} ({whose}, depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}")
     return "\n".join(lines)
 
 

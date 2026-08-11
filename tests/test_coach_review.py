@@ -242,3 +242,17 @@ def test_composed_fact_and_unsourced_square_split_specificity() -> None:
 
     # No captured prompt means the question cannot be answered, so neither fires.
     assert not voices_composed_fact(_turn(0, PHASE_OPENING, feedback="Be2 defends the knight on d4."))
+
+
+def test_stats_block_tells_the_reviewer_which_direction_is_good() -> None:
+    # Regression: labelled neutrally, "names a square we did not supply: 0%" was
+    # read by a frontier reviewer as the coach being blind to the position, and it
+    # built its top recommendation on that misreading — when 0% is the intended
+    # result. A metric handed over without its sign invites the wrong conclusion.
+    from chess_coach.eval.coach_review import build_coach_review_prompt
+
+    turns = [_turn(0, PHASE_OPENING, played="Bc4", best="Bc4", feedback="Bc4 eyes f7.")]
+    prompt = build_coach_review_prompt(turns, aggregate_review(turns))
+    assert "HIGHER IS BETTER" in prompt
+    assert "LOWER IS BETTER" in prompt
+    assert "not a weakness" in prompt

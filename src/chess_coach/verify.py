@@ -218,7 +218,26 @@ def _attributed_to_opponent(text: str, start: int, board: chess.Board) -> bool:
     caught here — the judge remains the backstop), but we stop punishing correct
     "the opponent plays X" coaching.
     """
-    window = text[max(0, start - 45) : start].lower()
+    before = text[:start]
+    # Standard notation first: "..." immediately before a move means it is the
+    # reply, not a move to play ("threats like ...Nxg2"). Missing this produced a
+    # false `illegal_move` on coaching that was factually correct — Nxg2 really
+    # was a legal black knight capture there, and still legal after the
+    # recommended king move. This is checked BEFORE the sentence scoping below,
+    # because the ellipsis is itself made of full stops and would otherwise be
+    # mistaken for a sentence boundary.
+    if before.rstrip().endswith("..."):
+        return True
+
+    # Scope the cue search to the CURRENT SENTENCE rather than a fixed number of
+    # characters. A 45-character window missed "your opponent immediately
+    # captures your bishop on d4 with exd4" — the cue sits ~53 characters back —
+    # and flagged a false `illegal_move` on correct coaching. Attribution applies
+    # to the clause it appears in, so a sentence is the right unit; the cap stops
+    # a run-on sentence from carrying a cue arbitrarily far.
+    floor = max(0, start - 240)
+    sentence_start = max(before.rfind(ch, floor) for ch in ".!?\n")
+    window = before[max(sentence_start + 1, floor) :].lower()
     if "opponent" in window or "after your move" in window or "in reply" in window:
         return True
     opp = "black" if board.turn == chess.WHITE else "white"

@@ -453,11 +453,41 @@ def test_numbered_san_marks_whose_move_it_is() -> None:
 
 
 def test_top_lines_section_names_which_side_is_the_opponent() -> None:
-    report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
+    # The fixture needs a real line: the header is only emitted when at least one
+    # line renders. It used to be printed unconditionally, which is how 19 of 44
+    # prompts ended up carrying a header with nothing under it while the
+    # instructions told the coach to use only facts from that section.
+    report = dataclasses.replace(
+        _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300),
+        top_lines=[PVLine(depth=8, eval_cp=120, moves=["b8c6", "h5e5"], theme="material win")],
+    )
     prompt = build_rich_move_evaluation_prompt(report, "intermediate")
     # Student is Black here, so White is the opponent — stated explicitly.
     assert "White = your opponent" in prompt
     assert "Black = you" in prompt
+
+
+def test_top_lines_section_is_omitted_entirely_when_nothing_renders() -> None:
+    # No header without content. An empty section is worse than no section: the
+    # grounding instructions point at it, so the coach was told to rely on facts
+    # that were not there.
+    report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
+    assert "Top Engine Lines" not in build_rich_move_evaluation_prompt(report, "intermediate")
+
+
+def test_top_lines_say_which_position_they_start_from() -> None:
+    # The engine's lines are relative to the position BEFORE the student's move
+    # (they include the student's own alternatives), so the coach is told that —
+    # otherwise a line of alternatives and a line of refutation read identically.
+    report = dataclasses.replace(
+        _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300),
+        top_lines=[PVLine(depth=8, eval_cp=120, moves=["b8c6", "h5e5"], theme="material win")],
+    )
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "from the position you were in" in prompt
+    # Rendered as SAN, from the right base — never coordinates.
+    assert "Nc6" in prompt
+    assert "b8c6" not in prompt
 
 
 def test_comparison_top_lines_render_san_not_uci() -> None:
@@ -685,3 +715,76 @@ def test_rich_prompt_no_menu_no_sourcing_rule_when_lines_empty() -> None:
     prompt = build_rich_coaching_prompt(_position_report(WHITE_TO_MOVE_FEN), constrain_moves=True)
     assert "Candidate moves (engine-verified)" not in prompt
     assert "Choosing a move" not in prompt
+
+
+# --- Change A: describe the quiet moves too -------------------------------
+#
+# Measured before writing any of it: 13 of 44 best moves in one game reached the
+# composer with nothing to say and got only the engine's category label ("rook
+# activity — improving rook placement"), which the coach can only restate. Each
+# clause below states squares, counts or a file — things a student can check on
+# the board — rather than naming the idea the label already named.
+
+
+def _clause(fen: str, san: str) -> str:
+    import chess
+
+    from chess_coach.prompts import _move_effect_clause
+
+    board = chess.Board(fen)
+    move = board.parse_san(san)
+    return _move_effect_clause(board, move.uci(), target_possessive="their ").removeprefix(", ")
+
+
+def test_quiet_clause_names_the_open_file() -> None:
+    assert _clause("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", "Ra4") == "moving your rook to a4 on the open a-file"
+
+
+def test_quiet_clause_distinguishes_half_open_from_open() -> None:
+    # Black has a pawn on a7, we have none on the a-file: half-open for us.
+    assert _clause("r5k1/p4ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", "Ra4") == "moving your rook to a4 on the half-open a-file"
+
+
+def test_quiet_clause_counts_the_squares_a_piece_gains() -> None:
+    # The counts are the teaching content: the student can recount them.
+    import chess
+
+    out = _clause(chess.STARTING_FEN, "Nc3")
+    assert out == "moving your knight from b1 to c3, where it covers 5 squares instead of 2"
+
+
+def test_quiet_clause_excludes_the_king_from_the_square_count() -> None:
+    # A king may not move into check, so counting attacked squares overstates
+    # where it can actually go — and the move this came from (an early Ke2 after
+    # losing castling rights) is usually forced rather than an improvement.
+    out = _clause("rnbqkbnr/pppppppp/8/8/8/8/PPPPKPPP/RNBQ1BNR w kq - 0 1", "Ke1")
+    assert "squares instead of" not in out
+
+
+def test_quiet_clause_describes_castling_concretely() -> None:
+    out = _clause(CASTLE_FEN, "O-O")
+    assert out == "castling short to tuck your king onto g1 and connect your rooks"
+
+
+def test_quiet_clause_walks_the_king_in_only_in_an_endgame() -> None:
+    # King and pawn versus king: the project's own endgame test passes, and d4 is
+    # genuinely closer to the centre than e3.
+    endgame = "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1"
+    assert _clause(endgame, "Kd4") == "walking your king from e3 to d4, closer to the centre"
+    # The same shape of move with a full board is not an endgame, so no claim.
+    assert "closer to the centre" not in _clause(CASTLE_FEN, "Kf1")
+
+
+def test_quiet_clause_reports_an_extra_defender_as_extra() -> None:
+    # Bishop c4 is attacked by the a6 bishop and already defended by the b3 pawn,
+    # so Na3 ADDS a defender rather than being the only one — said as such.
+    fen = "rn1qkbnr/pppp1ppp/b7/4p3/2B1P3/1P6/P1PP1PPP/RNBQK1NR w KQkq - 0 1"
+    assert _clause(fen, "Na3") == "adding a defender to your bishop on c4"
+
+
+def test_quiet_clause_says_nothing_about_bare_centralisation() -> None:
+    # "Toward the centre" was the largest bucket in the measurement and is just
+    # another label — and we flag the coach elsewhere for calling non-central
+    # squares central. A bishop landing squarely on e4 with nothing else to show
+    # for it gets no invented reason.
+    assert _clause("7k/8/8/8/8/8/8/K6B w - - 0 1", "Be4") == ""

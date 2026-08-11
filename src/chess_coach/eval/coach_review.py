@@ -328,8 +328,17 @@ def _fmt_stats(stats: ReviewStats) -> str:
         f"Move quality (engine): {cls or 'none'}\n"
         f"Deterministic fidelity violations: {fid}\n"
         f"Fidelity by phase: {by_phase}\n"
-        f"Turns naming a square we supplied in the prompt: {stats.composed_fact_rate:.0%}\n"
-        f"Turns naming a square we did NOT supply: {stats.unsourced_square_rate:.0%}\n"
+        # Spell out which direction is good. Labelled neutrally, a reviewer read
+        # "names a square we did not supply: 0%" as the coach being blind to the
+        # position and made it the headline recommendation — when 0% is the design
+        # working as intended. A number handed to a reader without its sign is an
+        # invitation to misread it.
+        f"Turns voicing a board fact we composed for it: {stats.composed_fact_rate:.0%} "
+        f"(HIGHER IS BETTER — by design the engine/composer derives the facts and the "
+        f"coach's job is to voice them, so this is the architecture working)\n"
+        f"Turns naming a square we never supplied: {stats.unsourced_square_rate:.0%} "
+        f"(LOWER IS BETTER — the model has no way to verify a square we did not give "
+        f"it, so this is where fabrication appears; 0% is the target, not a weakness)\n"
         f"Empty feedback turns: {stats.empty_feedback}\n"
         f"Prompts still containing raw UCI (should be 0): {stats.prompt_uci_leaks}\n"
         f"Generation latency (s): mean {stats.latency_mean_s:.1f}, "

@@ -67,14 +67,20 @@ class SelectionInput:
     """Features for which a verified board fact can be composed, so the entry
     can be *instantiated* rather than stated abstractly.
 
-    Ranked ABOVE ``preferred_features`` deliberately. Measured cause: the PV
-    theme "piece development" maps to the broad ``phase:opening`` feature, so
-    the theme bias handed the same +1 to every abstract opening entry and
-    cancelled out a fact-bearing entry of equal relevance — the type/id
-    tie-break then picked the abstraction. Being instantiable is a stronger
-    teaching signal than matching the move's theme, so it gets its own key
-    instead of competing inside one bonus. Still a tie-break only: it never
-    admits or drops an entry, and a genuinely more relevant entry still wins."""
+    Its own rank key rather than extra weight inside ``preferred_features``,
+    because the two biases cancelled when combined: the PV theme "piece
+    development" maps to the broad ``phase:opening`` feature, so the theme bonus
+    went to every abstract opening entry too and the id tie-break then picked the
+    abstraction.
+
+    Ranked BELOW ``preferred_features``. A first version put it above, and the
+    coach report card showed the cost: "rooks on open files" guidance appeared on
+    8 turns, and on 6 of them the move being taught was a KING move — because
+    ``open_file`` has a composable fact and so outranked the entry that actually
+    matched the move. Guidance about the wrong piece is worse than guidance that
+    is abstract, so matching the move comes first and instantiability breaks the
+    remaining ties. Still a tie-break either way: it never admits or drops an
+    entry, and a genuinely more relevant entry always wins."""
 
     def __post_init__(self) -> None:
         if self.max_entries < 1:
@@ -112,21 +118,26 @@ def _sort_key(entry: GuidanceEntry, inp: SelectionInput) -> tuple[int, int, int,
     """Total, deterministic ordering key (Req 2.4, 2.6).
 
     Primary: relevance descending (more matched keys first) — negated so a
-    plain ascending sort puts the most relevant first. Secondary: whether the
-    entry can be instantiated with a verified board fact
-    (``fact_features``) — a concrete entry beats an abstract one of equal
-    relevance. Tertiary: a soft bias toward the recommended move's theme
-    (``preferred_features``) — additive, so it only breaks ties and never
-    changes which entries are eligible (grounded-move-advice Req 4.2).
-    Then type order plan > pattern > principle. Final tie-break: ascending
-    ``id`` for a stable, total order.
+    plain ascending sort puts the most relevant first. Secondary: a soft bias
+    toward the recommended move's theme (``preferred_features``), so the taught
+    principle is about the move being taught (grounded-move-advice Req 4.2).
+    Tertiary: whether the entry can be instantiated with a verified board fact
+    (``fact_features``) — among entries equally relevant AND equally on-theme,
+    prefer the one that can state a fact instead of an abstraction. Then type
+    order plan > pattern > principle. Final tie-break: ascending ``id`` for a
+    stable, total order.
+
+    The theme bias sits above the fact bias on measured evidence: with the order
+    reversed, "rooks on open files" was selected on six turns whose best move was
+    a king move, because ``open_file`` carries a composable fact. Both remain
+    additive, so neither changes which entries are eligible.
     """
-    has_fact = 1 if entry.features & inp.fact_features else 0
     preferred_bonus = len(entry.features & inp.preferred_features)
+    has_fact = 1 if entry.features & inp.fact_features else 0
     return (
         -_relevance(entry, inp),
-        -has_fact,
         -preferred_bonus,
+        -has_fact,
         _TYPE_RANK.get(entry.type, _TYPE_RANK_FALLBACK),
         entry.id,
     )

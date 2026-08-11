@@ -459,7 +459,74 @@ surfaced one clear regression (BUG-016) and two issues worth tracking.*
 
 ## Engine Issues (found via the coach report card, 2026-08-10)
 
-### BUG-019: Engine emits an internally inconsistent PV (missing ply / wrong side to move)
+### BUG-019: Comparison `top_lines` came from the wrong search (FIXED 2026-08-11)
+
+**The original diagnosis below was WRONG and is kept for the lesson.** There was
+no missing ply and no PV corruption. The real cause was a single stale reference
+in the engine, and the "two Black moves in a row" was one mis-sided castle.
+
+**Root cause** (`blunder/source/MoveComparator.cpp:102`): `compare()` bound a
+`const auto&` to `search.get_multipv_results()`, which returns a reference to
+`Search::multipv_results_`. The post-user-move search further down calls
+`search.search()` again, and every search clears and reassigns that vector
+(`Search.cpp`: `clear()`/`resize()`, then `multipv_results_ = depth_results`).
+So partway through `compare()` the reference silently began pointing at the
+*second* search's single-PV result. For every move that was not the engine's
+best — 30 of 44 turns in a real game — this corrupted four fields at once:
+
+- `top_lines` held the post-move line instead of the pre-move MultiPV lines,
+  while `CoachJson::serialize_top_lines` (correctly) assumed they were relative
+  to `report.fen` and so attributed every move to the wrong side. For castling,
+  `move_to_uci` picks hardcoded coordinates by side, so a **White** castle was
+  emitted as `e8g8` — a well-formed move for the wrong colour. That is the
+  entire "missing White ply": patch index 7 of the reported line back to `e1g1`
+  and all 10 moves replay.
+- `pv.theme` was computed by replaying a post-move line on the pre-move board.
+- `critical_moment` was **always false** (it needs >= 2 lines; the second search
+  runs with multipv 1).
+- `missed_tactics` was **always empty** (both sides of the diff became the same
+  vector).
+
+`best_move_idea` was NOT affected — `describe_best_move` ignores its `pv_moves`
+parameter, and its other inputs were still correct.
+
+**Second, independent bug in the same function**: the best line's tactics were
+detected *after* `board.do_move(user_move)`, and `detect_tactics` reads
+side-to-move and the piece bitboards from the board it is handed — so even with
+the reference fixed, `missed_tactics` would still have been wrong.
+
+**Engine fix**: take a copy instead of a reference, and compute the best line's
+tactics before the user's move is applied. Verified before/after on the same
+probe: non-best moves went from 1 line (post-move base, identical to
+`refutation_line`, `critical_moment` always false, `missed_tactics` always
+empty) to 3 lines from the pre-move base, with real eval spreads and a correctly
+identified missed fork `('fork', ['c7','a8','e8'])`. Blunder's own suite: 2414
+assertions pass.
+
+**Client impact this had been hiding**: our renderer assumed the post-move base
+always, so on the 14 turns of a 44-turn game where the student *did* play the
+best move, every line failed to replay and was dropped — the coach received a
+`--- Top Engine Lines ---` header with nothing under it on 19 of 44 turns, while
+the grounding instructions told it to use only facts from that section. After the
+fix all 19 carry lines. The renderer now picks each line's base by trying the
+pre-move position first (so an older engine binary still works), only emits the
+header when a line actually renders, and states which position each line starts
+from. Guard added: a test asserting the section is omitted rather than left empty.
+
+**Also fixed alongside**: `PVLine` had no depth field, so
+`serialize_top_lines` reported each line's `depth` as `pv.moves.size()` — the
+move count. `PVLine` now carries the iterative-deepening depth it came from,
+verified to track the requested depth independently of line length.
+
+**Lesson**: the original entry proposed fixing PV extraction, which was not
+broken. The symptom (an unreplayable move) was two steps removed from the cause
+(a stale reference), and the intermediate step (side attribution) turned a
+correct move into a plausible-looking wrong one. Reading `serialize_top_lines`
+was what settled it: the serializer's assumptions document the intended contract.
+
+---
+
+**Original (incorrect) diagnosis, for the record:**
 - **Observed**: `get_comparison_report` on the starting position with the
   student move `g1f3` returns a top line whose moves cannot all be replayed:
   `['b8c6', 'b1c3', 'g8f6', 'e2e3', 'e7e6', 'f1d3', 'c6b4', 'e8g8', 'b4d3',
@@ -485,6 +552,28 @@ surfaced one clear regression (BUG-016) and two issues worth tracking.*
 - **Proposed engine fix**: validate each PV move against the running position
   while extracting the PV and stop at the first illegal move, so the engine
   emits a short valid line instead of a long corrupt one.
-- **Status**: OPEN (engine side). Mitigated client-side; low urgency because
-  truncation makes it harmless to coaching, but the engine should not emit
-  illegal continuations.
+- **Status**: superseded — see the corrected analysis above. PV extraction was
+  never at fault; the "likely cause" (transposition-table splicing) was a guess
+  and it was wrong.
+
+### BUG-021: `eval_drop_cp` reports mate scores as centipawns (OPEN, low priority)
+- **Observed**: a move that allows mate yields `eval_drop_cp` of ~100046, since
+  `eval_drop_cp = best_eval - (-mate_score)` and the mate score is ~99999.
+- **Impact**: cosmetic for now. The classification (`blunder`) is correct, our
+  own severity bands treat it as the largest drop, and the coach is forbidden
+  from mentioning centipawn numbers, so no student sees it. It would matter if
+  anything ever averaged or plotted eval drops.
+- **Not fixed**: changing the representation would alter classification inputs;
+  it needs a deliberate decision on how to express mate distance separately.
+
+### BUG-022: `critical_moment` cannot see catastrophic alternatives (OPEN, by design?)
+- **Observed**: in a position where the student's move loses to mate but the
+  engine's top three moves are all roughly equal (evals 47 / 26 / -29),
+  `critical_moment` is false, because it measures only the spread between the
+  best and third-best line.
+- **Assessment**: arguably correct — the flag asks "does it matter which good
+  move I find here?", and the answer is no. But the name suggests something
+  broader, and the metric cannot distinguish "many moves are fine" from "many
+  moves are fine and one is fatal".
+- **Not fixed**: this is a definition question, not a defect. Left for a
+  deliberate decision rather than changed unilaterally.

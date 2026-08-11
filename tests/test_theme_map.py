@@ -93,17 +93,16 @@ def test_preferred_features_is_additive_not_restrictive() -> None:
     assert [e.id for e in result] == ["a", "b"]  # unchanged from unbiased order
 
 
-def test_fact_features_outrank_the_theme_bias() -> None:
-    # Regression for a measured collision between the two soft biases. The
-    # engine's PV theme "piece development" maps to the broad `phase:opening`
-    # feature, so the theme bias handed +1 to every abstract opening entry.
-    # When the fact bias was folded into the same bonus it cancelled out, and
-    # the id tie-break picked the abstraction: in real positions with a live
-    # threat, "center control" beat "answer the threat first", and only 10 of 30
-    # selected entries could be instantiated with a verified board fact.
-    abstract = _entry("a", frozenset({"phase:opening"}))
-    instantiable = _entry("b", frozenset({"exposed_king"}))
-    resource = _resource(abstract, instantiable)
+def test_theme_bias_outranks_the_fact_bias() -> None:
+    # Measured regression from the coach report card. With the fact bias ranked
+    # ABOVE the theme bias, "rooks on open files" guidance was selected on eight
+    # turns and on six of them the move being taught was a KING move — because
+    # `open_file` carries a composable fact and so outranked the entry that
+    # actually matched the move. Guidance about the wrong piece is worse than
+    # guidance that is abstract, so matching the move comes first.
+    on_theme = _entry("a", frozenset({"phase:opening"}))
+    has_fact = _entry("b", frozenset({"exposed_king"}))
+    resource = _resource(on_theme, has_fact)
     position_features = frozenset({"phase:opening", "exposed_king"})
 
     result = select(
@@ -115,6 +114,28 @@ def test_fact_features_outrank_the_theme_bias() -> None:
             max_entries=2,
             # What theme_features("piece development") actually returns.
             preferred_features=frozenset({"phase:opening"}),
+            fact_features=frozenset({"exposed_king"}),
+        ),
+    )
+    assert [e.id for e in result] == ["a", "b"]
+
+
+def test_fact_features_break_ties_the_theme_bias_leaves() -> None:
+    # Where the theme bias does not separate two equally relevant entries, prefer
+    # the one we can instantiate with a verified board fact over the abstraction.
+    # Without this, only 10 of 30 selected entries could carry a fact at all.
+    abstract = _entry("a", frozenset({"phase:opening"}))
+    instantiable = _entry("b", frozenset({"exposed_king"}))
+    resource = _resource(abstract, instantiable)
+
+    result = select(
+        resource,
+        SelectionInput(
+            features=frozenset({"phase:opening", "exposed_king"}),
+            eco=None,
+            level="intermediate",
+            max_entries=2,
+            preferred_features=frozenset(),  # theme unmapped, so no bias either way
             fact_features=frozenset({"exposed_king"}),
         ),
     )

@@ -304,3 +304,32 @@ def test_property_checker_is_deterministic(text: str) -> None:
     assert check_coaching_fidelity(text, _report(), ITALIAN_MENU) == check_coaching_fidelity(
         text, _report(), ITALIAN_MENU
     )
+
+
+def test_opponent_attribution_spans_the_whole_sentence() -> None:
+    # Regression from the report card: the attribution cue was only looked for in
+    # the 45 characters before the move, so this correct coaching was flagged as
+    # naming an illegal move — "opponent" sits about 53 characters before "exd4",
+    # and exd4 really is a legal Black capture in this position.
+    import chess
+
+    from chess_coach.verify import _SAN_RE, _attributed_to_opponent
+
+    fen = "r1b1k1r1/pppp1p1p/8/4p1P1/1b1B4/1P2P3/P1P1B1nP/RN1K3R w q - 0 16"
+    board = chess.Board(fen)
+    text = "After your move Bc4, your opponent immediately captures your bishop on d4 with exd4, winning a piece."
+    hit = next(m for m in _SAN_RE.finditer(text) if m.group(1) == "exd4")
+    assert _attributed_to_opponent(text, hit.start(), board)
+
+
+def test_attribution_does_not_leak_across_sentences() -> None:
+    # The other side of the same change: a cue in a PREVIOUS sentence must not
+    # excuse a move recommended in this one, or the check stops catching anything.
+    import chess
+
+    from chess_coach.verify import _SAN_RE, _attributed_to_opponent
+
+    board = chess.Board("r1b1k1r1/pppp1p1p/8/4p1P1/1b1B4/1P2P3/P1P1B1nP/RN1K3R w q - 0 16")
+    text = "Your opponent has ideas on the queenside. You should play exd4 yourself."
+    hit = next(m for m in _SAN_RE.finditer(text) if m.group(1) == "exd4")
+    assert not _attributed_to_opponent(text, hit.start(), board)

@@ -1289,3 +1289,65 @@ moves against the real position, so they can say the coach was wrong), direct
 reading of the output, and the frontier review's prose critique — which is the real
 check on teaching quality precisely because keyword matching against LLM prose
 cannot be.
+
+### Coach report card v21 — after the engine fix (2026-08-11)
+
+First run against the fixed engine (BUG-019). The coach now receives real engine
+lines on every turn: **19 of 44 prompts had an empty "Top Engine Lines" section,
+now 0; rendered lines went 25 -> 131.** Judge score 4.5/10 (noise, per the
+measurement philosophy). **Fidelity did not improve**: 5 real violations in both
+v20 and v21 (each run also had one phantom `illegal_move`, both since fixed in the
+checker). Composition shifted — one fewer `off_menu`, one new `piece_type`, where
+the coach invented a capture of its own knight on c3. Five times the grounded
+content bought no measured accuracy. Whether it helps teaching is not answerable
+from one run.
+
+**Read the review's #1 finding with care.** It leads with "catastrophic
+square-naming failure (66% re-use, 0% novel)" and makes it the headline
+recommendation — but that is our own `unsourced_square_rate` of 0%, which is the
+architecture *working*: we compose facts, the coach voices them. The stats block
+labelled the number without saying which direction was good, so the reviewer
+inferred a defect. The labelling is fixed. The reasoning built on it should not be
+adopted: "let the model name squares it was not given" is the opposite of every
+lever that has worked.
+
+The *salvageable* part of that finding is real, though: it cites plies 26, 38, 44,
+56 and 58 where the position has concrete nameable threats and the coach talks in
+generalities. That is not a model failure, it is **missing composition** — we
+supply move-level facts and almost no position-level ones. Which points at the
+same place Change A does.
+
+**Action items, in the order I would take them:**
+
+1. **Verify the four fidelity errors the reviewer found by reading that our
+   checker missed.** It cites ply 12 ("you captured the opponent's knight on e3"
+   — `dxe3` takes a pawn), ply 18 ("the opponent threatened f4" — invented), ply
+   32 (a "fork opportunity" unconnected to what `exd4` does), ply 68 ("you
+   captured the undefended rook on f4" — the student played `Kxf4`). If ply 12 is
+   right, our `piece_type` check has a hole, since that is exactly what it exists
+   to catch. Some may be reviewer error — verify each against the board before
+   changing anything.
+2. **Measure repetition.** The reviewer flagged it twice and independently
+   counted it: the closing question is one of three templates, and "can I attack
+   an undefended piece?" appears at plies 8, 20, 22, 24, 30, 36, 38, 44, 46, 48,
+   50, 68 — roughly half the game. Ten "good move" responses are functionally
+   identical. We have no metric for this at all, and unlike the prose metrics it
+   is genuinely deterministic and hard to game: n-gram overlap between a turn's
+   feedback and the previous turns'. Cheap, and it can fail.
+3. **Compose position-level facts, not just move-level ones** (this is Change A
+   generalised). Change A extended the *best move* description from 70% to 89%
+   coverage. The gap the reviewer points at is different: what is true about the
+   POSITION that the student should notice — a hanging piece, a passed pawn, a
+   weak square — independent of any move. `feature_facts` already does a little
+   of this for the guidance block; it should feed the move-feedback path too.
+4. **Phase-specific content.** Raised in every review so far, and now with
+   concrete asks: name the opening from ECO ("this is the Italian Game — you are
+   targeting f7"), name endgame technique (rook behind the passed pawn, cutting
+   off the king, back-rank mate at ply 1003 where the coach said "open file").
+   All composable from the board plus data we already ship.
+5. **Vary the closing hook by mistake type** — a direct consequence of item 2. Do
+   it after 2, so there is a number that can show whether it worked.
+
+Deliberately NOT doing: adding more pedagogy YAML (the previous review's advice,
+and the entries already fire on nearly every turn), or asking the model to name
+squares it was not given.

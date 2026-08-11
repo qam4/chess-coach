@@ -42,10 +42,11 @@ from chess_coach.eval.game_coaching import TurnRecord, play_game, student_moves 
 from chess_coach.llm import create_provider  # noqa: E402
 from chess_coach.llm.ollama import OllamaProvider  # noqa: E402
 from chess_coach.pedagogy.features import phase_of_board  # noqa: E402
-from chess_coach.pedagogy.instantiate import feature_facts  # noqa: E402
 from chess_coach.pedagogy.guard import guard_entries  # noqa: E402
+from chess_coach.pedagogy.instantiate import feature_facts  # noqa: E402
 from chess_coach.pedagogy.resource import KnowledgeResource, default_resource_path, load_resource  # noqa: E402
 from chess_coach.pedagogy.selector import guidance_for_position  # noqa: E402
+from chess_coach.pedagogy.theme_map import theme_features  # noqa: E402
 from chess_coach.prompts import build_rich_move_evaluation_prompt, move_feedback_max_tokens  # noqa: E402
 from chess_coach.verify import check_coaching_fidelity  # noqa: E402
 
@@ -74,10 +75,23 @@ def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multip
     """Coach one student move with the shipping config; return a ReviewTurn."""
     comparison = oracle.get_comparison_report(fen, move, depth=depth)
     pos_report = oracle.get_position_report(fen, multipv=multipv, depth=depth)
-    guidance = guidance_for_position(resource, pos_report, level, guidance_max)
-    prompt = build_rich_move_evaluation_prompt(
-        comparison, level=level, guidance=guidance, guidance_facts=feature_facts(pos_report)
+    # Mirror Coach._select_guidance exactly, or the report card grades a
+    # configuration that does not ship. Both biases matter: the recommended
+    # move's theme, and preferring entries we can instantiate with a board fact
+    # (without the latter, only a third of selected entries carried a fact).
+    facts = feature_facts(pos_report)
+    preferred: frozenset[str] = frozenset()
+    if pos_report.top_lines and pos_report.top_lines[0].theme:
+        preferred = theme_features(pos_report.top_lines[0].theme)
+    guidance = guidance_for_position(
+        resource,
+        pos_report,
+        level,
+        guidance_max,
+        preferred_features=preferred,
+        fact_features=frozenset(facts),
     )
+    prompt = build_rich_move_evaluation_prompt(comparison, level=level, guidance=guidance, guidance_facts=facts)
     t0 = time.monotonic()
     text = model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0)
     latency = time.monotonic() - t0
@@ -192,11 +206,20 @@ def main() -> None:
             try:
                 turns.append(
                     _coach_turn(
-                        oracle, model, resource, ply, fen, move,
-                        level=args.level, depth=depth, multipv=args.multipv, guidance_max=args.guidance_max,
+                        oracle,
+                        model,
+                        resource,
+                        ply,
+                        fen,
+                        move,
+                        level=args.level,
+                        depth=depth,
+                        multipv=args.multipv,
+                        guidance_max=args.guidance_max,
                     )
                 )
-                print(f"  ply {ply}: {turns[-1].student_move_san} ({turns[-1].classification}, {turns[-1].latency_s:.1f}s)")
+                last = turns[-1]
+                print(f"  ply {ply}: {last.student_move_san} ({last.classification}, {last.latency_s:.1f}s)")
             except Exception as e:  # noqa: BLE001
                 print(f"  ply {ply}: SKIP ({e})")
 
@@ -206,11 +229,21 @@ def main() -> None:
                 try:
                     turns.append(
                         _coach_turn(
-                            oracle, model, resource, 1000 + i, fen, move,
-                            level=args.level, depth=depth, multipv=args.multipv, guidance_max=args.guidance_max,
+                            oracle,
+                            model,
+                            resource,
+                            1000 + i,
+                            fen,
+                            move,
+                            level=args.level,
+                            depth=depth,
+                            multipv=args.multipv,
+                            guidance_max=args.guidance_max,
                         )
                     )
-                    print(f"  curated {i}: {turns[-1].student_move_san} ({turns[-1].phase}, {turns[-1].latency_s:.1f}s)")
+                    print(
+                        f"  curated {i}: {turns[-1].student_move_san} ({turns[-1].phase}, {turns[-1].latency_s:.1f}s)"
+                    )
                 except Exception as e:  # noqa: BLE001
                     print(f"  curated {i}: SKIP ({e})")
     finally:
