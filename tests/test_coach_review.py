@@ -56,38 +56,44 @@ def test_aggregate_counts_and_latency() -> None:
     assert stats.latency_mean_s <= stats.latency_p90_s <= stats.latency_max_s
 
 
-def test_specificity_discounts_the_move_squares() -> None:
-    from chess_coach.eval.coach_review import is_specific
-
-    # Only names squares already in the move names -> not specific.
-    echo = _turn(0, PHASE_OPENING, played="Bc4", best="Nc3", feedback="Bc4 is fine; Nc3 was better.")
-    assert is_specific(echo) is False
-    # Names another square -> specific.
-    concrete = _turn(0, PHASE_OPENING, played="Bc4", best="Nc3", feedback="Bc4 eyes the f7 pawn.")
-    assert is_specific(concrete) is True
-    assert is_specific(_turn(0, PHASE_OPENING, feedback="   ")) is False
-
-
-def test_principle_connection_requires_principle_near_a_square() -> None:
-    from chess_coach.eval.coach_review import connects_principle
-
-    # Abstract principle, no square -> not connected (the recycled-template case).
-    assert connects_principle(_turn(0, PHASE_OPENING, feedback="Focus on development.")) is False
-    # Principle named alongside a concrete square -> connected.
-    assert connects_principle(_turn(0, PHASE_OPENING, feedback="Development: your knight on b1 is home.")) is True
-    # A square with no principle keyword -> not connected.
-    assert connects_principle(_turn(0, PHASE_OPENING, feedback="The pawn sits on e4.")) is False
-
-
 def test_aggregate_reports_rates_and_phase_breakdown() -> None:
+    from dataclasses import replace
+
     turns = [
-        _turn(0, PHASE_OPENING, played="Bc4", best="Bc4", feedback="Development: your knight on b1 is still home."),
-        _turn(2, PHASE_ENDGAME, played="Kg3", best="Kg3", feedback="Focus on king safety.", fidelity={"off_menu": 1}),
+        replace(
+            _turn(0, PHASE_OPENING, played="Bc4", best="Bc4", feedback="Bc4 eyes the f7 pawn."),
+            prompt="Best move: Bc4, which pressures f7.",
+        ),
+        replace(
+            _turn(
+                2, PHASE_ENDGAME, played="Kg3", best="Kg3", feedback="Focus on king safety.", fidelity={"off_menu": 1}
+            ),
+            prompt="Best move: Kg3.",
+        ),
     ]
     stats = aggregate_review(turns)
-    assert stats.specificity_rate == 0.5  # only the first names another square
-    assert stats.principle_connection_rate == 0.5
+    assert stats.composed_fact_rate == 0.5  # only the first names a square we supplied
+    assert stats.unsourced_square_rate == 0.0
     assert stats.fidelity_by_phase == {PHASE_ENDGAME: {"off_menu": 1}}
+
+
+def test_stats_round_trip_keeps_every_metric() -> None:
+    # Regression: rebuilding ReviewStats field-by-field at a call site dropped
+    # the newer metrics, so a frontier reviewer was told specificity was 0% and
+    # made "diagnose the rollback" its top recommendation — chasing a phantom.
+    from chess_coach.eval.coach_review import ReviewStats
+
+    turns = [
+        _turn(0, PHASE_OPENING, played="Bc4", best="Bc4", feedback="Development: your knight on b1 is home."),
+        _turn(2, PHASE_ENDGAME, feedback="Focus on king safety.", fidelity={"off_menu": 1}),
+    ]
+    original = aggregate_review(turns)
+    restored = ReviewStats.from_dict(original.to_dict())
+    assert restored.composed_fact_rate == original.composed_fact_rate
+    assert restored.unsourced_square_rate == original.unsourced_square_rate
+    assert restored.fidelity_by_phase == original.fidelity_by_phase
+    assert restored.prompt_uci_leaks == original.prompt_uci_leaks
+    assert restored.to_dict() == original.to_dict()
 
 
 def test_prompt_uci_leak_is_counted() -> None:
@@ -151,3 +157,88 @@ def test_review_prompt_contains_standard_stats_and_transcript() -> None:
     assert "engine best: Nc3" in prompt
     assert "Great central move." in prompt
     assert "Too early." in prompt
+
+
+def test_square_detection_sees_squares_inside_san_tokens() -> None:
+    # Regression: `\b[a-h][1-8]\b` found NO square in "Ra8#", "Rxc8#", "Nf3" or
+    # "cxd5" — the leading piece/file letter kills the word boundary. That broke
+    # both metrics silently: coaching that named a square only in SAN was scored
+    # as naming none, and `is_specific`'s discount set (built from the move SANs)
+    # was empty for every piece move, so it discounted nothing and over-credited.
+    from chess_coach.eval.coach_review import _SQUARE_RE
+
+    assert _SQUARE_RE.findall("The best move is Ra8#, delivering mate") == ["a8"]
+    assert _SQUARE_RE.findall("Rxc8# exploits the back rank") == ["c8"]
+    assert _SQUARE_RE.findall("Nf3 develops toward the center") == ["f3"]
+    assert _SQUARE_RE.findall("cxd5 wins a pawn") == ["d5"]
+    assert _SQUARE_RE.findall("your rook on a1 can move to a8") == ["a1", "a8"]
+    assert _SQUARE_RE.findall("e8=Q promotes") == ["e8"]
+    # Disambiguated SAN, where a file or rank precedes the destination square.
+    # A tighter lookbehind attempt rejected these, which cost 1.1% of all legal
+    # moves — and these forms really do occur in the coach's output ("Nfg4",
+    # "Rae1+", "Rgg1").
+    assert _SQUARE_RE.findall("the opponent plays Nfg4") == ["g4"]
+    assert _SQUARE_RE.findall("Rae1+ is a strong choice") == ["e1"]
+    assert _SQUARE_RE.findall("R1e2 holds the rank") == ["e2"]
+    # Not a square reference: a file name, and the second half of a coordinate
+    # pair (so a UCI token still reads as one square, not two).
+    assert _SQUARE_RE.findall("the a-file is open") == []
+    assert _SQUARE_RE.findall("f6g4") == ["f6"]
+
+
+def test_square_detection_covers_every_legal_san() -> None:
+    # The property the regex has to hold, checked against the move generator
+    # rather than against hand-picked strings. Two earlier versions passed
+    # eyeball tests and still missed 76.1% and 1.1% of legal moves respectively.
+    import chess
+
+    from chess_coach.eval.coach_review import _SQUARE_RE
+
+    board = chess.Board()
+    for uci in ("e4", "e5", "Nf3", "Nc6", "Bb5", "Nf6", "d4", "exd4", "e5", "Nd5"):
+        board.push_san(uci)
+    for move in board.legal_moves:
+        san = board.san(move)
+        if san.startswith("O-O"):  # castling names no square, by design
+            continue
+        assert chess.square_name(move.to_square) in _SQUARE_RE.findall(san), san
+
+
+def test_squares_named_only_by_the_moves_are_discounted() -> None:
+    # The point of the discount: repeating the move you were handed says nothing
+    # about the position. This could not have passed before the regex fix, because
+    # "Ra8#" contributed nothing to either side of the comparison.
+    from chess_coach.eval.coach_review import _extra_squares
+
+    echo = _turn(0, PHASE_ENDGAME, played="Rb8", best="Ra8", feedback="Ra8 is better than Rb8.")
+    assert _extra_squares(echo) == set()
+    beyond = _turn(0, PHASE_ENDGAME, played="Rb8", best="Ra8", feedback="Ra8 mates; your king on g1 is safe.")
+    assert _extra_squares(beyond) == {"g1"}
+
+
+def test_composed_fact_and_unsourced_square_split_specificity() -> None:
+    from dataclasses import replace
+
+    from chess_coach.eval.coach_review import names_unsourced_square, voices_composed_fact
+
+    prompt = "Best move: Be2. What the best move achieves: defending your knight on d4."
+    # Voicing a square we supplied: the architecture working as intended.
+    voiced = _turn(0, PHASE_OPENING, played="Bc4", best="Be2", feedback="Be2 defends your knight on d4.")
+    voiced = replace(voiced, prompt=prompt)
+    assert voices_composed_fact(voiced)
+    assert not names_unsourced_square(voiced)
+
+    # A square we never mentioned: where fabrication would show up.
+    invented = _turn(0, PHASE_OPENING, played="Bc4", best="Be2", feedback="Be2 covers the h7 square.")
+    invented = replace(invented, prompt=prompt)
+    assert names_unsourced_square(invented)
+    assert not voices_composed_fact(invented)
+
+    # Echoing only the moves counts as neither.
+    echo = _turn(0, PHASE_OPENING, played="Bc4", best="Be2", feedback="Be2 is better than Bc4.")
+    echo = replace(echo, prompt=prompt)
+    assert not voices_composed_fact(echo)
+    assert not names_unsourced_square(echo)
+
+    # No captured prompt means the question cannot be answered, so neither fires.
+    assert not voices_composed_fact(_turn(0, PHASE_OPENING, feedback="Be2 defends the knight on d4."))

@@ -13,21 +13,52 @@ critique and phase-fit. It answers "is the coach the teacher we envisioned?".
 
 ## Measurement philosophy (what to trust)
 
-The 0–10 score is **noise-dominated at n=1** and must NOT be the optimization
-target. Proof: five runs of the *identical* game (seed 7) with monotonically
-refining prompts scored **3.5 → 4.2 → 4.5 → 4.5 → 3.5** — a ~1-point band, and
-the last run (lever 4) scored *below baseline* despite outputs that are
-demonstrably better differentiated. So we judge a lever by, in order of trust:
+**You cannot check LLM prose by matching words against it.** That is the whole
+reason the end-to-end frontier review exists: its written critique is the real
+check on whether the coaching teaches anything. The numbers are here to anchor
+that review in facts and to catch regressions.
 
-1. **Deterministic fidelity counts** (off_menu / unsound_move / placement /
-   piece_type) — objective, no noise.
-2. **Direct inspection of the outputs** — did the change do what it was designed
-   to do (e.g. did best-move replies actually shorten)?
-3. **The judge's qualitative shortcomings** — the *prose* critique is stable and
-   informative across runs; that is the report card's real value.
+Every number we keep answers a question that can be checked, and they come in two
+kinds.
 
-The 0–10 score is kept only as a rough directional band, never as the thing we
-tune against.
+**Checked against the position.** The fidelity counts (`off_menu`,
+`unsound_move`, `illegal_move`, `placement`, `piece_type`) come from `verify.py`,
+which pulls move tokens out of the text and parses them against the real board.
+Those can tell us the coach was *wrong*. `prompt_uci_leaks` checks our own
+rendered prompt. Latency, `empty_feedback` and the phase / move-quality mixes are
+plain counts.
+
+**Checked against our own prompt.** `composed_fact_rate` (the coach named a square
+we gave it) and `unsourced_square_rate` (it named one we did not). Both are facts
+about our own data rather than guesses about meaning. Neither says whether the
+sentence around the square is true or worth reading.
+
+**One metric was deleted rather than kept with a caveat.**
+`principle_connection_rate` looked for a word from a hardcoded list within 120
+characters of a square, meaning to catch a principle stated abstractly instead of
+applied to the position. It could not: words like "material", "capture",
+"exchange" and "center" appear in essentially any chess sentence, so **all 44
+responses** in the v19 transcript contained one, 95% contained a square, and it
+reported 91% against that 95% ceiling. It also passed on prose written
+specifically to fail it — *"Nf3 is a good move. In general, development matters a
+lot in the opening."* Nothing was wrong with the code; the idea was wrong, and a
+number that always says yes is worse than no number, because someone will cite it.
+Whether the coaching bridges a principle to a position is the frontier review's
+question.
+
+**Do not maximize any of the rest either.** Every one can be improved by padding
+the output with square names, which would make the coaching worse while the
+numbers looked better.
+
+**The 0–10 score is noise-dominated at n=1** and must NOT be the optimization
+target either. Proof: five runs of the *identical* game (seed 7) with
+monotonically refining prompts scored **3.5 → 4.2 → 4.5 → 4.5 → 3.5** — a ~1-point
+band, and the last run (lever 4) scored *below baseline* despite outputs that are
+demonstrably better differentiated.
+
+So a lever is accepted or rejected on: the board-validated counts, direct reading
+of the outputs, and the review's prose critique. Never on a rate alone. A rate
+that moves is a hint to go and read something.
 
 All runs below: qwen3:14b coach, sonnet judge, seed 7, 44 coached turns
 (10 opening / 16 middlegame / 18 endgame; 23 good / 9 inaccuracy / 8 mistake /
@@ -406,3 +437,236 @@ before-numbers for items 2-4.
 - **Stop iterating on prompt ordering** — lever 7 showed available facts outweigh
   what the model is told to lead with. Revisit ordering only after grounding
   improves.
+
+## Second architecture review (v3, after items 2b/2c/3/4)
+
+The review script was re-run with the `ARCHITECTURE` summary updated to describe
+items 2b/2c/3/4, so the frontier reviewer critiqued the *current* design rather
+than the one it had already commented on. Full text: `output/architecture_review_v3/review.md`
+(gitignored). Two process notes worth keeping:
+
+- The rendered prompt plus architecture summary blew past Windows' ~32k command
+  line limit. No new plumbing was needed: `CliProvider` already pipes the prompt
+  on **stdin** when `{prompt}` is omitted from `--judge-command`. The usage
+  docstring now says so.
+- The first re-run reported "specificity 0% — alarming", which was **a bug in the
+  script, not a regression**: it rebuilt `ReviewStats` field by field from the
+  saved JSON and silently dropped every metric added after it was written. Fixed
+  with `ReviewStats.from_dict` plus a regression test that fails if a field is
+  dropped. A measurement harness that silently zeroes a metric is worse than no
+  metric, because it invites a "fix" for a problem that does not exist.
+
+**What the review confirmed.** Compose-facts-and-let-the-model-voice-them is the
+right architecture; every kept lever obeys it and every reverted lever broke it.
+It independently reached the same conclusion as our own item-4 inspection: the
+guidance block is now "a third competing fact stream" that loses to the
+move-effect clause, at roughly "three-to-one abstract:concrete tokens". It named
+**coverage** — the 30% of best moves that still fall back to a bare category
+label — as the fundamental remaining limit, not anything architectural.
+
+**Recommended changes, in its priority order:**
+
+- **A — compose the missing 30%.** Extend `_move_effect_clause` with branches for
+  quiet improving moves: landing on an open file, centralizing, activating a
+  previously blocked piece (legal-move count before vs after). Additive, no LLM
+  involvement, and coverage is measurable before spending a run.
+- **B — merge guidance INTO the move-effect clause instead of alongside it.**
+  Pick the guidance entry whose feature matches the move-effect category and emit
+  one teaching point; drop the block when nothing matches. Removes the
+  abstract:concrete imbalance without removing the pedagogy layer.
+- **C — mark the fallback honestly.** Tag the label-only case
+  `[category only — no specific fact]` and instruct the coach to hedge. Today the
+  prompt demands specificity while handing over an abstraction, and the model
+  resolves that conflict by fabricating.
+- **D — compose the takeaway hook** from (move-effect category x guidance theme)
+  templates. Deferred by the review itself until A and B are measured; it is
+  authoring work, ~20-30 templates.
+
+**Measurement gaps it flagged:**
+
+- `specificity_rate` cannot tell "specific because composed" from "specific
+  because the model guessed right". A `composed_specificity_rate` counting only
+  squares that appear in a composed prompt field would make the delta between
+  the two an explicit hallucination buffer.
+- The seed-7 game is too uniform for rare paths (3 of 44 turns carry a
+  refutation). Curation should be systematic: one position per
+  (move-quality x phase) cell plus a fixture per composer branch. Most of that
+  can run as a prompt-rendering regression suite with **no LLM at all**.
+
+**And one item it promoted that we had parked:** the opening is the *worst* phase
+(3 fidelity violations vs middlegame's 1) and named openings are composable from
+ECO data — a Layer 1 fact, not a prompt directive. That reframes "opening
+content" from polish to the highest-violation target.
+
+## Item 4 on the position-coaching path — and the attachment bug it exposed
+
+Item 4's hypothesis was that instantiating guidance with a board fact should pay
+off more on the **position-coaching** path than on move feedback, because there
+is no move to anchor to. Wiring it there took one line
+(`build_rich_coaching_prompt` already holds the `PositionReport`). Measuring it
+took three attempts, and the second failure was the actual finding.
+
+**Dead end 1 — a saturated metric.** Scoring the position path with
+`is_specific` / `connects_principle` gave **6/6 facts-off vs 5/6 facts-on**. Both
+metrics were built for move feedback, where the student's and engine's move
+squares are *discounted*; the position path has no such move, so any square
+mention passes, and a position explanation always puts a theme word near a
+square. The run was discarded rather than reported — a saturated metric cannot
+answer the question, and "5/6 vs 6/6" would have read as a regression.
+
+**Dead end 2 — the metric could not find the facts.** Rescoring on "does the
+composed fact reach the output" (the review's Gap-1 `composed_specificity_rate`)
+**skipped 4 of 5 positions**, because no *selected* entry carried a fact at all.
+
+**The coverage measurement.** Offline, engine only, no LLM — the same discipline
+that saved a run on item 3. Over 10 positions: **10 of 30 selected entries (33%)
+could be instantiated**, 6 of 10 positions carried a single fact, and every
+opening position carried none. So item 4's small gain on move feedback was never
+really about the model's preferences; two thirds of the mechanism was not
+reaching the prompt.
+
+**Cause, verified rather than guessed.** Entries tie on relevance (each matches
+exactly one present feature) and the tie-break — type, then `id` — is blind to
+whether a fact exists. In a position with a live threat, the abstract
+`center control` beat `answer the threat first`, which would have rendered
+"HERE: there is a live threat against f7".
+
+The first fix folded the fact bias into the existing `preferred_features` hook
+and reached only 18/30. Instrumenting the misses showed **two soft biases
+colliding**: the engine's PV theme `"piece development"` maps to the broad
+`phase:opening` feature, so the move-theme bias handed the same +1 to all three
+abstract opening entries and cancelled the fact bias out; the `id` tie-break then
+picked the abstraction. Fixed by giving instantiability its own `_sort_key` term,
+above the theme bonus and below relevance.
+
+| | attachment (selected entries) | positions with >=1 fact |
+|---|---|---|
+| before | 10/30 (33%) | 6/10 |
+| fact bias inside `preferred_features` | 18/30 (60%) | 8/10 |
+| fact bias as its own rank term | **23/30 (77%)** | **10/10** |
+
+Still a tie-break: it never admits or drops an entry, and a genuinely more
+relevant entry still wins — both have regression tests. The remaining 7 of 30
+are positions with fewer than three eligible fact-bearing entries, which is a
+content-coverage limit, not a ranking one.
+
+**The transferable lesson** is about the harness, not the coach: two of the three
+attempts failed because a metric borrowed from another path could not
+discriminate on this one, and a third of the pipeline was silently inert. Before
+spending LLM runs, check that the mechanism under test actually fires — the same
+mistake as the `ReviewStats` bug that told a reviewer specificity was 0%.
+
+## Correction: the square regex was blind to SAN, so the headline metrics were wrong
+
+Reading the position-path responses turned up a measurement bug, not a coaching
+one. `_SQUARE_RE` was `\b[a-h][1-8]\b`, which finds **no square at all** in
+`Ra8#`, `Rxc8#`, `Nf3` or `cxd5` — the leading piece or file letter kills the
+word boundary. Measured against the move generator, it missed the destination
+square of **76.1% of all legal moves**. Two consequences, in opposite directions:
+
+- `connects_principle` missed every case where the coach named a square in SAN,
+  so principle-connection was **under**-reported.
+- `is_specific` builds its discount set from the move SANs, so that set was
+  **empty for every piece move** and nothing was discounted. Coaching that only
+  echoed the played/best move's own square was credited as specific, so
+  specificity was **over**-reported.
+
+The transcripts are saved, so the corrected numbers cost nothing to recompute
+(no LLM, no engine):
+
+| run | specificity (was -> is) | principle-connection (was -> is) |
+|---|---|---|
+| v17 (before item 3) | 27% -> **34%** | 34% -> **82%** |
+| v18 (item 3) | 66% -> **52%** | 64% -> **84%** |
+| v19 (item 4) | 66% -> **52%** | 66% -> **91%** |
+
+**Two earlier conclusions have to change.**
+
+1. **Item 3's specificity win was overstated.** The real move is 34% -> 52%, not
+   27% -> 66%. Still the largest specificity gain in the series, and the prose
+   evidence for the mechanism stands — but a good part of the old jump was the
+   coach being credited for repeating the move it was handed.
+2. **Item 4 did help the move-feedback path after all.** Principle-connection
+   went 84% -> 91%, not the 64% -> 66% we called "within noise" and only kept on
+   mechanism grounds. Instantiating the guidance theme with a board fact was
+   working; the metric could not see it.
+
+**Then a second audit undercut conclusion 2, and it is the more important
+result.** The principle-connection metric turned out to say yes to everything, and
+has since been deleted — see the measurement philosophy section. So the 84% -> 91%
+move is not evidence that item 4 helped; the question was never being measured.
+Item 4 is kept on its mechanism (it removes abstract-only guidance and cannot
+fabricate) and on fidelity, not on that number. What can be said is narrower and
+honest:
+
+- **Item 3 is a specificity lever and it worked.** On the split, honest metric,
+  the rate of turns voicing a fact we composed went **27% -> 52%** (v16 -> v19),
+  while the rate of turns naming a square we never supplied stayed at **2-5%** —
+  so the gain came from the coach voicing supplied facts, not from inventing.
+- **Item 4's effect on teaching quality is unmeasured.** Not disproven, unmeasured.
+  It is the frontier review's prose critique that would show it, if anything does.
+
+That also means the architecture review's premise cannot be repaired simply by
+substituting a corrected number. It reasoned from principle-connection at 64% and
+named YAML coverage as the fundamental limit; the truth is that the metric it
+reasoned from never measured anything. Its **Change A (compose the missing
+30% of best-move clauses)** survives on independent grounds, because
+composed-clause coverage is a deterministic count and specificity is genuinely at
+52%. The guidance-merge work (Change B) rested on the 64% figure, so it should be
+reconsidered from scratch rather than reprioritized.
+
+**The regex is now validated against the move generator, not by eyeball**, since
+that is exactly where the first two attempts went wrong. A test generates every
+legal move in a position and asserts the destination square is found; a wider
+throwaway sweep over 128,411 legal-move SANs from 60 random games measured the
+candidates:
+
+| pattern | legal SANs missed |
+|---|---|
+| `\b[a-h][1-8]\b` (original) | **76.1%** — every piece move |
+| `(?<![a-h])(?<![0-9])[a-h][1-8](?![0-9])` (first fix) | **1.1%** — disambiguated moves: `Nbd7`, `Rae1+`, `Rgg1`, `R1e2` |
+| `(?<![a-h][1-8])[a-h][1-8]` (shipped) | **0.0%** |
+
+The first fix looked right on hand-picked examples and was still wrong; the forms
+it dropped (`Nfg4`, `Rae1+`, `Rgg1`) occur in the coach's real output. The single
+rule "not the second half of a coordinate pair" is both simpler and complete, and
+adds no false positives over 41k characters of real coach responses. Castling
+contributes no square, deliberately and in both directions.
+
+A second test pins that echoing the move back does not count as specific — which
+could not have passed before, because `Ra8#` contributed nothing to either side
+of the comparison.
+
+## The honest metric split (2026-08-11)
+
+`specificity_rate` conflated two different things, so it could rise for a good
+reason or a bad one. It was replaced by the pair below, both computed against the
+prompt the coach actually received:
+
+| run | voiced a fact we composed | named a square we never supplied |
+|---|---|---|
+| v16 | 27% | 2% |
+| v17 | 30% | 5% |
+| v18 (item 3) | **52%** | 5% |
+| v19 (item 4) | **52%** | 2% |
+
+The first column is the architecture working as designed — compose the fact, let
+the model voice it — and it is the rate worth watching. The second is where
+fabrication would surface; at 2-5% it is low and flat, which is the reassuring
+part of the item-3 result: the specificity gain came from voicing supplied facts,
+not from the model getting inventive.
+
+Neither says anything about whether the sentence around the square is true (that
+is `verify.py`'s job) or worth reading (that is the frontier review's job). They
+are screens.
+
+**And the rule that comes out of this whole episode:** do not maximize any of
+these. Every one can be moved by padding the output with square names, which
+would make the coaching worse while every number improved. A rate that moves is a
+prompt to go and read the output, not a result.
+
+The other rule, from the deleted metric: if a measurement cannot fail, delete it.
+Keeping it with a warning attached does not work — the number still gets printed,
+still gets quoted in a review prompt, and still gets cited months later by someone
+who did not read the warning. That is exactly how the 64% figure ended up
+anchoring an architecture review.

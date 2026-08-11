@@ -28,6 +28,7 @@ from chess_coach.models import (
     PositionReport,
 )
 from chess_coach.pedagogy.inject import format_guidance_block
+from chess_coach.pedagogy.instantiate import feature_facts
 from chess_coach.pedagogy.resource import GuidanceEntry
 
 logger = logging.getLogger(__name__)
@@ -785,7 +786,11 @@ def build_rich_coaching_prompt(
     # level-filtered (Req 3.3). Inserted first so the coach leads with the
     # selected themes; the engine-grounding instructions below are untouched
     # (Req 3.4). An empty selection adds nothing (Req 3.6, 3.7).
-    guidance_block = format_guidance_block(guidance or [], level=level)
+    # Instantiate each theme with the board fact that fired it. This path has
+    # the PositionReport in hand, so it composes the facts itself. Hypothesis
+    # being tested: instantiation should matter MORE here than on the move-eval
+    # path, because position coaching has no specific move to anchor to.
+    guidance_block = format_guidance_block(guidance or [], level=level, facts=feature_facts(report))
     if guidance_block:
         sections.append(guidance_block)
 

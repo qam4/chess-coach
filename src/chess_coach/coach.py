@@ -170,6 +170,7 @@ class Coach:
         if not self.guidance or self._resource is None:
             return None
         try:
+            from chess_coach.pedagogy.instantiate import feature_facts
             from chess_coach.pedagogy.selector import guidance_for_position
             from chess_coach.pedagogy.theme_map import theme_features
 
@@ -180,8 +181,24 @@ class Coach:
             if pos_report.top_lines and pos_report.top_lines[0].theme:
                 preferred = theme_features(pos_report.top_lines[0].theme)
 
+            # Also prefer entries we can INSTANTIATE with a verified board fact.
+            # Measured: without this, only 10 of 30 selected entries could carry
+            # a "HERE: ..." fact — entries tied on relevance and the tie-break
+            # (type, then id) was blind to whether a fact existed, so "center
+            # control" beat "answer the threat first" in a position with a live
+            # threat. Passed as its own rank term, NOT folded into `preferred`:
+            # the PV theme "piece development" maps to the broad `phase:opening`
+            # feature, which handed the same bonus to every abstract opening
+            # entry and cancelled the fact bias out.
+            facts = frozenset(feature_facts(pos_report))
+
             return guidance_for_position(
-                self._resource, pos_report, level, self.guidance_max, preferred_features=preferred
+                self._resource,
+                pos_report,
+                level,
+                self.guidance_max,
+                preferred_features=preferred,
+                fact_features=facts,
             )
         except Exception as e:
             logger.warning("guidance selection failed: %s — proceeding without guidance", e)

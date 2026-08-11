@@ -63,6 +63,19 @@ class SelectionInput:
     theme). Additive only — never admits or drops an entry, just reorders
     ties (grounded-move-advice Req 4.2)."""
 
+    fact_features: frozenset[str] = frozenset()
+    """Features for which a verified board fact can be composed, so the entry
+    can be *instantiated* rather than stated abstractly.
+
+    Ranked ABOVE ``preferred_features`` deliberately. Measured cause: the PV
+    theme "piece development" maps to the broad ``phase:opening`` feature, so
+    the theme bias handed the same +1 to every abstract opening entry and
+    cancelled out a fact-bearing entry of equal relevance — the type/id
+    tie-break then picked the abstraction. Being instantiable is a stronger
+    teaching signal than matching the move's theme, so it gets its own key
+    instead of competing inside one bonus. Still a tie-break only: it never
+    admits or drops an entry, and a genuinely more relevant entry still wins."""
+
     def __post_init__(self) -> None:
         if self.max_entries < 1:
             raise ValueError(f"max_entries must be >= 1, got {self.max_entries}")
@@ -95,21 +108,24 @@ def _relevance(entry: GuidanceEntry, inp: SelectionInput) -> int:
     return score
 
 
-def _sort_key(entry: GuidanceEntry, inp: SelectionInput) -> tuple[int, int, int, str]:
+def _sort_key(entry: GuidanceEntry, inp: SelectionInput) -> tuple[int, int, int, int, str]:
     """Total, deterministic ordering key (Req 2.4, 2.6).
 
     Primary: relevance descending (more matched keys first) — negated so a
-    plain ascending sort puts the most relevant first. Secondary: a soft
-    bias toward the recommended move's theme (``preferred_features``),
-    negated so a preferred entry sorts earlier among equally-relevant ones
-    — additive, so it only breaks ties and never changes which entries are
-    eligible (grounded-move-advice Req 4.2). Tertiary: type order
-    plan > pattern > principle. Tie-break: ascending ``id`` for a stable,
-    total order.
+    plain ascending sort puts the most relevant first. Secondary: whether the
+    entry can be instantiated with a verified board fact
+    (``fact_features``) — a concrete entry beats an abstract one of equal
+    relevance. Tertiary: a soft bias toward the recommended move's theme
+    (``preferred_features``) — additive, so it only breaks ties and never
+    changes which entries are eligible (grounded-move-advice Req 4.2).
+    Then type order plan > pattern > principle. Final tie-break: ascending
+    ``id`` for a stable, total order.
     """
+    has_fact = 1 if entry.features & inp.fact_features else 0
     preferred_bonus = len(entry.features & inp.preferred_features)
     return (
         -_relevance(entry, inp),
+        -has_fact,
         -preferred_bonus,
         _TYPE_RANK.get(entry.type, _TYPE_RANK_FALLBACK),
         entry.id,
@@ -167,6 +183,7 @@ def select_for_position(
     level: str,
     max_entries: int,
     preferred_features: frozenset[str] = frozenset(),
+    fact_features: frozenset[str] = frozenset(),
 ) -> tuple[list[GuidanceEntry], str | None]:
     """Select guidance for an analyzed position, guarding malformed input.
 
@@ -198,6 +215,7 @@ def select_for_position(
         level=level,
         max_entries=max_entries,
         preferred_features=preferred_features,
+        fact_features=fact_features,
     )
     return select(resource, inp), None
 
@@ -208,6 +226,7 @@ def guidance_for_position(
     level: str,
     max_entries: int,
     preferred_features: frozenset[str] = frozenset(),
+    fact_features: frozenset[str] = frozenset(),
 ) -> list[GuidanceEntry]:
     """The single source of guidance for BOTH prompts (Req 4.1, 4.5).
 
@@ -227,5 +246,5 @@ def guidance_for_position(
     ``teaches_principle`` criterion (Req 3.6, 4.6). Callers needing the error
     indication should use :func:`select_for_position` directly.
     """
-    entries, _error = select_for_position(resource, report, level, max_entries, preferred_features)
+    entries, _error = select_for_position(resource, report, level, max_entries, preferred_features, fact_features)
     return entries

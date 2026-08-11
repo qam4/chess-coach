@@ -77,9 +77,19 @@ def feature_facts(report: PositionReport) -> dict[str, str]:
         hp = theirs[0]
         facts[HANGING_PIECE_OPPONENT] = f"their {hp.piece} on {hp.square} is undefended"
 
-    threats = [t for s in ("white", "black") for t in (report.threats.get(s) or [])]
-    if threats and threats[0].target_squares:
-        facts[THREAT_PRESENT] = f"there is a live threat against {threats[0].target_squares[0]}"
+    # WHOSE threat matters. The first version said "there is a live threat
+    # against c8" with no side, and the model read it as a danger TO the student
+    # every time — in a position where the student had mate in one it wrote
+    # "your king is vulnerable if you don't act". A side-ambiguous fact is not a
+    # fact; the report keys threats by the side making them, so name the side.
+    # The student's own threat is stated first: it is the actionable one.
+    for owner, phrasing in ((side, "you threaten {}"), (opponent, "the opponent threatens {}")):
+        for threat in report.threats.get(owner) or []:
+            if threat.target_squares:
+                facts[THREAT_PRESENT] = phrasing.format(threat.target_squares[0])
+                break
+        if THREAT_PRESENT in facts:
+            break
 
     pawns = report.pawn_structure.get(side)
     if pawns is not None:

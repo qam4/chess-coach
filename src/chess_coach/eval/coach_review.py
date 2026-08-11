@@ -65,11 +65,37 @@ class ReviewTurn:
 class ReviewStats:
     """Aggregate, objective facts about a coaching transcript.
 
-    Deterministic (no judge) so they anchor the frontier review in numbers:
-    phase coverage, move-quality mix, fidelity-violation totals, latency, and
-    the two *teaching* metrics below (specificity / principle-connection), which
-    measure how concrete correct coaching is — the fidelity counts only measure
-    what it gets wrong.
+    Every number here answers a question that can be checked. There used to be
+    one that did not — a ``principle_connection_rate`` that looked for a word
+    from a hardcoded list near a square, meaning to detect a principle stated
+    abstractly instead of applied to the position. It was deleted rather than
+    kept with a warning: all 44 responses in the v19 transcript contained one of
+    its keywords ("material", "capture", "exchange", "threat", "center" are hard
+    to avoid in chess prose), so it reported 91% against a ceiling of 95% and
+    passed happily on "Nf3 is a good move. In general, development matters a lot
+    in the opening." Whether the coaching actually teaches is what the frontier
+    review's written critique is for; a keyword list cannot stand in for it.
+
+    What is left is of two kinds:
+
+    * **Checked against the position.** ``fidelity_totals`` and
+      ``fidelity_by_phase`` come from :mod:`chess_coach.verify`, which pulls move
+      tokens out of the text and parses them against the real board, so it can
+      say the coach was *wrong*. ``prompt_uci_leaks`` checks our own rendered
+      prompt.
+    * **Checked against our own prompt.** ``composed_fact_rate`` and
+      ``unsourced_square_rate``: did the coach name a square we gave it, or one
+      we did not. Both are facts about our data, not guesses about meaning — but
+      neither says whether the sentence around the square is true or worth
+      reading.
+
+    Plus plain counts: ``empty_feedback``, latency, and the phase and move-quality
+    mixes.
+
+    None of these is a target. Every one can be moved by padding the output with
+    square names, which would make the coaching worse while the numbers improved.
+    They anchor the frontier review in facts and catch regressions; a rate that
+    moves is a reason to go and read the output, not a result.
     """
 
     n_turns: int
@@ -80,12 +106,16 @@ class ReviewStats:
     latency_mean_s: float
     latency_p90_s: float
     latency_max_s: float
-    # Fraction of turns naming a position-specific square/piece beyond the moved
-    # piece itself — a proxy for "did it connect the principle to THIS position".
-    specificity_rate: float = 0.0
-    # Fraction of turns where a named principle keyword appears near a square
-    # reference — i.e. the principle was instantiated, not just echoed.
-    principle_connection_rate: float = 0.0
+    # Squares the coach names beyond the played and best moves, split by where
+    # they came from. These replaced a single `specificity_rate`, which lumped
+    # them together and so could rise for either a good reason or a bad one.
+    # `composed_fact_rate`: it voiced a square we gave it — the architecture
+    # working as designed (compose the fact, let the model say it).
+    # `unsourced_square_rate`: it named a square that was nowhere in its prompt.
+    # Not automatically wrong, but this is where fabrication would show up.
+    # Both are 0.0 when the transcript did not capture prompts.
+    composed_fact_rate: float = 0.0
+    unsourced_square_rate: float = 0.0
     # Fidelity violations broken down by phase (where to focus composer work).
     fidelity_by_phase: dict[str, dict[str, int]] = field(default_factory=dict)
     # Turns whose PROMPT still contained a raw UCI token (e.g. "f6g4"). SAN
@@ -104,11 +134,37 @@ class ReviewStats:
             "latency_mean_s": round(self.latency_mean_s, 2),
             "latency_p90_s": round(self.latency_p90_s, 2),
             "latency_max_s": round(self.latency_max_s, 2),
-            "specificity_rate": round(self.specificity_rate, 4),
-            "principle_connection_rate": round(self.principle_connection_rate, 4),
+            "composed_fact_rate": round(self.composed_fact_rate, 4),
+            "unsourced_square_rate": round(self.unsourced_square_rate, 4),
             "fidelity_by_phase": {k: dict(v) for k, v in self.fidelity_by_phase.items()},
             "prompt_uci_leaks": self.prompt_uci_leaks,
         }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ReviewStats:
+        """Rebuild from :meth:`to_dict`, tolerating older transcripts.
+
+        Exists because reconstructing this field-by-field at a call site
+        silently dropped the newer metrics (specificity, principle-connection,
+        per-phase fidelity, UCI leaks) — they defaulted to 0 and a frontier
+        reviewer was then told specificity was 0%, which it (correctly) called
+        alarming. Round-tripping through one place keeps the class and its
+        serialization from drifting again.
+        """
+        return cls(
+            n_turns=d["n_turns"],
+            phase_counts=dict(d.get("phase_counts", {})),
+            classification_counts=dict(d.get("classification_counts", {})),
+            fidelity_totals=dict(d.get("fidelity_totals", {})),
+            empty_feedback=d.get("empty_feedback", 0),
+            latency_mean_s=d.get("latency_mean_s", 0.0),
+            latency_p90_s=d.get("latency_p90_s", 0.0),
+            latency_max_s=d.get("latency_max_s", 0.0),
+            composed_fact_rate=d.get("composed_fact_rate", 0.0),
+            unsourced_square_rate=d.get("unsourced_square_rate", 0.0),
+            fidelity_by_phase={k: dict(v) for k, v in (d.get("fidelity_by_phase") or {}).items()},
+            prompt_uci_leaks=d.get("prompt_uci_leaks", 0),
+        )
 
 
 def _percentile(sorted_vals: list[float], pct: float) -> float:
@@ -121,74 +177,74 @@ def _percentile(sorted_vals: list[float], pct: float) -> float:
     return sorted_vals[rank]
 
 
-# A square reference (a1..h8) anywhere in the text.
-_SQUARE_RE = re.compile(r"\b[a-h][1-8]\b")
+# A square reference (a1..h8) anywhere in the text, INCLUDING inside a SAN token.
+# The single rule is "not the second half of a coordinate pair", so a UCI token
+# like "f6g4" reads as one square rather than two, and everything else matches.
+#
+# Validated rather than eyeballed: over 128,411 legal-move SANs generated with
+# python-chess across 60 random games, this finds the destination square of every
+# single one. Two earlier attempts did not, which is why the rule is this plain:
+#   `\b[a-h][1-8]\b`                        missed 76.1% — a leading piece or
+#       file letter kills the word boundary, so "Nf3", "Ra8#" and "cxd5" matched
+#       NOTHING. That silently broke both metrics below: coaching that named a
+#       square only in SAN scored as naming none, and `is_specific`'s discount
+#       set (built from the move SANs) was empty for every piece move, so it
+#       discounted nothing and over-credited.
+#   `(?<![a-h])(?<![0-9])[a-h][1-8](?![0-9])`  missed 1.1% — the lookbehinds also
+#       reject disambiguated SAN, where a file or rank precedes the destination:
+#       "Nbd7", "Rae1+", "Rgg1", "R1e2".
+# Known, deliberate gap: castling ("O-O") names no square and so contributes
+# none, in the text or in the discount set.
+_SQUARE_RE = re.compile(r"(?<![a-h][1-8])[a-h][1-8]")
 # A bare UCI move token ("f6g4"): should never appear in a rendered prompt, since
 # every move is meant to be SAN. Detects silent SAN-conversion fallbacks.
 _UCI_TOKEN_RE = re.compile(r"\b[a-h][1-8][a-h][1-8][qrbn]?\b")
-# Principle keywords the coaching is expected to name (the pedagogy themes).
-_PRINCIPLE_WORDS = (
-    "development",
-    "develop",
-    "center",
-    "central",
-    "king safety",
-    "castl",
-    "pawn structure",
-    "isolated",
-    "passed pawn",
-    "majority",
-    "fork",
-    "pin",
-    "back rank",
-    "material",
-    "capture",
-    "exchange",
-    "trade",
-    "activity",
-    "outpost",
-    "open file",
-    "opposition",
-    "threat",
-)
-# How close a principle word must be to a square reference to count as
-# "instantiated" rather than merely stated (characters).
-_CONNECTION_WINDOW = 120
+# NB: a list of "principle keywords" used to live here, with a 120-character
+# proximity rule, to detect whether the coach applied a principle to the position
+# instead of just stating one. It is gone. Words like "material", "capture",
+# "exchange" and "center" appear in essentially any chess sentence, so it passed
+# on 44 of 44 real responses and on prose written specifically to fail it. See
+# the ReviewStats docstring; that question belongs to the frontier review.
 
 
-def is_specific(turn: ReviewTurn) -> bool:
-    """True if the response names a square/piece beyond the moved piece itself.
+def _extra_squares(turn: ReviewTurn) -> set[str]:
+    """Squares the response names beyond the played and best moves.
 
-    Deterministic proxy for "did the coach connect the principle to THIS
-    position". Squares mentioned by the student's own move or the engine best
-    move are discounted, so merely echoing the move names does not count.
+    Discounting the two moves is the point: repeating the move you were handed is
+    not saying anything about the position.
     """
     text = turn.coach_feedback
     if not text.strip():
-        return False
+        return set()
     own = {s.lower() for s in _SQUARE_RE.findall(turn.student_move_san + " " + turn.best_move_san)}
-    return any(sq.lower() not in own for sq in _SQUARE_RE.findall(text))
+    return {s.lower() for s in _SQUARE_RE.findall(text)} - own
 
 
-def connects_principle(turn: ReviewTurn) -> bool:
-    """True if a named principle appears near a square reference.
+def voices_composed_fact(turn: ReviewTurn) -> bool:
+    """True if the coach voiced a square we put in its prompt.
 
-    Measures whether the principle was *instantiated* on the board rather than
-    stated abstractly ("develop your pieces") — the recycled-template failure.
+    This is the architecture working as intended — compose the fact, let the
+    model say it — so this is the rate worth watching. Needs a captured prompt;
+    without one it cannot be judged and returns False.
     """
-    text = turn.coach_feedback.lower()
-    if not text.strip():
+    if not turn.prompt:
         return False
-    squares = [m.start() for m in _SQUARE_RE.finditer(text)]
-    if not squares:
+    prompt = turn.prompt.lower()
+    return any(sq in prompt for sq in _extra_squares(turn))
+
+
+def names_unsourced_square(turn: ReviewTurn) -> bool:
+    """True if the coach named a square that was NOT anywhere in its prompt.
+
+    Not automatically wrong — the model can legitimately read the board
+    description — but this is where fabrication would surface, so it belongs
+    beside the fidelity counts rather than among the prose metrics. Measured at
+    1 turn in 44 on v19.
+    """
+    if not turn.prompt:
         return False
-    for word in _PRINCIPLE_WORDS:
-        start = text.find(word)
-        while start != -1:
-            if any(abs(sq - start) <= _CONNECTION_WINDOW for sq in squares):
-                return True
-            start = text.find(word, start + 1)
-    return False
+    prompt = turn.prompt.lower()
+    return any(sq not in prompt for sq in _extra_squares(turn))
 
 
 def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
@@ -210,8 +266,8 @@ def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
         latency_mean_s=(sum(latencies) / n) if n else 0.0,
         latency_p90_s=_percentile(latencies, 90),
         latency_max_s=(latencies[-1] if latencies else 0.0),
-        specificity_rate=(sum(1 for t in turns if is_specific(t)) / n) if n else 0.0,
-        principle_connection_rate=(sum(1 for t in turns if connects_principle(t)) / n) if n else 0.0,
+        composed_fact_rate=(sum(1 for t in turns if voices_composed_fact(t)) / n) if n else 0.0,
+        unsourced_square_rate=(sum(1 for t in turns if names_unsourced_square(t)) / n) if n else 0.0,
         fidelity_by_phase={k: dict(v) for k, v in by_phase.items()},
         prompt_uci_leaks=sum(1 for t in turns if t.prompt and _UCI_TOKEN_RE.search(t.prompt)),
     )
@@ -272,10 +328,8 @@ def _fmt_stats(stats: ReviewStats) -> str:
         f"Move quality (engine): {cls or 'none'}\n"
         f"Deterministic fidelity violations: {fid}\n"
         f"Fidelity by phase: {by_phase}\n"
-        f"Specificity rate (names a square/piece beyond the move itself): "
-        f"{stats.specificity_rate:.0%}\n"
-        f"Principle-connection rate (principle named near a square): "
-        f"{stats.principle_connection_rate:.0%}\n"
+        f"Turns naming a square we supplied in the prompt: {stats.composed_fact_rate:.0%}\n"
+        f"Turns naming a square we did NOT supply: {stats.unsourced_square_rate:.0%}\n"
         f"Empty feedback turns: {stats.empty_feedback}\n"
         f"Prompts still containing raw UCI (should be 0): {stats.prompt_uci_leaks}\n"
         f"Generation latency (s): mean {stats.latency_mean_s:.1f}, "

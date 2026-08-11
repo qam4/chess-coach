@@ -11,11 +11,12 @@ while respecting our constraints and the log of already-tried levers.
 
 Needs no engine and no tunnel: it consumes a saved transcript + the lever log.
 
-Usage:
+Usage (omit {prompt} so the prompt goes on STDIN — this context is tens of
+thousands of characters and exceeds the Windows command-line limit as an argv):
     python scripts/eval_architecture_review.py \
-        --transcript output/coach_review_v12/transcript.json \
+        --transcript output/coach_review_v19/transcript.json \
         --judge-model claude-sonnet-4.6 \
-        --judge-command "kiro-cli chat --no-interactive --model claude-sonnet-4.6 {prompt}"
+        --judge-command "kiro-cli chat --no-interactive --model claude-sonnet-4.6"
 """
 
 from __future__ import annotations
@@ -55,6 +56,21 @@ Pipeline for one coached student move (the move-feedback path):
    (each move tagged best/sound/dubious/blunder from its eval drop), and the
    opponent's single first refutation reply with what it captures (computed from
    the board).
+   Since the last review, four composer changes were made and measured:
+   (a) the comparison report's top lines are rendered in SAN from the CORRECT
+   base position (after the student's move) and NUMBERED so whose-move-is-whose
+   is explicit ("5...Nfg4 6.f4"); a line is truncated at the first unreplayable
+   move rather than degrading to raw coordinates (the engine sometimes emits an
+   internally inconsistent PV);
+   (b) the opponent's reply carries a verified effect clause (capture / fork /
+   check / attack-on-undefended / escape / defend), shared with (c);
+   (c) "What the best move achieves" is no longer the engine's category LABEL
+   alone — a board-derived clause is prepended ("attacking their bishop on b4
+   (pawn structure ...)"), covering ~70% of moves; the label alone is used when
+   nothing is verifiable;
+   (d) each selected guidance theme is instantiated with the board fact that
+   made its feature fire ("... HERE: their knight on d5 is undefended"), filtered
+   to features actually present so no fact can be fabricated.
 3. PEDAGOGY LAYER: a curated YAML knowledge resource (~20 entries: principles,
    patterns, plans) each carrying a named theme, a `focus` statement and a
    `how_to_apply` statement, keyed to a closed vocabulary of board-derived
@@ -117,17 +133,9 @@ def main() -> None:
 
     data = json.loads(Path(args.transcript).read_text(encoding="utf-8"))
     turns = [ReviewTurn(**{k: v for k, v in t.items()}) for t in data["turns"]]
-    s = data["stats"]
-    stats = ReviewStats(
-        n_turns=s["n_turns"],
-        phase_counts=s["phase_counts"],
-        classification_counts=s["classification_counts"],
-        fidelity_totals=s["fidelity_totals"],
-        empty_feedback=s["empty_feedback"],
-        latency_mean_s=s["latency_mean_s"],
-        latency_p90_s=s["latency_p90_s"],
-        latency_max_s=s["latency_max_s"],
-    )
+    # Via from_dict: reconstructing field-by-field here silently dropped the
+    # newer metrics, and the reviewer was told specificity was 0%.
+    stats = ReviewStats.from_dict(data["stats"])
 
     # A representative sample across severities keeps the review prompt focused.
     def pick(pred, n=2):  # type: ignore[no-untyped-def]

@@ -1140,3 +1140,152 @@ off_menu/unsound). So BUG-017 is un-parked and becomes lever 2: constrain the
 coach strictly to engine-stated facts (eval drop, specific squares, concrete
 consequences) and forbid inventing causal chains it cannot verify — measured
 the same way (report card, same seed) before/after.
+
+### Pedagogy — instantiated facts on the position path, and the attachment rate — 2026-08-11
+
+Follow-through on report-card item 4 ("instantiate each guidance theme with the
+board fact that fired it"). Item 4 barely moved principle-connection on the
+move-feedback path because the model preferred the move-anchored clause from
+item 3. The stated hypothesis was that instantiation should matter MORE on the
+**position-coaching** path (`chess-coach explain`), which has no move to anchor
+to. Wiring it there is a one-liner, since `build_rich_coaching_prompt` already
+holds the `PositionReport`.
+
+**Two measurement dead ends, both worth recording so they are not repeated.**
+
+1. Scoring the position path with `is_specific` / `connects_principle` gave
+   **6/6 vs 5/6 — a saturated metric**. Those two were built for move feedback,
+   where the student's and engine's move squares are *discounted*; the position
+   path has no such move, so any square mention passes, and a full position
+   explanation always puts a theme word near a square. A saturated metric cannot
+   answer the question, so the run was thrown away rather than reported.
+2. Rescoring on "does the composed fact reach the output" then **skipped 4 of 5
+   positions**, because no *selected* entry carried a fact at all.
+
+**That second dead end was the real finding, and it is a coverage bug, not a
+prose problem.** Measured offline over 10 positions with the engine only (no
+LLM, following the item-3 discipline of measuring coverage before spending a
+run): **only 10 of 30 selected entries (33%) could be instantiated**, and just
+6 of 10 positions carried a single fact. Every opening position scored 0/3.
+
+**Root cause, verified rather than guessed.** Entries tie on relevance (each
+matches exactly one present feature) and the tie-break — type, then `id` — is
+blind to whether a fact exists. So in a position with a live threat, the
+abstract `center control` beat `answer the threat first`, which would have
+rendered "HERE: there is a live threat against f7".
+
+First attempt folded the fact bias into the existing `preferred_features` hook
+and only reached 18/30. Instrumenting the misses showed why, and it was a
+**collision between two soft biases**: the engine's PV theme
+`"piece development"` maps to the broad `phase:opening` feature, so the
+move-theme bias handed the same +1 to all three abstract opening entries and
+cancelled the fact bias out. Fixed properly by giving instantiability its own
+rank term in `_sort_key`, above the theme bonus and below relevance — being
+instantiable is a stronger teaching signal than matching the move's theme.
+
+| | attachment (selected entries) | positions with >=1 fact |
+|---|---|---|
+| before | 10/30 (33%) | 6/10 |
+| fact bias folded into `preferred_features` | 18/30 (60%) | 8/10 |
+| fact bias as its own rank term | **23/30 (77%)** | **10/10** |
+
+Still a tie-break only: it never admits or drops an entry, and a genuinely more
+relevant entry still wins (both properties have regression tests). The remaining
+7 of 30 are positions where fewer than three eligible entries can carry a fact —
+a genuine content-coverage limit, not a ranking one.
+
+**Next:** the LLM A/B on the position path is only now worth running, since
+before the fix most positions had no fact to test.
+
+### Measurement corrections found by reading the coach's actual output — 2026-08-11
+
+Two defects, both found by inspecting prose rather than by a failing test.
+
+**1. `_SQUARE_RE` was blind to SAN, so both headline metrics were wrong.**
+`\b[a-h][1-8]\b` matches nothing in `Ra8#`, `Rxc8#`, `Nf3` or `cxd5`. So
+`connects_principle` under-counted (a square named in SAN was invisible) and
+`is_specific` over-counted (its discount set, built from the move SANs, was empty
+for every piece move, so echoing the move back scored as specific). Recomputed
+from the saved transcripts — no LLM, no engine:
+
+| run | specificity | principle-connection |
+|---|---|---|
+| v17 | 27% -> 34% | 34% -> 82% |
+| v18 | 66% -> 52% | 64% -> 84% |
+| v19 | 66% -> 52% | 66% -> 91% |
+
+Item 3's specificity gain was overstated (34->52%, not 27->66%), and **item 4 did
+help after all** (principle-connection 84->91%, not the 64->66% we dismissed as
+noise). The two levers do different jobs, matching their mechanisms: item 3 is a
+specificity lever, item 4 a principle-connection one. Principle-connection at 91%
+is well past the 80% bar the architecture review set for "the limiting factor
+moves to the model", so its reasoning from 64% needs rereading; specificity at
+52% is the genuinely low number, which keeps Change A (compose the missing
+best-move clauses) as the top item.
+
+The pattern is validated against the move generator rather than by eyeball, which
+is where the first two attempts failed. Over 128,411 legal-move SANs from 60
+random games: `\b[a-h][1-8]\b` missed **76.1%** (every piece move); a tighter
+lookbehind fix still missed **1.1%** (disambiguated moves — `Nbd7`, `Rae1+`,
+`Rgg1`, `R1e2`, forms that really do appear in the coach's output); the shipped
+`(?<![a-h][1-8])[a-h][1-8]`, whose single rule is "not the second half of a
+coordinate pair", misses **none** and adds no false positives over 41k characters
+of real responses. A unit test now asserts the property over every legal move in
+a position.
+
+**2. The `threat_present` fact was side-ambiguous and caused false statements.**
+It read "there is a live threat against c8" with no owner, and the model read it
+as a danger to the student every time: in a position where the student had mate
+in one, the coach wrote "your king is vulnerable if you don't act". The report
+keys threats by the side making them, so the fact now says "you threaten c8" or
+"the opponent threatens c8", preferring the student's own threat as the
+actionable one. Regression tests for both directions.
+
+Both are the same failure mode as the `ReviewStats.from_dict` bug: a harness or a
+composed field that is quietly wrong is worse than one that is missing, because
+it sends the next decision in the wrong direction.
+
+### Metrics audit — principle-connection is saturated; specificity split — 2026-08-11
+
+Prompted by the right question: are these metrics real, or just word matching?
+Audited on the 44-turn v19 transcript rather than argued about.
+
+**`principle_connection_rate` is deleted.** All 44 responses contain one of its 22
+keywords (which include "material", "capture", "exchange", "threat", "center" —
+unavoidable in chess prose), and 95% contain a square, so 95% was the metric's
+actual ceiling; it reported 91%, meaning the 120-character proximity window
+discriminated almost nothing. A deliberately abstract response passed: "Nf3 is a
+good move. In general, development matters a lot in the opening." — exactly the
+failure it was built to catch. Nothing was wrong with the code; the idea was wrong.
+
+It was deleted rather than kept with a caveat, because a caveat does not stop the
+number being printed, quoted into a review prompt, and cited later by someone who
+did not read the caveat — which is precisely how the 64% figure came to anchor an
+architecture review. **Consequence: the earlier claim that item 4 improved
+principle-connection (84 -> 91%) is withdrawn.** Item 4 is kept on mechanism and
+fidelity; its effect on teaching quality is unmeasured, not disproven.
+
+**`specificity_rate` is replaced** by two numbers measured against the prompt the
+coach received, because as one number it could rise for a good reason or a bad one:
+`composed_fact_rate` (the coach named a square we gave it — the architecture
+working as designed) and `unsourced_square_rate` (it named one we never supplied —
+where fabrication would show up).
+
+| run | composed_fact_rate | unsourced_square_rate |
+|---|---|---|
+| v16 | 27% | 2% |
+| v17 | 30% | 5% |
+| v18 (item 3) | 52% | 5% |
+| v19 (item 4) | 52% | 2% |
+
+Item 3's win holds up on the honest metric, and fabrication risk stayed flat — the
+gain came from voicing supplied facts.
+
+**Two standing rules, now recorded in code and in the report card.** These rates
+are not targets: every one can be improved by padding output with square names,
+which would make the coaching worse. And if a measurement cannot fail, delete it
+rather than annotate it. Levers are accepted on the fidelity counts (which parse
+moves against the real position, so they can say the coach was wrong), direct
+reading of the output, and the frontier review's prose critique — which is the real
+check on teaching quality precisely because keyword matching against LLM prose
+cannot be.

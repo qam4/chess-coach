@@ -13,6 +13,7 @@ from chess_coach.models import (
     KingSafety,
     PawnFeatures,
     PositionReport,
+    Threat,
 )
 from chess_coach.pedagogy.inject import format_guidance_block
 from chess_coach.pedagogy.instantiate import feature_facts
@@ -29,6 +30,8 @@ def _report(
     hanging_white: list[HangingPiece] | None = None,
     hanging_black: list[HangingPiece] | None = None,
     pawns_white: PawnFeatures | None = None,
+    threats_white: list[Threat] | None = None,
+    threats_black: list[Threat] | None = None,
 ) -> PositionReport:
     empty = PawnFeatures([], [], [])
     return PositionReport(
@@ -36,7 +39,7 @@ def _report(
         eval_cp=0,
         eval_breakdown=EvalBreakdown(material=0, mobility=0, king_safety=0, pawn_structure=0),
         hanging_pieces={"white": hanging_white or [], "black": hanging_black or []},
-        threats={"white": [], "black": []},
+        threats={"white": threats_white or [], "black": threats_black or []},
         pawn_structure={"white": pawns_white or empty, "black": empty},
         king_safety={"white": KingSafety(0, ""), "black": KingSafety(0, "")},
         top_lines=[],
@@ -90,3 +93,28 @@ def test_guidance_block_instantiates_the_theme_with_the_fact() -> None:
     assert "HERE: their knight on d5 is undefended." in block
     # Without facts the entry renders exactly as before (no behaviour change).
     assert "HERE:" not in format_guidance_block([entry], level="intermediate")
+
+
+def _threat(target: str) -> Threat:
+    return Threat(type="attack", source_square="c1", target_squares=[target], description="d")
+
+
+def test_threat_fact_names_whose_threat_it_is() -> None:
+    # Regression found by reading the coach's actual output: the fact used to say
+    # "there is a live threat against c8" with no side, and the model read it as
+    # a danger TO the student every time — in a position where the student had
+    # mate in one it wrote "your king is vulnerable if you don't act". A
+    # side-ambiguous fact is not a fact.
+    mine = feature_facts(_report(LEAD, threats_white=[_threat("d5")]))
+    assert mine["threat_present"] == "you threaten d5"
+
+    theirs = feature_facts(_report(LEAD, threats_black=[_threat("a1")]))
+    assert theirs["threat_present"] == "the opponent threatens a1"
+
+
+def test_own_threat_is_stated_in_preference_to_the_opponents() -> None:
+    # When both sides have one, the student's own threat is the actionable fact.
+    both = feature_facts(
+        _report(LEAD, threats_white=[_threat("d5")], threats_black=[_threat("a1")]),
+    )
+    assert both["threat_present"] == "you threaten d5"

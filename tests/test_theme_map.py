@@ -91,3 +91,56 @@ def test_preferred_features_is_additive_not_restrictive() -> None:
         ),
     )
     assert [e.id for e in result] == ["a", "b"]  # unchanged from unbiased order
+
+
+def test_fact_features_outrank_the_theme_bias() -> None:
+    # Regression for a measured collision between the two soft biases. The
+    # engine's PV theme "piece development" maps to the broad `phase:opening`
+    # feature, so the theme bias handed +1 to every abstract opening entry.
+    # When the fact bias was folded into the same bonus it cancelled out, and
+    # the id tie-break picked the abstraction: in real positions with a live
+    # threat, "center control" beat "answer the threat first", and only 10 of 30
+    # selected entries could be instantiated with a verified board fact.
+    abstract = _entry("a", frozenset({"phase:opening"}))
+    instantiable = _entry("b", frozenset({"exposed_king"}))
+    resource = _resource(abstract, instantiable)
+    position_features = frozenset({"phase:opening", "exposed_king"})
+
+    result = select(
+        resource,
+        SelectionInput(
+            features=position_features,
+            eco=None,
+            level="intermediate",
+            max_entries=2,
+            # What theme_features("piece development") actually returns.
+            preferred_features=frozenset({"phase:opening"}),
+            fact_features=frozenset({"exposed_king"}),
+        ),
+    )
+    assert [e.id for e in result] == ["b", "a"]
+
+
+def test_fact_features_do_not_override_relevance() -> None:
+    # The fact bias is a tie-break, not an override: a genuinely more relevant
+    # entry still wins even when it carries no composable fact.
+    two_matches = _entry("a", frozenset({"phase:opening", "exposed_king"}))
+    one_match_with_fact = _entry("b", frozenset({"passed_pawn"}))
+    resource = KnowledgeResource(
+        entries=(two_matches, one_match_with_fact),
+        feature_vocab=frozenset({"phase:opening", "exposed_king", "passed_pawn"}),
+        eco_vocab=frozenset(),
+        levels=frozenset({"beginner", "intermediate", "advanced"}),
+    )
+
+    result = select(
+        resource,
+        SelectionInput(
+            features=frozenset({"phase:opening", "exposed_king", "passed_pawn"}),
+            eco=None,
+            level="intermediate",
+            max_entries=2,
+            fact_features=frozenset({"passed_pawn"}),
+        ),
+    )
+    assert [e.id for e in result] == ["a", "b"]
