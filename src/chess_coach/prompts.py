@@ -27,7 +27,7 @@ from chess_coach.models import (
     ComparisonReport,
     PositionReport,
 )
-from chess_coach.pedagogy.features import PHASE_ENDGAME, phase_of_board
+from chess_coach.pedagogy.features import PHASE_ENDGAME, PHASE_OPENING, phase_of_board
 from chess_coach.pedagogy.inject import format_guidance_block
 from chess_coach.pedagogy.instantiate import feature_facts
 from chess_coach.pedagogy.resource import GuidanceEntry
@@ -339,11 +339,7 @@ What the best move achieves: {best_move_idea}
 {sections}
 
 {move_instructions}\
-CLOSE with one transferable takeaway, not a generic maxim: name the principle \
-in a few words, then a short "next time you see ..., ask yourself ..." hook the \
-student can reuse. Do NOT end with "focus on developing your pieces" or "focus \
-on king safety" unless that is the specific lesson of this move. (This is a \
-teaching heuristic, not a board fact — do not assert new pieces or squares in it.)
+{takeaway_instruction}
 {level_instructions}\
 {critical_section}\
 Keep your response concise (under {word_limit} words).\
@@ -1015,8 +1011,118 @@ def _format_refutation_line(report: ComparisonReport) -> str | None:
     return f"--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is {reply_san}{capture_clause}."
 
 
+#: What a move was found to DO. One per branch of :func:`_move_effect`, so a
+#: category is only ever assigned where the clause was verified from the board.
+EFFECT_CAPTURE = "capture"
+EFFECT_FORK = "fork"
+EFFECT_CHECK = "check"
+EFFECT_ATTACK = "attack"
+EFFECT_ESCAPE = "escape"
+EFFECT_DEFEND = "defend"
+EFFECT_CASTLE = "castle"
+EFFECT_OPEN_FILE = "open_file"
+EFFECT_MOBILITY = "mobility"
+EFFECT_KING_ACTIVITY = "king_activity"
+EFFECT_EXTRA_DEFENDER = "extra_defender"
+
+#: Phase-specific lessons, keyed ``(category, phase)``, consulted before the
+#: phase-agnostic table below. Only the cases where the lesson GENUINELY differs by
+#: phase are listed — the rest fall through, so this stays a short table rather
+#: than a speculative 33-cell matrix.
+#:
+#: Added because the judge's follow-up review named phase-blindness as the problem
+#: with the composed lessons, with specific examples: ply 74 centralised the king in
+#: a pawn endgame and was taught "move it somewhere safe and active", when the
+#: endgame principle is the king as an ATTACKER; ply 72 got a generic
+#: rook-on-an-open-file tip when the endgame principle is the rook behind the passed
+#: pawn or cutting the enemy king off. Same board fact, different lesson depending
+#: on when it happens.
+_PHASE_TAKEAWAYS: dict[tuple[str, str], str] = {
+    (EFFECT_OPEN_FILE, PHASE_ENDGAME): (
+        "rook placement in an endgame — behind your passed pawn to push it, or across a rank to cut the enemy king off"
+    ),
+    (EFFECT_CAPTURE, PHASE_ENDGAME): (
+        "in an endgame a single pawn usually decides the result, so a capture that wins one is worth more than it looks"
+    ),
+    (EFFECT_ATTACK, PHASE_ENDGAME): (
+        "in an endgame go after the pawns that could promote, and the pieces guarding them"
+    ),
+    (EFFECT_ESCAPE, PHASE_ENDGAME): (
+        "with few pieces left, move a threatened piece somewhere it keeps doing a job — guarding a passed "
+        "pawn or holding a key square"
+    ),
+    (EFFECT_MOBILITY, PHASE_OPENING): (
+        "development — a piece still on its starting square is doing nothing, so bring it out towards the centre early"
+    ),
+    (EFFECT_ATTACK, PHASE_OPENING): (
+        "do not start an attack before your pieces are out — develop first, then look for targets"
+    ),
+}
+
+#: The lesson each effect category teaches, as CONTENT for the closing takeaway —
+#: not as finished prose. The model still writes the sentence; it just no longer
+#: chooses the subject.
+#:
+#: Why compose this at all: left to choose, the coach reached for the same three
+#: ideas on 68% of turns, and worse, chose ones that did not apply — on ply 32 it
+#: closed with "next time you see a fork opportunity" about a move that forks
+#: nothing, and three of four verified-correct turns ended with that same hook.
+#: The category is already derived from the board, so keying the lesson to it makes
+#: the takeaway follow the position instead of the model's habits.
+#:
+#: The judge's own suggestion was to forbid repetition in the prompt. That is a
+#: negative constraint, and those have never worked on this model (the grounding
+#: rule, lever 2, had no measurable effect). Supplying the subject is the positive
+#: form of the same idea.
+_EFFECT_TAKEAWAYS: dict[str, str] = {
+    EFFECT_CAPTURE: (
+        "what a capture is worth — check what you win, what recaptures, and whether the trade favours you"
+    ),
+    EFFECT_FORK: "hitting two pieces with one move, so the opponent can only save one",
+    EFFECT_CHECK: "a check forces an answer, which buys you a move to use elsewhere",
+    EFFECT_ATTACK: "going after a piece that has too few defenders",
+    EFFECT_ESCAPE: "when one of your pieces is attacked, move it somewhere it is both safe and useful",
+    EFFECT_DEFEND: "defending what you already have before starting something new",
+    EFFECT_CASTLE: "getting the king to safety before the centre opens up",
+    EFFECT_OPEN_FILE: "putting a rook on a file with no pawns in its way",
+    EFFECT_MOBILITY: "a piece with almost no squares is doing almost nothing — find it a better home",
+    EFFECT_KING_ACTIVITY: (
+        "in an endgame the king is a fighting piece, not something to hide — walk it towards the action"
+    ),
+    EFFECT_EXTRA_DEFENDER: "counting attackers and defenders on a square before you commit to it",
+}
+
+
+def effect_takeaway(category: str, phase: str = "") -> str:
+    """The lesson to close on for a verified effect ``category``, or ``''``.
+
+    Prefers the phase-specific lesson where one exists, because the same board
+    fact carries a different lesson at different stages — a king walking forward is
+    a mistake in the opening and the winning method in an endgame.
+
+    Empty for an unrecognised or absent category, in which case the caller leaves
+    the takeaway to the model rather than inventing a lesson — the same rule the
+    clause composer follows when nothing about a move can be verified.
+    """
+    if phase and (category, phase) in _PHASE_TAKEAWAYS:
+        return _PHASE_TAKEAWAYS[(category, phase)]
+    return _EFFECT_TAKEAWAYS.get(category, "")
+
+
 def _move_effect_clause(board: chess.Board | None, uci: str, *, target_possessive: str) -> str:
-    """A verified clause describing what a move DOES, or '' if nothing is certain.
+    """The clause half of :func:`_move_effect` — see there for the detail."""
+    return _move_effect(board, uci, target_possessive=target_possessive)[1]
+
+
+def _move_effect(board: chess.Board | None, uci: str, *, target_possessive: str) -> tuple[str, str]:
+    """``(category, clause)`` for what a move DOES; ``("", "")`` if nothing is certain.
+
+    The category is the same judgement the clause is built from, returned rather
+    than thrown away so the closing takeaway can be keyed to it. Otherwise the
+    model picks its own lesson and reaches for the same three every time — three
+    ideas covered 68% of turns, and on ply 32 it closed with "next time you see a
+    fork opportunity" about a move that forks nothing. One derivation, two uses,
+    so the clause and the lesson cannot disagree.
 
     Everything is computed from ``board`` (the position the move is played in),
     so the result is a fact the model only has to voice — never an inference it
@@ -1030,24 +1136,27 @@ def _move_effect_clause(board: chess.Board | None, uci: str, *, target_possessiv
     b2 and your pawn on h2").
     """
     if board is None:
-        return ""
+        return ("", "")
     try:
         move = chess.Move.from_uci(uci)
     except ValueError:
-        return ""
+        return ("", "")
     if move not in board.legal_moves:
-        return ""
+        return ("", "")
 
     mover = board.turn
     if board.is_capture(move):
         if board.is_en_passant(move):
             cap_sq = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
-            return f", capturing {target_possessive}pawn on {chess.square_name(cap_sq)}"
+            return (EFFECT_CAPTURE, f", capturing {target_possessive}pawn on {chess.square_name(cap_sq)}")
         victim = board.piece_at(move.to_square)
         if victim is not None:
             name = chess.piece_name(victim.piece_type)
-            return f", capturing {target_possessive}{name} on {chess.square_name(move.to_square)}"
-        return ""
+            return (
+                EFFECT_CAPTURE,
+                f", capturing {target_possessive}{name} on {chess.square_name(move.to_square)}",
+            )
+        return ("", "")
 
     moved = board.piece_at(move.from_square)
     was_attacked = bool(board.attackers(not mover, move.from_square))
@@ -1068,28 +1177,39 @@ def _move_effect_clause(board: chess.Board | None, uci: str, *, target_possessiv
 
     if len(targets) >= 2:
         two = " and ".join(t[1].replace("undefended ", "") for t in targets[:2])
-        return f", giving check and hitting {two}" if check else f", hitting {two}"
+        return (EFFECT_FORK, f", giving check and hitting {two}" if check else f", hitting {two}")
     if targets:
         phrase = targets[0][1]
-        return f", giving check and attacking {phrase}" if check else f", attacking {phrase}"
+        return (
+            EFFECT_ATTACK,
+            f", giving check and attacking {phrase}" if check else f", attacking {phrase}",
+        )
     if check:
-        return ", giving check"
+        return (EFFECT_CHECK, ", giving check")
 
     # Defensive motives, in the mover's own terms.
     if was_attacked and not after.attackers(not mover, move.to_square) and moved is not None:
         name = chess.piece_name(moved.piece_type)
-        return f", moving your {name} off {chess.square_name(move.from_square)} where it was attacked"
+        return (
+            EFFECT_ESCAPE,
+            f", moving your {name} off {chess.square_name(move.from_square)} where it was attacked",
+        )
     for sq in after.attacks(move.to_square):
         piece = after.piece_at(sq)
         if piece is None or piece.color != mover or piece.piece_type == chess.KING:
             continue
         if after.attackers(not mover, sq) and len(after.attackers(mover, sq)) == 1:
             name = chess.piece_name(piece.piece_type)
-            return f", defending your {name} on {chess.square_name(sq)}"
-    return _quiet_move_clause(board, after, move)
+            return (EFFECT_DEFEND, f", defending your {name} on {chess.square_name(sq)}")
+    return _quiet_move_effect(board, after, move)
 
 
 def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move) -> str:
+    """The clause half of :func:`_quiet_move_effect`."""
+    return _quiet_move_effect(board, after, move)[1]
+
+
+def _quiet_move_effect(board: chess.Board, after: chess.Board, move: chess.Move) -> tuple[str, str]:
     """Describe a move that captures, attacks and defends nothing.
 
     Measured on one game: 13 of 44 best moves reached this point and got only the
@@ -1108,13 +1228,16 @@ def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move)
     mover = board.turn
     piece = board.piece_at(move.from_square)
     if piece is None:
-        return ""
+        return ("", "")
     from_name = chess.square_name(move.from_square)
     to_name = chess.square_name(move.to_square)
 
     if board.is_castling(move):
         side = "short" if chess.square_file(move.to_square) > chess.square_file(move.from_square) else "long"
-        return f", castling {side} to tuck your king onto {to_name} and connect your rooks"
+        return (
+            EFFECT_CASTLE,
+            f", castling {side} to tuck your king onto {to_name} and connect your rooks",
+        )
 
     # A rook or queen reaching a file with no pawns in the way.
     if piece.piece_type in (chess.ROOK, chess.QUEEN):
@@ -1125,9 +1248,12 @@ def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move)
         file_name = chess.FILE_NAMES[file_index]
         name = chess.piece_name(piece.piece_type)
         if not own_pawns and not their_pawns:
-            return f", moving your {name} to {to_name} on the open {file_name}-file"
+            return (EFFECT_OPEN_FILE, f", moving your {name} to {to_name} on the open {file_name}-file")
         if not own_pawns:
-            return f", moving your {name} to {to_name} on the half-open {file_name}-file"
+            return (
+                EFFECT_OPEN_FILE,
+                f", moving your {name} to {to_name} on the half-open {file_name}-file",
+            )
 
     # A piece that had almost nowhere to go and now has somewhere. The counts are
     # the point: the student can recount them on the board.
@@ -1145,8 +1271,9 @@ def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move)
         if before_squares <= 2 and after_squares >= before_squares + 3:
             name = chess.piece_name(piece.piece_type)
             return (
+                EFFECT_MOBILITY,
                 f", moving your {name} from {from_name} to {to_name}, where it covers "
-                f"{after_squares} squares instead of {before_squares}"
+                f"{after_squares} squares instead of {before_squares}",
             )
 
     # An endgame king walking in. Gated on the project's own endgame test, NOT on
@@ -1156,7 +1283,10 @@ def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move)
         before_dist = _centre_distance(move.from_square)
         after_dist = _centre_distance(move.to_square)
         if after_dist < before_dist:
-            return f", walking your king from {from_name} to {to_name}, closer to the centre"
+            return (
+                EFFECT_KING_ACTIVITY,
+                f", walking your king from {from_name} to {to_name}, closer to the centre",
+            )
 
     # Adding a defender to something already under attack. Weaker than the
     # single-defender case handled above, so it comes last and says so.
@@ -1166,8 +1296,11 @@ def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move)
             continue
         if after.attackers(not mover, sq):
             name = chess.piece_name(defended.piece_type)
-            return f", adding a defender to your {name} on {chess.square_name(sq)}"
-    return ""
+            return (
+                EFFECT_EXTRA_DEFENDER,
+                f", adding a defender to your {name} on {chess.square_name(sq)}",
+            )
+    return ("", "")
 
 
 def _reachable_count(board: chess.Board, square: int, color: chess.Color) -> int:
@@ -1179,6 +1312,45 @@ def _centre_distance(square: int) -> int:
     """Chebyshev distance from ``square`` to the nearest of d4/d5/e4/e5."""
     file_index, rank = chess.square_file(square), chess.square_rank(square)
     return max(min(abs(file_index - 3), abs(file_index - 4)), min(abs(rank - 3), abs(rank - 4)))
+
+
+#: Closing instruction when we could NOT verify what the best move does, so there
+#: is no composed lesson to hand over. Unchanged from the original wording: the
+#: model chooses, because inventing a lesson would be worse.
+_TAKEAWAY_FALLBACK = (
+    "CLOSE with one transferable takeaway, not a generic maxim: name the principle in a few words, then a short "
+    '"next time you see ..., ask yourself ..." hook the student can reuse. Do NOT end with "focus on developing '
+    'your pieces" or "focus on king safety" unless that is the specific lesson of this move. (This is a teaching '
+    "heuristic, not a board fact — do not assert new pieces or squares in it.)"
+)
+
+
+def _build_takeaway_instruction(report: ComparisonReport) -> str:
+    """The closing-takeaway instruction, with the lesson composed where possible.
+
+    The subject of the takeaway is derived from what the best move verifiably DOES
+    (:func:`_move_effect`), not chosen by the model. Left to choose, the coach
+    closed on one of the same three ideas on 68% of turns and sometimes on an idea
+    that did not apply at all — "next time you see a fork opportunity" about a move
+    that forks nothing. The model still writes the sentence; it no longer picks the
+    topic.
+
+    Falls back to the original open-ended instruction when nothing about the move
+    can be verified, on the same principle as the clause composer: no fact, no
+    claim.
+    """
+    board = _safe_board(report.fen)
+    category, _clause = _move_effect(board, report.best_move, target_possessive="their ")
+    phase = phase_of_board(board) if board is not None else ""
+    lesson = effect_takeaway(category, phase)
+    if not lesson:
+        return _TAKEAWAY_FALLBACK
+    return (
+        "CLOSE with one transferable takeaway on THIS lesson and no other: "
+        f"{lesson}. Put it in your own words as a short "
+        '"next time you see ..., ask yourself ..." hook the student can reuse. Do not substitute a '
+        "different principle, and do not assert new pieces or squares in it."
+    )
 
 
 def _best_move_achievement(report: ComparisonReport) -> str:
@@ -1389,6 +1561,7 @@ def build_rich_move_evaluation_prompt(
     tier = _move_feedback_tier(report)
     move_instructions = _TIER_INSTRUCTIONS[tier]
     word_limit = _TIER_WORD_LIMIT[tier]
+    takeaway_instruction = _build_takeaway_instruction(report)
 
     return RICH_MOVE_EVALUATION_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,
@@ -1405,6 +1578,7 @@ def build_rich_move_evaluation_prompt(
         best_move_idea=_best_move_achievement(report),
         sections="\n\n".join(sections),
         move_instructions=move_instructions,
+        takeaway_instruction=takeaway_instruction,
         level_instructions=level_instructions,
         critical_section=critical_section,
         word_limit=word_limit,

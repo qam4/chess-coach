@@ -1426,3 +1426,50 @@ reading that our checker missed (ply 12 "captured the knight on e3" where `dxe3`
 takes a pawn is the important one — that is what `piece_type` exists to catch);
 compose position-level facts; phase-specific content starting with the endgame,
 which is both the biggest phase by turn count and the weakest.
+
+### Composed closing lesson (v22), phase-gating (v23), and switching the judge — 2026-08-12
+
+Ledger rows 19-21 in `docs/coach-report-card.md`.
+
+**v22 — compose the closing lesson from the move's verified effect.** Kept. The
+wrong-hook defect is gone: three turns closed with "next time you see a fork
+opportunity" about moves that fork nothing, now zero, and no closing sentence
+repeats more than twice. `lesson_concentration_rate` 68% -> 66%, which under-reports
+the change — it counts shared content words, and the new hooks differ in lesson
+while sharing words like "safe" and "square". Fidelity flat at 5.
+
+**v23 — phase-gate the lesson.** Kept (costs nothing, no fidelity cost) but it did
+NOT land. In the prompt it works: distinct lessons 11 -> 18, top-3 coverage 57% ->
+30%. In the output it does not: only 2 of 18 endgame turns mention a passed pawn,
+none mention promotion or the king as a fighting piece, and the judge independently
+reports "not one turn mentions king activity as a fighting piece… the framework
+doesn't change, only the square names do".
+
+**The lesson from that pair, which is the useful part:** handing the model a FACT
+gets voiced faithfully (66% composed-fact rate, 0% invented squares). Handing it a
+LESSON gets paraphrased back into its own vocabulary. Facts survive the model,
+abstractions do not — the same result as the pedagogy YAML, arriving again in a new
+place. So the next attempt at the endgame gap should compose endgame *facts* (this
+pawn is passed, this rook is behind it, the enemy king is N squares from it), not
+better endgame prose.
+
+**Judge switched to `claude-opus-5`** (was claude-sonnet-4.6) in both review
+scripts, with the command now derived from the model so the two cannot disagree.
+Sonnet was wrong on 5 of 5 per-ply factual claims when checked against the board;
+opus-5 was right on 2 of 2 and found two defects our checker misses.
+
+**Next, in order:**
+
+1. **Ply 28 incoherence**: "your opponent plays e3, winning material because your
+   pawn on e3 is undefended" — e3 holds OUR pawn. Find out where that comes from
+   (the refutation reply composition is the suspect) and whether the checker can
+   catch a claim that the opponent moves onto our own occupied square.
+2. **Comparative centrality**: the `king_activity` clause says "closer to the
+   centre" from from-square vs to-square, which is misleading when the student's
+   own move was MORE central (ply 1002). Either compare against the student's move
+   or drop the comparative wording.
+3. **Stop leaking harness bookkeeping into coaching.** "The evaluation spread shows
+   it was a key decision", "the best move was also your move" on five turns. That
+   is eval plumbing in the slot where a chess reason belongs, and it comes from our
+   own critical-moment section.
+4. **Endgame facts, not endgame prose** (see the lesson above).

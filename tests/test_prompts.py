@@ -327,7 +327,53 @@ def test_move_eval_prompt_requires_named_principle_and_hook() -> None:
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
         assert "CLOSE with one transferable takeaway" in prompt
         assert "ask yourself" in prompt
-        assert 'Do NOT end with "focus on developing your pieces"' in prompt
+
+
+def test_takeaway_lesson_is_composed_from_what_the_move_does() -> None:
+    # The coach used to pick the lesson and reached for the same three ideas on 68%
+    # of turns — closing with "next time you see a fork opportunity" about a move
+    # that forks nothing. The subject now comes from the verified effect.
+    import chess
+
+    from chess_coach.prompts import _build_takeaway_instruction
+
+    # After 1.e4 e5 2.Qh5, the queen attacks e5 and Nc6 defends it — so the lesson
+    # is defending, not developing. Worth pinning: the composed lesson tracks what
+    # the move actually does, which is not always the move's most obvious feature.
+    report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
+    instruction = _build_takeaway_instruction(report)
+    assert "on THIS lesson and no other" in instruction
+    assert "defending what you already have" in instruction
+    assert "fork" not in instruction
+
+    # An endgame king walk gets the endgame lesson, which the judge said never
+    # appeared once across 18 endgame turns.
+    endgame = dataclasses.replace(
+        _move_eval_report("8/8/4k3/8/4P3/4K3/8/8 w - - 0 1", "e3f3", "e3d4"),
+        best_move="e3d4",
+    )
+    assert "king is a fighting piece" in _build_takeaway_instruction(endgame)
+
+    # A capture gets the capture-value lesson, not a developing one.
+    board = chess.Board(CASTLE_FEN)
+    assert board.piece_at(chess.E5) is not None  # the pawn Nxe5 takes
+    capture = dataclasses.replace(_move_eval_report(CASTLE_FEN, "d2d3", "f3e5"), best_move="f3e5")
+    assert "what a capture is worth" in _build_takeaway_instruction(capture)
+
+
+def test_takeaway_falls_back_when_the_move_cannot_be_verified() -> None:
+    # No verifiable effect means no composed lesson: the model chooses, rather than
+    # us inventing one. Same rule the clause composer follows.
+    from chess_coach.prompts import _build_takeaway_instruction
+
+    # A bishop landing on e4 with nothing to show for it (see the Change A tests).
+    quiet = dataclasses.replace(
+        _move_eval_report("7k/8/8/8/8/8/8/K6B w - - 0 1", "a1a2", "h1e4"),
+        best_move="h1e4",
+    )
+    instruction = _build_takeaway_instruction(quiet)
+    assert 'Do NOT end with "focus on developing your pieces"' in instruction
+    assert "on THIS lesson and no other" not in instruction
 
 
 def test_refutation_states_captured_piece() -> None:
@@ -788,3 +834,40 @@ def test_quiet_clause_says_nothing_about_bare_centralisation() -> None:
     # squares central. A bishop landing squarely on e4 with nothing else to show
     # for it gets no invented reason.
     assert _clause("7k/8/8/8/8/8/8/K6B w - - 0 1", "Be4") == ""
+
+
+def test_takeaway_lesson_is_phase_specific() -> None:
+    # The judge's follow-up: the composed lessons were phase-blind. Ply 72 got a
+    # generic "rook on an open file" tip in a rook endgame, where the real principle
+    # is the rook behind the passed pawn or cutting the enemy king off; ply 74
+    # centralised the king in a pawn endgame and was taught about safety, when in an
+    # endgame the king is an attacker. Same board fact, different lesson.
+    from chess_coach.pedagogy.features import PHASE_ENDGAME, PHASE_MIDDLEGAME
+    from chess_coach.prompts import EFFECT_OPEN_FILE, effect_takeaway
+
+    middlegame = effect_takeaway(EFFECT_OPEN_FILE, PHASE_MIDDLEGAME)
+    endgame = effect_takeaway(EFFECT_OPEN_FILE, PHASE_ENDGAME)
+    assert "no pawns in its way" in middlegame
+    assert "behind your passed pawn" in endgame
+    assert "cut the enemy king off" in endgame
+    assert middlegame != endgame
+
+    # A phase with no special case falls through to the shared lesson, so the table
+    # stays short instead of becoming a speculative matrix.
+    assert effect_takeaway(EFFECT_OPEN_FILE, PHASE_MIDDLEGAME) == effect_takeaway(EFFECT_OPEN_FILE)
+    # And an unknown category still yields nothing rather than an invented lesson.
+    assert effect_takeaway("no_such_effect", PHASE_ENDGAME) == ""
+
+
+def test_endgame_rook_takeaway_reaches_the_prompt() -> None:
+    # End to end: a rook reaching an open file in a rook endgame should teach the
+    # endgame principle, not the generic one.
+    from chess_coach.prompts import _build_takeaway_instruction
+
+    endgame = dataclasses.replace(
+        _move_eval_report("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", "g1h1", "a1a4"),
+        best_move="a1a4",
+    )
+    instruction = _build_takeaway_instruction(endgame)
+    assert "behind your passed pawn" in instruction
+    assert "no pawns in its way" not in instruction

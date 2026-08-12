@@ -15,9 +15,11 @@ fall short?".
 Usage:
     python scripts/eval_coach_review.py \
         --model qwen3:14b --base-url http://localhost:11435 \
-        --student-elo 1350 --opponent-elo 1500 --ply-cap 120 --seed 7 \
-        --judge-model claude-sonnet-4.6 \
-        --judge-command "kiro-cli chat --no-interactive --model claude-sonnet-4.6 {prompt}"
+        --student-elo 1350 --opponent-elo 1500 --ply-cap 120 --seed 7
+
+The judge defaults to claude-opus-5 and the command is derived from it, so neither
+needs passing. Do not drop to a cheaper judge without re-checking its per-ply
+claims against the board: claude-sonnet-4.6 was wrong on 5 of 5 such claims.
 """
 
 from __future__ import annotations
@@ -137,16 +139,33 @@ def main() -> None:
     parser.add_argument("--engine-timeout", type=float, default=120.0)
     parser.add_argument("--no-curated", action="store_true", help="skip the curated endgame/tactic positions")
     parser.add_argument("--out", default="output/coach_review")
-    parser.add_argument("--judge-model", required=True)
-    parser.add_argument("--judge-command", required=True, help="kiro-cli command template with {prompt}")
+    # Defaults to the strongest judge available. Measured on one transcript,
+    # claude-sonnet-4.6 got 5 of 5 per-ply factual claims WRONG (twice insisting
+    # dxe3 captured a pawn where the board has a knight on e3, and attributing a
+    # piece_type violation to the wrong ply), and built a headline recommendation
+    # on a misread metric. claude-opus-5 on the same transcript got 2 of 2 right
+    # and found two real defects the deterministic checker misses. The extra
+    # credits and ~2 minutes are cheap next to a wrong finding — we spent two
+    # investigations on the phantom one.
+    parser.add_argument("--judge-model", default="claude-opus-5")
+    parser.add_argument(
+        "--judge-command",
+        default=None,
+        help="judge command; defaults to kiro-cli with --judge-model (prompt on stdin)",
+    )
     parser.add_argument("--judge-base-url", default="http://localhost:11434")
     args = parser.parse_args()
 
     config = load_config(args.config)
     depth = args.depth if args.depth is not None else config.get("engine", {}).get("depth", 12)
 
+    # Derive the command from the model unless one is given. These two arguments
+    # both named a model and could silently disagree — and the COMMAND is what
+    # actually decides, so `--judge-model opus-5` with a sonnet command would have
+    # recorded the wrong model against the run.
+    judge_command = args.judge_command or f"kiro-cli chat --no-interactive --model {args.judge_model}"
     judge = create_provider(
-        "cli", model=args.judge_model, base_url=args.judge_base_url, api_key="", command=shlex.split(args.judge_command)
+        "cli", model=args.judge_model, base_url=args.judge_base_url, api_key="", command=shlex.split(judge_command)
     )
     model = OllamaProvider(model=args.model, base_url=args.base_url, timeout=300.0)
 
@@ -201,6 +220,9 @@ def main() -> None:
             seed=args.seed,
         )
         moves = student_moves(traj)
+        # `total` counts the curated positions too, so the progress line covers the
+        # whole job rather than resetting when the game ends.
+        total = len(moves) + (0 if args.no_curated else len(CURATED))
         print(f"  game: {traj.result}, {len(moves)} student moves; coaching each...")
         for ply, fen, move in moves:
             try:
@@ -222,6 +244,9 @@ def main() -> None:
                 print(f"  ply {ply}: {last.student_move_san} ({last.classification}, {last.latency_s:.1f}s)")
             except Exception as e:  # noqa: BLE001
                 print(f"  ply {ply}: SKIP ({e})")
+            # An explicit, labelled progress line for kiro-monitor. Without one it
+            # guesses, and it guessed the game result "1/2-1/2" was 50% complete.
+            print(f"  progress: {len(turns)}/{total} coached")
 
         if not args.no_curated:
             print("Coaching curated endgame/tactic positions for phase coverage...")
@@ -246,6 +271,7 @@ def main() -> None:
                     )
                 except Exception as e:  # noqa: BLE001
                     print(f"  curated {i}: SKIP ({e})")
+                print(f"  progress: {len(turns)}/{total} coached")
     finally:
         player.stop()
         oracle.stop()

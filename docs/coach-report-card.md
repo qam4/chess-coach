@@ -38,7 +38,10 @@ our own measurement rather than the coach. Detail for each is further down.
 | 16 | (our finding) Coach handed an EMPTY engine-lines section on 19/44 turns | Root-caused to a stale reference in the engine; fixed blunder + per-line base in the client | Empty sections 19 -> 0, rendered lines 25 -> 131; fidelity flat | kept |
 | 17 | "Catastrophic square-naming failure — 0% novel squares" | Nothing in the coach: this was our own metric handed over without saying which direction was good | Re-judged the identical transcript: became **strength #2**, "the 66% board-fact voicing and 0% invented squares are exactly right" | **was our bug, not the coach's** |
 | 18 | Same three lessons all game (counted by hand, twice) | Measured it: `lesson_concentration_rate` (4th design; two earlier ones deleted) | 82% (v17) -> 57% (v20) -> 68% (v21); judge now cites the number and confirms it independently | kept |
-| 19 | Lesson repetition is now the #1 weakness; endgame the biggest phase gap | **next** | — | open |
+| 19 | Closing question recycled; "one of three templates" | Compose the closing lesson from what the move verifiably DOES, instead of letting the model pick | Bogus hooks gone ("fork opportunity" on a move that forks nothing: 3 turns -> 0); no closing repeats more than twice; concentration 68% -> 66% (metric under-reports, see below) | kept |
+| 20 | Composed lessons are phase-blind (endgame taught as opening) | Phase-gate the lesson table: endgame rook-behind-passed-pawn, king as attacker, etc. | **Did not land.** Distinct lessons 11 -> 18 and top-3 coverage 57% -> 30% in the prompt, but only 2/18 endgame turns mention a passed pawn and none mention promotion or the king as a fighting piece — the model paraphrases the lesson back into its own vocabulary | kept (free, no fidelity cost) but ineffective |
+| 21 | (our finding) The judge itself was wrong on 5 of 5 per-ply factual claims | Switched the default judge to `claude-opus-5` | On the same transcript opus-5 got 2 of 2 right and found two real defects the checker misses | kept |
+| 22 | Coach text incoherent at ply 28 ("your opponent plays e3 … your pawn on e3 is undefended"); our own centrality clause misleading at ply 1002; harness bookkeeping leaking as explanation | **next** | — | open |
 
 ## Measurement philosophy (what to trust)
 
@@ -793,3 +796,53 @@ already compute, so variety comes from the data rather than from an instruction.
 run qwen3:14b — its incidental claims need checking. And it is capable of building a
 headline recommendation on a misread number, so the stats block we hand it is part
 of the experiment, not neutral scaffolding.
+
+## The judge itself was the unreliable part (2026-08-12)
+
+Two changes were measured against the judge's advice — composing the closing lesson
+(v22) and phase-gating it (v23) — and while doing so its per-ply factual claims
+were checked against the board for the first time. They did not hold up.
+
+**claude-sonnet-4.6, five specific claims, five wrong.** It asserted twice that
+ply 12's `dxe3` "recaptures a pawn, not a knight" and called it a fabrication; the
+position has a black knight on e3 and the coach was correct. It attributed the
+run's `piece_type` violation to that ply; the violation is at ply 60. It said ply
+68's "you captured the undefended rook on f4" was wrong because `Kxf4` is a king
+move; capturing a rook with the king is exactly what happened. It said ply 18's
+"the opponent threatened f4" was invented; a knight on g6 attacks f4. Earlier it
+built its entire headline recommendation on misreading a 0% metric as a defect.
+
+**claude-opus-5 on the same transcript: two claims, both correct, both new.**
+
+- Ply 28: the coach wrote *"your opponent plays e3, winning material because your
+  pawn on e3 is undefended."* Verified — e3 holds OUR pawn. The coach has the
+  opponent moving onto a square our own pawn occupies and calls it our undefended
+  pawn in the same sentence. Incoherent, and the fidelity checker recorded nothing.
+- Ply 1002 (white Kf2, pawn d5, black Kf7): the student played Ke3 and the coach
+  said the alternative Kf3 "takes it one step closer to the center". Both squares
+  are equidistant from the centre by the measure our own composer uses, and e3 is
+  the more central file — so the coach downgraded a more central move by claiming
+  the alternative was more central. **That one implicates our code**: the
+  `king_activity` clause compares from-square to to-square, which is locally true
+  and comparatively wrong when set against the student's move.
+
+It also identified something sonnet listed as a strength: our own harness
+bookkeeping leaking into the coaching as pseudo-explanation — "the evaluation
+spread shows it was a key decision", "the best move was also your move" — on five
+turns, occupying the slot where a chess reason belongs.
+
+So `claude-opus-5` is now the default judge in both review scripts, at 2.20x
+credits and ~3 minutes against sonnet's 1.30x and ~1 minute. That is cheap next to
+a wrong finding: sonnet's phantom ply-12 error cost two investigations, and its
+misread metric would have sent us to implement the opposite of what works.
+
+**Also fixed while there:** `--judge-model` and `--judge-command` both named a
+model and could silently disagree, with the command deciding — so a run could
+record opus-5 while actually being judged by sonnet. The command is now derived
+from the model unless explicitly given.
+
+**And the standing rule this produces:** the judge's *structural* observations have
+been consistently valuable — phase blindness, template closings, repetition counts,
+the bridge critique. Its claims about specific plies are leads to verify, not
+findings. Every one that has been checked against the board was wrong under
+sonnet; opus-5 is better but the habit stays.

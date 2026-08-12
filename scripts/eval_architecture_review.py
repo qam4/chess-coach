@@ -11,12 +11,16 @@ while respecting our constraints and the log of already-tried levers.
 
 Needs no engine and no tunnel: it consumes a saved transcript + the lever log.
 
-Usage (omit {prompt} so the prompt goes on STDIN — this context is tens of
-thousands of characters and exceeds the Windows command-line limit as an argv):
+The prompt goes on STDIN (never as an argv token): this context is tens of
+thousands of characters and exceeds the Windows command-line limit.
+
     python scripts/eval_architecture_review.py \
-        --transcript output/coach_review_v19/transcript.json \
-        --judge-model claude-sonnet-4.6 \
-        --judge-command "kiro-cli chat --no-interactive --model claude-sonnet-4.6"
+        --transcript output/coach_review_v23/transcript.json
+
+The judge defaults to claude-opus-5 and the command is derived from it. Do not
+drop to a cheaper judge without re-checking its per-ply claims against the board:
+claude-sonnet-4.6 was wrong on 5 of 5 such claims on one transcript, while
+claude-opus-5 was right on 2 of 2 and found two defects the checker misses.
 """
 
 from __future__ import annotations
@@ -118,8 +122,10 @@ def main() -> None:
     p.add_argument("--transcript", required=True, help="report-card transcript.json (with prompts)")
     p.add_argument("--lever-log", default="docs/coach-report-card.md")
     p.add_argument("--out", default="output/architecture_review")
-    p.add_argument("--judge-model", required=True)
-    p.add_argument("--judge-command", required=True)
+    # See the module docstring for why opus-5 is the default rather than a cheaper
+    # judge, and why the command is derived from the model instead of repeated.
+    p.add_argument("--judge-model", default="claude-opus-5")
+    p.add_argument("--judge-command", default=None)
     p.add_argument("--judge-base-url", default="http://localhost:11434")
     args = p.parse_args()
 
@@ -168,7 +174,7 @@ def main() -> None:
         model=args.judge_model,
         base_url=args.judge_base_url,
         api_key="",
-        command=shlex.split(args.judge_command),
+        command=shlex.split(args.judge_command or f"kiro-cli chat --no-interactive --model {args.judge_model}"),
     )
     print(f"Requesting architecture review ({len(prompt)} chars of context)...")
     review = judge.generate(prompt, max_tokens=4096, temperature=0.0)
