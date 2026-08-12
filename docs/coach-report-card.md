@@ -11,6 +11,35 @@ critique and phase-fit. It answers "is the coach the teacher we envisioned?".
 - Run: `--seed 7` fixes the game so successive runs are a clean before/after.
 - Artifacts live under `output/` (gitignored); results are recorded here.
 
+## Ledger — what the judge flagged, what we did, what happened
+
+Newest last. One row per finding, so the loop is auditable: a review names a
+problem, we make one change, we measure, and the row records whether it worked —
+including the changes that did not, and the findings that turned out to be about
+our own measurement rather than the coach. Detail for each is further down.
+
+| # | Judge flagged | What we changed | Outcome | Verdict |
+|---|---|---|---|---|
+| 1 | Generic, recycled advice | Removed the always-on "CHESS PRINCIPLES" crib | Score +0.7, fabrication counts flat | kept |
+| 2 | Fabricated causal chains ("Bc4 allows Nxd4") | Grounding rule forbidding unverifiable causes | No measurable effect — negative constraints do not work on this model | **reverted** |
+| 3 | Same tone for a slight slip and a blunder | Severity tiers from our own eval-drop bands | Violations 13 -> 6 | kept |
+| 4 | Verbose for the content delivered | Per-tier word limit + `max_tokens` | Replies shortened as designed | kept |
+| 5 | Refutations too vague | State the full refutation line | Move-salad; `illegal_move` 0 -> 5 | **reverted** |
+| 6 | (same) | Opponent's *single* first reply + opponent-aware checker | `illegal_move` -> 0 | kept |
+| 7 | Leads with principle, not position | Reorder prompt: position before principle | Cost accuracy — placement/piece_type doubled | **reverted** |
+| 8 | Wrong captured piece in opponent replies | Compose the captured piece from the board | Corrected a hallucination at zero cost | kept |
+| 9 | Best move explained generically | Voice the engine's `best_move_idea` | Necessary but insufficient — the label has only 10 distinct values | kept |
+| 10 | Closing maxims are interchangeable | Named principle + "next time you see X" hook | Kept on the judge's direct recommendation | kept |
+| 11 | Coach parroted coordinates and invented what the move did | Correct SAN base position + truncate, never emit coordinates | Prompt leaks 27/44 -> 0/44 | kept |
+| 12 | Coach misattributed whose move it was | Numbered SAN (`5...Nfg4 6.f4`) | Violations 8 -> 6, `piece_type` -> 0 | kept |
+| 13 | Best-move "why" still a category label | Compose a board-derived clause (item 3) | Specificity 34% -> 52% (corrected figures) | kept |
+| 14 | Guidance is abstract prose the model echoes | Instantiate each theme with the fact that fired it (item 4) | Cleanest fidelity of the series; teaching effect unmeasured | kept |
+| 15 | (our finding) 30% of best moves had no description | Clauses for quiet moves: open file, mobility, castling, extra defender (Change A) | Coverage 70% -> 89% | kept |
+| 16 | (our finding) Coach handed an EMPTY engine-lines section on 19/44 turns | Root-caused to a stale reference in the engine; fixed blunder + per-line base in the client | Empty sections 19 -> 0, rendered lines 25 -> 131; fidelity flat | kept |
+| 17 | "Catastrophic square-naming failure — 0% novel squares" | Nothing in the coach: this was our own metric handed over without saying which direction was good | Re-judged the identical transcript: became **strength #2**, "the 66% board-fact voicing and 0% invented squares are exactly right" | **was our bug, not the coach's** |
+| 18 | Same three lessons all game (counted by hand, twice) | Measured it: `lesson_concentration_rate` (4th design; two earlier ones deleted) | 82% (v17) -> 57% (v20) -> 68% (v21); judge now cites the number and confirms it independently | kept |
+| 19 | Lesson repetition is now the #1 weakness; endgame the biggest phase gap | **next** | — | open |
+
 ## Measurement philosophy (what to trust)
 
 **You cannot check LLM prose by matching words against it.** That is the whole
@@ -722,3 +751,45 @@ decide whether prose was *good*, which a keyword cannot know. This list is used 
 count *how often the same lesson recurs*. Adding a word to it cannot make the
 coaching look better, only make the measurement blunter — and unlike the deleted
 metric, the output was validated against a count nobody derived from it.
+
+## Re-judging the same transcript with corrected metrics (2026-08-11)
+
+A clean experiment, because the coach's output was byte-identical: only the stats
+block the reviewer is handed changed (directions stated, repetition measured).
+Anything that moved is attributable to that block. Artifacts in
+`output/coach_review_v21_rejudge/`.
+
+**The previous review's weakness #1 became strength #2.**
+
+Before: *"Catastrophic square-naming failure (66% re-use, 0% novel). A chess
+teacher who can't say 'your bishop is hanging on c4' is not teaching chess — it's
+paraphrasing prompts."* It was the headline finding and the basis of the top
+recommendation.
+
+After: *"Fidelity to engine-supplied facts is solid. The 66% board-fact voicing and
+0% invented squares are exactly right. The coach isn't hallucinating piece
+locations or phantom threats. This is the floor the product needs, and it holds."*
+
+Same coaching, same numbers, opposite conclusion. The whole complaint was a metric
+handed over without its sign — and had we acted on it, the change would have been
+"let the model name squares we did not give it", the exact opposite of every lever
+that has worked.
+
+**The new #1 weakness is the one we just started measuring**, and the reviewer does
+not merely repeat our figure — it verifies it from the transcript with its own
+counts: "undefended piece" closing on ten turns, king safety on twelve, open file
+on eight. First time a metric we built and a reviewer that had no hand in building
+it have independently agreed. Score unchanged at 4.5/10, consistent with treating
+it as too coarse to move on.
+
+**Its recommended fix, and why we will not implement it literally:** "track which
+principle was used in the last N turns and prohibit repetition in the prompt". The
+prohibition half is a negative constraint, which is the one lever category that has
+never worked on this model (row 2 of the ledger). The tracking half is sound. So
+the composed version: derive the closing hook from the move-effect category we
+already compute, so variety comes from the data rather than from an instruction.
+
+**Two cautions about the reviewer itself.** It called the coach "Qwen3-8B" when we
+run qwen3:14b — its incidental claims need checking. And it is capable of building a
+headline recommendation on a misread number, so the stats block we hand it is part
+of the experiment, not neutral scaffolding.

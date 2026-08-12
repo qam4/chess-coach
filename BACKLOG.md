@@ -1387,3 +1387,42 @@ Every previous prose metric either saturated or could not be falsified.
    half of the review's headline finding.
 4. **Phase-specific content** (ECO opening names, endgame technique). Raised in
    every review so far.
+
+### Re-judged v21 with the corrected stats block — 2026-08-11
+
+Same transcript, byte-identical coach output, only the metrics block changed. See
+the ledger at the top of `docs/coach-report-card.md`.
+
+- The previous review's **weakness #1 became strength #2**. "Catastrophic
+  square-naming failure (0% novel)" is now "the 66% board-fact voicing and 0%
+  invented squares are exactly right... the floor the product needs, and it
+  holds." The complaint was entirely our unlabelled metric. Acting on it would
+  have meant letting the model name squares we never gave it.
+- **Lesson repetition is now the #1 weakness**, and the reviewer confirms our
+  68% figure with its own hand count (undefended piece x10, king safety x12, open
+  file x8). A metric we built and a reviewer with no hand in building it agree.
+- Score unchanged at 4.5/10.
+- It names the **endgame as the biggest phase gap**: "in the endgame your king
+  becomes a fighting piece" appears zero times across 18 endgame turns.
+
+**Next: compose the closing hook (ledger row 19).**
+
+The reviewer's own fix is "track the last N principles and prohibit repetition in
+the prompt". Take the tracking, drop the prohibition — a negative constraint is
+ledger row 2, the lever category that has never worked on this model. Instead
+derive the hook from the move-effect category already computed for the clause, so
+variety comes from the data.
+
+Accept/reject criteria, decided before running:
+- `lesson_concentration_rate` falls from 68% — the point of the change;
+- `recycled_phrase_rate` does not rise above ~25% — otherwise we have traded
+  repeated meaning for repeated wording;
+- fidelity violations stay at 5 or fewer and `unsourced_square_rate` stays under
+  5% — accuracy is not for sale;
+- then read the output, and only then re-judge.
+
+**After that**, in order: verify the four fidelity errors the reviewer found by
+reading that our checker missed (ply 12 "captured the knight on e3" where `dxe3`
+takes a pawn is the important one — that is what `piece_type` exists to catch);
+compose position-level facts; phase-specific content starting with the endgame,
+which is both the biggest phase by turn count and the weakest.
