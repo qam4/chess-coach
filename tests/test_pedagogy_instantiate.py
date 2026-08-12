@@ -105,11 +105,13 @@ def test_threat_fact_names_whose_threat_it_is() -> None:
     # a danger TO the student every time — in a position where the student had
     # mate in one it wrote "your king is vulnerable if you don't act". A
     # side-ambiguous fact is not a fact.
+    # LEAD has a black knight on d5 and our rook on a1, and the fact names both the
+    # side holding the threat and the piece it is aimed at (see the ply-28 test).
     mine = feature_facts(_report(LEAD, threats_white=[_threat("d5")]))
-    assert mine["threat_present"] == "you threaten d5"
+    assert mine["threat_present"] == "you threaten their knight on d5"
 
     theirs = feature_facts(_report(LEAD, threats_black=[_threat("a1")]))
-    assert theirs["threat_present"] == "the opponent threatens a1"
+    assert theirs["threat_present"] == "the opponent threatens your rook on a1"
 
 
 def test_own_threat_is_stated_in_preference_to_the_opponents() -> None:
@@ -117,4 +119,28 @@ def test_own_threat_is_stated_in_preference_to_the_opponents() -> None:
     both = feature_facts(
         _report(LEAD, threats_white=[_threat("d5")], threats_black=[_threat("a1")]),
     )
-    assert both["threat_present"] == "you threaten d5"
+    assert both["threat_present"] == "you threaten their knight on d5"
+
+
+def test_threat_fact_names_the_piece_under_threat() -> None:
+    # Found by the frontier judge at ply 28. The fact said "the opponent threatens
+    # e3", and the model read the bare square as a DESTINATION, writing "your
+    # opponent plays e3, winning material because your pawn on e3 is undefended" —
+    # for a square our own pawn occupies. A square alone is ambiguous between
+    # "threatens to move there" and "threatens what stands there".
+    fen = "r1b1k1r1/pppp1p1p/4p3/6P1/1bBB4/1P2P3/P1P3nP/RN1K3R w q - 0 15"
+    facts = feature_facts(_report(fen, threats_black=[_threat("e3")]))
+    assert facts["threat_present"] == "the opponent threatens your pawn on e3"
+
+    # Our own threat points at THEIR piece, and the possessive follows ownership of
+    # the threat rather than the wording of the fact.
+    mine = feature_facts(_report(fen, threats_white=[_threat("b4")]))
+    assert mine["threat_present"] == "you threaten their bishop on b4"
+
+
+def test_threat_fact_falls_back_to_the_square_when_it_is_empty() -> None:
+    # A threat can be aimed at a square nobody occupies (infiltration, mate).
+    # Naming a piece that is not there would be worse than being vague.
+    fen = "r1b1k1r1/pppp1p1p/4p3/6P1/1bBB4/1P2P3/P1P3nP/RN1K3R w q - 0 15"
+    facts = feature_facts(_report(fen, threats_black=[_threat("f3")]))
+    assert facts["threat_present"] == "the opponent threatens the f3 square"

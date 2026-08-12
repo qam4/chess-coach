@@ -871,3 +871,30 @@ def test_endgame_rook_takeaway_reaches_the_prompt() -> None:
     instruction = _build_takeaway_instruction(endgame)
     assert "behind your passed pawn" in instruction
     assert "no pawns in its way" not in instruction
+
+
+def test_king_walk_clause_needs_to_beat_the_students_move() -> None:
+    # Found by the frontier judge at ply 1002. White Kf2, pawn d5, black Kf7: the
+    # student played the MORE central Ke3, and we told the coach that Kf3 was
+    # "closer to the centre" — so it informed the student their more central move
+    # was less central. The clause was true of Kf3 in isolation (f2 -> f3 does
+    # approach the centre) and wrong as a reason to prefer it.
+    import chess
+
+    from chess_coach.prompts import _build_takeaway_instruction, _move_effect
+
+    fen = "8/5k2/8/3P4/8/8/5K2/8 w - - 0 1"
+    board = chess.Board(fen)
+
+    # Against a rival that is equally central (e3 vs f3), say nothing.
+    assert _move_effect(board, "f2f3", target_possessive="their ", rival_uci="f2e3") == ("", "")
+    # Against a rival that stays put on the rim, the claim is a real distinction.
+    _category, clause = _move_effect(board, "f2f3", target_possessive="their ", rival_uci="f2g1")
+    assert "closer to the centre" in clause
+    # And with no rival supplied at all, the isolated fact still stands.
+    assert "closer to the centre" in _move_effect(board, "f2f3", target_possessive="their ")[1]
+
+    # End to end: the takeaway must not preach king activity when centralisation is
+    # not what separates the moves.
+    report = dataclasses.replace(_move_eval_report(fen, "f2e3", "f2f3"), best_move="f2f3")
+    assert "fighting piece" not in _build_takeaway_instruction(report)

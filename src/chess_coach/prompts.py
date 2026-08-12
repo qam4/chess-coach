@@ -1114,7 +1114,13 @@ def _move_effect_clause(board: chess.Board | None, uci: str, *, target_possessiv
     return _move_effect(board, uci, target_possessive=target_possessive)[1]
 
 
-def _move_effect(board: chess.Board | None, uci: str, *, target_possessive: str) -> tuple[str, str]:
+def _move_effect(
+    board: chess.Board | None,
+    uci: str,
+    *,
+    target_possessive: str,
+    rival_uci: str = "",
+) -> tuple[str, str]:
     """``(category, clause)`` for what a move DOES; ``("", "")`` if nothing is certain.
 
     The category is the same judgement the clause is built from, returned rather
@@ -1134,6 +1140,11 @@ def _move_effect(board: chess.Board | None, uci: str, *, target_possessive: str)
     Pawns and the king are excluded as *named targets*: an early version turned
     a real check into a pawn inventory ("giving check and hitting your pawn on
     b2 and your pawn on h2").
+
+    ``rival_uci`` is the move this one is being compared against (the student's,
+    when describing the engine's choice). It suppresses claims that are true of
+    the move in isolation but misleading as a *reason to prefer it* — see the
+    king-walk branch in :func:`_quiet_move_effect`.
     """
     if board is None:
         return ("", "")
@@ -1201,7 +1212,7 @@ def _move_effect(board: chess.Board | None, uci: str, *, target_possessive: str)
         if after.attackers(not mover, sq) and len(after.attackers(mover, sq)) == 1:
             name = chess.piece_name(piece.piece_type)
             return (EFFECT_DEFEND, f", defending your {name} on {chess.square_name(sq)}")
-    return _quiet_move_effect(board, after, move)
+    return _quiet_move_effect(board, after, move, rival_uci=rival_uci)
 
 
 def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move) -> str:
@@ -1209,7 +1220,13 @@ def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move)
     return _quiet_move_effect(board, after, move)[1]
 
 
-def _quiet_move_effect(board: chess.Board, after: chess.Board, move: chess.Move) -> tuple[str, str]:
+def _quiet_move_effect(
+    board: chess.Board,
+    after: chess.Board,
+    move: chess.Move,
+    *,
+    rival_uci: str = "",
+) -> tuple[str, str]:
     """Describe a move that captures, attacks and defends nothing.
 
     Measured on one game: 13 of 44 best moves reached this point and got only the
@@ -1282,7 +1299,21 @@ def _quiet_move_effect(board: chess.Board, after: chess.Board, move: chess.Move)
     if piece.piece_type == chess.KING and phase_of_board(board) == PHASE_ENDGAME:
         before_dist = _centre_distance(move.from_square)
         after_dist = _centre_distance(move.to_square)
-        if after_dist < before_dist:
+        # Only claim centralisation when it actually distinguishes this move from
+        # the one it is being compared against. Otherwise the clause is true in
+        # isolation and wrong as a reason: with white Kf2 and the student playing
+        # the MORE central Ke3, we told the coach that Kf3 was "closer to the
+        # centre", and it duly told the student their more central move was less
+        # central. If the centre is not what separates the two moves, the engine
+        # preferred it for a reason we cannot see — so say nothing.
+        rival_is_at_least_as_central = False
+        if rival_uci:
+            try:
+                rival = chess.Move.from_uci(rival_uci)
+                rival_is_at_least_as_central = _centre_distance(rival.to_square) <= after_dist
+            except ValueError:
+                rival_is_at_least_as_central = False
+        if after_dist < before_dist and not rival_is_at_least_as_central:
             return (
                 EFFECT_KING_ACTIVITY,
                 f", walking your king from {from_name} to {to_name}, closer to the centre",
@@ -1340,7 +1371,7 @@ def _build_takeaway_instruction(report: ComparisonReport) -> str:
     claim.
     """
     board = _safe_board(report.fen)
-    category, _clause = _move_effect(board, report.best_move, target_possessive="their ")
+    category, _clause = _move_effect(board, report.best_move, target_possessive="their ", rival_uci=report.user_move)
     phase = phase_of_board(board) if board is not None else ""
     lesson = effect_takeaway(category, phase)
     if not lesson:
@@ -1368,7 +1399,9 @@ def _best_move_achievement(report: ComparisonReport) -> str:
     is returned unchanged.
     """
     board = _safe_board(report.fen)
-    effect = _move_effect_clause(board, report.best_move, target_possessive="their ")
+    # The student's move is the comparison this description is implicitly making,
+    # so pass it: a clause that does not distinguish the two moves is not a reason.
+    _category, effect = _move_effect(board, report.best_move, target_possessive="their ", rival_uci=report.user_move)
     if not effect:
         return report.best_move_idea
     concrete = effect.removeprefix(", ").strip()

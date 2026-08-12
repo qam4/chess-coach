@@ -47,6 +47,30 @@ def _side_names(fen: str) -> tuple[str, str]:
     return ("black", "white") if len(parts) > 1 and parts[1] == "b" else ("white", "black")
 
 
+def _describe_target(board: chess.Board | None, square: str, threat_is_ours: bool) -> str:
+    """Name what stands on ``square``, so a threat reads unambiguously.
+
+    "the opponent threatens e3" was read by the model as the opponent MOVING to
+    e3; "the opponent threatens your pawn on e3" cannot be. Whose piece it is
+    follows from who owns the threat, not from the phrasing of the fact: a threat
+    of ours points at their piece, and theirs at ours.
+
+    Falls back to naming the square when it is empty — a threat can be aimed at a
+    square nobody occupies (an infiltration or mating square), and inventing a
+    piece there would be worse than being vague.
+    """
+    piece = None
+    if board is not None:
+        try:
+            piece = board.piece_at(chess.parse_square(square))
+        except ValueError:
+            piece = None
+    if piece is None:
+        return f"the {square} square"
+    owner = "their" if threat_is_ours else "your"
+    return f"{owner} {chess.piece_name(piece.piece_type)} on {square}"
+
+
 def feature_facts(report: PositionReport) -> dict[str, str]:
     """Map each present ``Position_Feature`` to a short, verified board fact.
 
@@ -77,17 +101,25 @@ def feature_facts(report: PositionReport) -> dict[str, str]:
         hp = theirs[0]
         facts[HANGING_PIECE_OPPONENT] = f"their {hp.piece} on {hp.square} is undefended"
 
-    # WHOSE threat matters. The first version said "there is a live threat
-    # against c8" with no side, and the model read it as a danger TO the student
-    # every time — in a position where the student had mate in one it wrote
-    # "your king is vulnerable if you don't act". A side-ambiguous fact is not a
-    # fact; the report keys threats by the side making them, so name the side.
-    # The student's own threat is stated first: it is the actionable one.
+    # WHOSE threat, and WHAT is threatened. Both halves were learned the hard way.
+    #
+    # First version: "there is a live threat against c8", no side. The model read
+    # it as a danger TO the student every time — in a position where the student
+    # had mate in one it wrote "your king is vulnerable if you don't act".
+    #
+    # Second version named the side but only the square: "the opponent threatens
+    # e3". A bare square is ambiguous between "threatens to move to e3" and
+    # "threatens the piece standing on e3", and the model chose the first, writing
+    # "your opponent plays e3, winning material because your pawn on e3 is
+    # undefended" — for a square OUR pawn occupies. So name the piece under
+    # threat, which the board tells us.
     for owner, phrasing in ((side, "you threaten {}"), (opponent, "the opponent threatens {}")):
         for threat in report.threats.get(owner) or []:
-            if threat.target_squares:
-                facts[THREAT_PRESENT] = phrasing.format(threat.target_squares[0])
-                break
+            if not threat.target_squares:
+                continue
+            square = threat.target_squares[0]
+            facts[THREAT_PRESENT] = phrasing.format(_describe_target(board, square, owner == side))
+            break
         if THREAT_PRESENT in facts:
             break
 
