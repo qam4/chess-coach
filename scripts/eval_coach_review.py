@@ -20,6 +20,10 @@ Usage:
 The judge defaults to claude-opus-5 and the command is derived from it, so neither
 needs passing. Do not drop to a cheaper judge without re-checking its per-ply
 claims against the board: claude-sonnet-4.6 was wrong on 5 of 5 such claims.
+
+Under kiro-monitor, pass --progress-pattern "progress=(\\d+)/(\\d+)" to read the
+progress line this prints. Without it the monitor guesses and has reported the chess
+result "1/2-1/2" as 50% complete.
 """
 
 from __future__ import annotations
@@ -246,7 +250,11 @@ def main() -> None:
                 print(f"  ply {ply}: SKIP ({e})")
             # An explicit, labelled progress line for kiro-monitor. Without one it
             # guesses, and it guessed the game result "1/2-1/2" was 50% complete.
-            print(f"  progress: {len(turns)}/{total} coached")
+            # No spaces in the token: the monitor's --progress-pattern is passed
+            # through PowerShell's -ArgumentList, which splits on spaces, so a
+            # pattern like "progress: (\d+)/(\d+)" arrives truncated to "progress:"
+            # and matches with no capture groups (hence no percent).
+            print(f"  progress={len(turns)}/{total}")
 
         if not args.no_curated:
             print("Coaching curated endgame/tactic positions for phase coverage...")
@@ -271,7 +279,7 @@ def main() -> None:
                     )
                 except Exception as e:  # noqa: BLE001
                     print(f"  curated {i}: SKIP ({e})")
-                print(f"  progress: {len(turns)}/{total} coached")
+                print(f"  progress={len(turns)}/{total}")
     finally:
         player.stop()
         oracle.stop()
