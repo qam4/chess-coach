@@ -116,6 +116,17 @@ class ReviewStats:
     # Both are 0.0 when the transcript did not capture prompts.
     composed_fact_rate: float = 0.0
     unsourced_square_rate: float = 0.0
+    # Repetition, the one thing a frontier reviewer has now complained about
+    # twice and counted by hand while we had no measurement for it at all.
+    # `recycled_phrase_rate`: mean share of each turn's five-word windows that
+    # already appeared in an earlier turn (0 = always fresh wording). Measures
+    # repeated WORDING.
+    # `lesson_concentration_rate`: share of turns whose closing lesson is one of
+    # the three most common. Measures repeated MEANING, which is the thing that
+    # was actually complained about — the model rewords freely while teaching the
+    # same lesson, so the two numbers move independently.
+    recycled_phrase_rate: float = 0.0
+    lesson_concentration_rate: float = 0.0
     # Fidelity violations broken down by phase (where to focus composer work).
     fidelity_by_phase: dict[str, dict[str, int]] = field(default_factory=dict)
     # Turns whose PROMPT still contained a raw UCI token (e.g. "f6g4"). SAN
@@ -136,6 +147,8 @@ class ReviewStats:
             "latency_max_s": round(self.latency_max_s, 2),
             "composed_fact_rate": round(self.composed_fact_rate, 4),
             "unsourced_square_rate": round(self.unsourced_square_rate, 4),
+            "recycled_phrase_rate": round(self.recycled_phrase_rate, 4),
+            "lesson_concentration_rate": round(self.lesson_concentration_rate, 4),
             "fidelity_by_phase": {k: dict(v) for k, v in self.fidelity_by_phase.items()},
             "prompt_uci_leaks": self.prompt_uci_leaks,
         }
@@ -162,6 +175,8 @@ class ReviewStats:
             latency_max_s=d.get("latency_max_s", 0.0),
             composed_fact_rate=d.get("composed_fact_rate", 0.0),
             unsourced_square_rate=d.get("unsourced_square_rate", 0.0),
+            recycled_phrase_rate=d.get("recycled_phrase_rate", 0.0),
+            lesson_concentration_rate=d.get("lesson_concentration_rate", 0.0),
             fidelity_by_phase={k: dict(v) for k, v in (d.get("fidelity_by_phase") or {}).items()},
             prompt_uci_leaks=d.get("prompt_uci_leaks", 0),
         )
@@ -205,6 +220,133 @@ _UCI_TOKEN_RE = re.compile(r"\b[a-h][1-8][a-h][1-8][qrbn]?\b")
 # "exchange" and "center" appear in essentially any chess sentence, so it passed
 # on 44 of 44 real responses and on prose written specifically to fail it. See
 # the ReviewStats docstring; that question belongs to the frontier review.
+
+
+#: Length of the word window used to detect recycled phrasing. Five words is long
+#: enough that ordinary chess vocabulary ("your knight on") does not match by
+#: accident, and short enough to catch a reworded template.
+_SHINGLE_N = 5
+
+#: Sentence terminators, for pulling the closing sentence off a response.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _normalise_words(text: str) -> list[str]:
+    """Lowercased word list with markdown and punctuation stripped."""
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def _shingles(text: str, n: int = _SHINGLE_N) -> set[str]:
+    """The set of n-word windows in ``text``."""
+    words = _normalise_words(text)
+    if len(words) < n:
+        return {" ".join(words)} if words else set()
+    return {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
+
+
+def recycled_phrase_rates(turns: list[ReviewTurn]) -> list[float]:
+    """Per turn: the fraction of its phrasing that already appeared earlier.
+
+    Answers the complaint a frontier reviewer raised twice and counted by hand —
+    that the coaching is "wallpaper", the same few sentences regardless of the
+    position. For each turn, what share of its five-word windows occurred in any
+    PREVIOUS turn: 0.0 is all fresh wording, 1.0 is a verbatim rehash. The first
+    turn has nothing to repeat and is always 0.0.
+
+    Deterministic, needs no model, and unlike the square-based screens it cannot
+    be improved by padding the output with board references. It IS gameable by
+    padding with *novel* words, so read it next to the word-count limits rather
+    than alone.
+    """
+    seen: set[str] = set()
+    rates: list[float] = []
+    for turn in turns:
+        current = _shingles(turn.coach_feedback)
+        if not current:
+            rates.append(0.0)
+            continue
+        rates.append(len(current & seen) / len(current) if seen else 0.0)
+        seen |= current
+    return rates
+
+
+def closing_sentence(turn: ReviewTurn) -> str:
+    """The response's last sentence, normalised for comparison.
+
+    The closing "next time you see X, ask yourself Y" hook is where the reviewer
+    found the worst repetition, so it is worth measuring separately from the body:
+    a response can be specific about the position and still end with the same
+    lesson every time.
+    """
+    text = turn.coach_feedback.strip()
+    if not text:
+        return ""
+    sentences = [s for s in _SENTENCE_SPLIT_RE.split(text) if s.strip()]
+    return " ".join(_normalise_words(sentences[-1])) if sentences else ""
+
+
+#: Template scaffolding and generic English, removed before looking at what a
+#: closing sentence is actually about.
+#:
+#: This is a word list, and this file deleted a metric for being built on a word
+#: list, so the difference matters: that one used keywords to decide whether prose
+#: was GOOD, which a keyword cannot know. These words are removed to count how
+#: often the same lesson recurs — a frequency measure over what is left. Adding a
+#: word here cannot make the coaching look better, only make the measurement
+#: blunter, and the result was checked against an independent count (below).
+_TEMPLATE_WORDS = frozenset(
+    """next time you see a an the your my is are was were do does did can could i it
+    its this that these those and or but if when whether ask yourself asking to of on
+    in at for with without be been being have has had will would should shall may
+    might must there their they them then than so as by from up down out off over
+    under again more most less least very just also too not no yes what which who
+    whom how why where takeaway transferable move moves moved making make makes made
+    piece pieces play plays played player position positions board game games one two
+    first next last other another same different good better best strong stronger
+    weak weaker safe safer keep keeps kept get gets got put puts placing place""".split()
+)
+
+#: How many of the most common closing terms count as "the coach's usual lessons".
+#: Three, because that is the claim being measured: a reviewer counting by hand
+#: said the closing question was "almost always one of three templates".
+_CONCENTRATION_TOP_N = 3
+
+
+def _lesson_terms(text: str) -> set[str]:
+    """Content words of a closing sentence — what the lesson is *about*."""
+    return {w for w in _normalise_words(text) if w not in _TEMPLATE_WORDS and len(w) > 2}
+
+
+def lesson_concentration(turns: list[ReviewTurn]) -> float:
+    """Share of turns whose closing lesson is one of the three most common.
+
+    Measures "the coach teaches the same few lessons regardless of the position",
+    which is the complaint a frontier reviewer raised twice and quantified by hand.
+    Lower is better; 1.0 means three ideas cover the whole game.
+
+    Two earlier designs for this failed and are worth recording, because both
+    looked reasonable:
+
+    * ``recycled_phrase_rate`` (kept, below) measures repeated *wording*. It reads
+      21-23% flat across three runs and its worst turns overlapped the reviewer's
+      cited plies only 3 of 12 — because the model rewords freely while keeping the
+      lesson identical.
+    * counting *distinct closing sentences* scored 95-100%, i.e. saturated and
+      useless, for the same reason: "next time you see a fork..." and "next time
+      you see your knight on the back rank..." are different strings and the same
+      template. It was deleted rather than kept with a warning.
+
+    This one agrees with the hand count: three terms cover 57-68% of turns in the
+    runs measured, matching "almost always one of three templates".
+    """
+    per_turn = [_lesson_terms(closing_sentence(t)) for t in turns]
+    frequency: Counter[str] = Counter()
+    for terms in per_turn:
+        frequency.update(terms)
+    if not frequency or not turns:
+        return 0.0
+    common = {term for term, _ in frequency.most_common(_CONCENTRATION_TOP_N)}
+    return sum(1 for terms in per_turn if terms & common) / len(turns)
 
 
 def _extra_squares(turn: ReviewTurn) -> set[str]:
@@ -268,6 +410,8 @@ def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
         latency_max_s=(latencies[-1] if latencies else 0.0),
         composed_fact_rate=(sum(1 for t in turns if voices_composed_fact(t)) / n) if n else 0.0,
         unsourced_square_rate=(sum(1 for t in turns if names_unsourced_square(t)) / n) if n else 0.0,
+        recycled_phrase_rate=(sum(recycled_phrase_rates(turns)) / n) if n else 0.0,
+        lesson_concentration_rate=lesson_concentration(turns),
         fidelity_by_phase={k: dict(v) for k, v in by_phase.items()},
         prompt_uci_leaks=sum(1 for t in turns if t.prompt and _UCI_TOKEN_RE.search(t.prompt)),
     )
@@ -339,6 +483,13 @@ def _fmt_stats(stats: ReviewStats) -> str:
         f"Turns naming a square we never supplied: {stats.unsourced_square_rate:.0%} "
         f"(LOWER IS BETTER — the model has no way to verify a square we did not give "
         f"it, so this is where fabrication appears; 0% is the target, not a weakness)\n"
+        f"Recycled phrasing: {stats.recycled_phrase_rate:.0%} of an average turn's "
+        f"five-word phrases already appeared in an earlier turn "
+        f"(LOWER IS BETTER — repeated wording)\n"
+        f"Lesson concentration: {stats.lesson_concentration_rate:.0%} of turns close on "
+        f"one of only three recurring lessons "
+        f"(LOWER IS BETTER — repeated meaning, i.e. the same advice regardless of the "
+        f"position; this is measured, so you do not need to count it by hand)\n"
         f"Empty feedback turns: {stats.empty_feedback}\n"
         f"Prompts still containing raw UCI (should be 0): {stats.prompt_uci_leaks}\n"
         f"Generation latency (s): mean {stats.latency_mean_s:.1f}, "

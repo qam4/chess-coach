@@ -1351,3 +1351,39 @@ same place Change A does.
 Deliberately NOT doing: adding more pedagogy YAML (the previous review's advice,
 and the entries already fire on nearly every turn), or asking the model to name
 squares it was not given.
+
+### Repetition is now measured (action item 2 from the v21 review) — 2026-08-11
+
+Two deterministic metrics in the report card, no model involved:
+
+- `recycled_phrase_rate` — repeated **wording**: the share of a turn's five-word
+  phrases that appeared in an earlier turn. 21-27% across five runs.
+- `lesson_concentration_rate` — repeated **meaning**: the share of turns whose
+  closing sentence uses one of the three most common content words in the game.
+  **82% (v17) -> 57% (v20) -> 68% (v21).**
+
+The second is the one that matters and it was the fourth design. Full account in
+`docs/coach-report-card.md`; short version: measuring repeated wording missed the
+complaint entirely (the model rewords while teaching the same lesson, overlap with
+the reviewer's cited plies 3/12), counting distinct closing sentences saturated at
+95-100% and was deleted, and picking the single dominant term overlapped 0/12.
+Lesson concentration reproduces the reviewer's hand count and moves across runs.
+
+**Why this was worth doing first:** it is the only metric we have that both moves
+and can fail, and it was validated against a count we did not derive ourselves.
+Every previous prose metric either saturated or could not be falsified.
+
+**Next, in order:**
+
+1. **Vary the closing hook by mistake type** (item 5, now unblocked). There is a
+   number that can show whether it works: `lesson_concentration_rate` should fall
+   without `recycled_phrase_rate` rising, and with fidelity flat. Compose the hook
+   from the move-effect category rather than letting the model pick a maxim.
+2. **Verify the four fidelity errors the reviewer found by reading** that our
+   checker missed — especially ply 12, "you captured the opponent's knight on e3"
+   where `dxe3` takes a pawn. That is what `piece_type` exists to catch, so if the
+   reviewer is right we have a hole in it.
+3. **Compose position-level facts**, not just move-level ones — the salvageable
+   half of the review's headline finding.
+4. **Phase-specific content** (ECO opening names, endgame technique). Raised in
+   every review so far.

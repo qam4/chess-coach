@@ -670,3 +670,55 @@ Keeping it with a warning attached does not work — the number still gets print
 still gets quoted in a review prompt, and still gets cited months later by someone
 who did not read the warning. That is exactly how the 64% figure ended up
 anchoring an architecture review.
+
+## Measuring repetition (2026-08-11) — and two designs that failed first
+
+The reviewer complained twice that the coaching says the same thing every move,
+and counted it by hand: "the closing question is almost always one of three
+templates", with "can I attack an undefended piece?" on roughly half the game. We
+had no measurement for it at all, so every discussion of it was anecdote against
+anecdote.
+
+Because the reviewer had produced a hand count, there was something to check a
+candidate metric *against* — which is how two plausible designs got caught.
+
+**Attempt 1, repeated wording** (`recycled_phrase_rate`, kept). For each turn,
+the share of its five-word windows that already appeared in an earlier turn. Reads
+21-27% across five runs and its worst-offending turns overlapped the reviewer's
+cited plies only **3 of 12**. Kept, because repeated wording is a real and
+separate thing and the number is honest about what it is — but it does not measure
+the complaint, because the model rewords freely while teaching the same lesson.
+
+**Attempt 2, distinct closing sentences** (deleted). Scored **95-100%** — saturated
+and useless. "Next time you see a fork..." and "next time you see your knight on
+the back rank..." are different strings and the same template. Deleted rather than
+kept with a warning, per the rule the previous metric taught us.
+
+**Attempt 3, the dominant lesson term** (rejected). Whichever single content word
+appears in the most closing sentences. Picks "king", which overlaps the reviewer's
+cited plies **0 of 12** — because the complaint was not about one lesson, it was
+about *three* covering everything.
+
+**Attempt 4, lesson concentration** (shipped). The share of turns whose closing
+sentence contains one of the three most common content words across the game.
+Directly encodes the reviewer's claim, and reproduces it:
+
+| run | lesson concentration | recycled phrasing |
+|---|---|---|
+| v17 | 82% | 25% |
+| v18 | 80% | 27% |
+| v19 | 68% | 23% |
+| v20 | **57%** | 21% |
+| v21 | 68% | 22% |
+
+It has the properties the deleted metrics lacked. It is not saturated, it moves
+across runs, it can fail, and it agrees with an independent count. It also shows
+the lever series did reduce repetition (82% -> 57%) and that v21 gave some back.
+
+**On the word list.** This metric strips template scaffolding and generic English
+before counting, which is a hand-authored word list — the thing we just deleted a
+metric for. The distinction is worth stating plainly: the old list used keywords to
+decide whether prose was *good*, which a keyword cannot know. This list is used to
+count *how often the same lesson recurs*. Adding a word to it cannot make the
+coaching look better, only make the measurement blunter — and unlike the deleted
+metric, the output was validated against a count nobody derived from it.

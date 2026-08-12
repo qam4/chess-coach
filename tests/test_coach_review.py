@@ -256,3 +256,79 @@ def test_stats_block_tells_the_reviewer_which_direction_is_good() -> None:
     assert "HIGHER IS BETTER" in prompt
     assert "LOWER IS BETTER" in prompt
     assert "not a weakness" in prompt
+
+
+def test_recycled_phrasing_is_zero_for_fresh_wording() -> None:
+    from chess_coach.eval.coach_review import recycled_phrase_rates
+
+    turns = [
+        _turn(0, PHASE_OPENING, feedback="Your knight on b1 has nowhere useful to go yet."),
+        _turn(2, PHASE_OPENING, feedback="Trading the bishop pair away hands over long-term pressure."),
+        _turn(4, PHASE_OPENING, feedback="A rook belongs behind the passed pawn, escorting it forward."),
+    ]
+    assert recycled_phrase_rates(turns) == [0.0, 0.0, 0.0]
+
+
+def test_recycled_phrasing_catches_a_verbatim_repeat() -> None:
+    from chess_coach.eval.coach_review import recycled_phrase_rates
+
+    line = "Next time you see an undefended piece, ask yourself whether you can attack it."
+    rates = recycled_phrase_rates([_turn(i, PHASE_OPENING, feedback=line) for i in range(3)])
+    assert rates[0] == 0.0  # nothing to repeat yet
+    assert rates[1] == 1.0  # every phrase seen before
+    assert rates[2] == 1.0
+
+
+def test_recycled_phrasing_is_partial_for_a_shared_template() -> None:
+    # The real failure mode: a fresh first clause bolted onto the same closing
+    # maxim. Neither 0 nor 1 — it should land in between.
+    from chess_coach.eval.coach_review import recycled_phrase_rates
+
+    hook = " Next time you see an undefended piece, ask yourself whether you can attack it first."
+    turns = [
+        _turn(0, PHASE_OPENING, feedback="Bc4 pressures f7 and opens the way to castle." + hook),
+        _turn(2, PHASE_MIDDLEGAME, feedback="Rd1 lines the rook up against the queen on d8." + hook),
+    ]
+    rate = recycled_phrase_rates(turns)[1]
+    assert 0.2 < rate < 0.9, rate
+
+
+def test_lesson_concentration_is_high_when_the_advice_never_varies() -> None:
+    # Same lesson, deliberately REWORDED each time — which is what the model
+    # actually does, and why counting distinct closing sentences saw nothing.
+    from chess_coach.eval.coach_review import closing_sentence
+
+    turns = [
+        _turn(0, PHASE_OPENING, feedback="Fine. Next time you spot an undefended knight, ask if you can hit it."),
+        _turn(2, PHASE_OPENING, feedback="Careful. When a bishop is undefended, look for a way to attack it."),
+        _turn(4, PHASE_MIDDLEGAME, feedback="Watch out. An undefended rook invites an attack — go after it."),
+        _turn(6, PHASE_MIDDLEGAME, feedback="Good. Undefended pieces are targets, so attack the loose one."),
+    ]
+    assert len({closing_sentence(t) for t in turns}) == 4  # every ending is a different string
+    assert aggregate_review(turns).lesson_concentration_rate == 1.0  # and every one is the same lesson
+
+
+def test_lesson_concentration_falls_when_the_advice_varies() -> None:
+    turns = [
+        _turn(0, PHASE_OPENING, feedback="Develop both knights before the queen comes out."),
+        _turn(2, PHASE_OPENING, feedback="Castle early; the centre is about to open."),
+        _turn(4, PHASE_MIDDLEGAME, feedback="Rooks belong on files without pawns."),
+        _turn(6, PHASE_MIDDLEGAME, feedback="Trade when you are ahead in material."),
+        _turn(8, PHASE_ENDGAME, feedback="Escort the passer with your monarch."),
+        _turn(10, PHASE_ENDGAME, feedback="Cut the enemy monarch off along the rank."),
+    ]
+    assert aggregate_review(turns).lesson_concentration_rate < 0.7
+
+
+def test_repetition_metrics_survive_the_round_trip() -> None:
+    from chess_coach.eval.coach_review import ReviewStats
+
+    hook = "Next time you see an undefended piece, ask yourself whether you can attack it."
+    turns = [_turn(i, PHASE_OPENING, feedback=f"Move {i}. {hook}") for i in range(3)]
+    original = aggregate_review(turns)
+    assert original.recycled_phrase_rate > 0
+    restored = ReviewStats.from_dict(original.to_dict())
+    # to_dict rounds to 4 decimal places, so the trip is lossy by design.
+    assert restored.recycled_phrase_rate == round(original.recycled_phrase_rate, 4)
+    assert restored.lesson_concentration_rate == round(original.lesson_concentration_rate, 4)
+    assert restored.to_dict() == original.to_dict()
