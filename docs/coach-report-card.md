@@ -45,7 +45,7 @@ our own measurement rather than the coach. Detail for each is further down.
 | 23 | Our own centrality clause downgraded a more central king move (ply 1002) | Suppress the king-walk clause unless it beats the student's move (`rival_uci`) | Clause gone from the prompt — but the model now fabricates "closer to the center" unprompted | kept, insufficient |
 | 24 | "Endgame: most turns, worst pedagogy, and it is inverted" — king safety preached on plies 52, 60, 76, 1000, 1002; a centralized king called "exposed" | `excludes_features` on guidance entries; `principle.exposed_king` excludes `phase:endgame` | The entry was in all five prompts, now in none — replaced by passed-pawn / king-activity / open-file guidance | kept |
 | 25 | Ply 36: "capturing the undefended bishop on b4" when `bxc4` took a knight — and the checker said nothing | Widened `_CAPTURE_CLAIM_RE` to allow up to two words (adjectives) between the article and the piece noun | The check now fires on ply 36; "wins a pawn" idiom and "takes control of the bishop's diagonal" still clean | kept |
-| 26 | (v25) Same endgame complaint again, because the guidance entry was only one of three sources of "king safety" | Drop the engine's king-safety idea label in endgames (keeping any verified clause), and remove the hardcoded "is my king safe?" example from the PEDAGOGY block | Label dropped on 8 of 18 endgame turns; on 6 of them the board-derived clause survives, so the fact stays and only the wrong frame goes | kept, unmeasured (needs v26) |
+| 26 | (v25) Same endgame complaint again, because the guidance entry was only one of three sources of "king safety" | Drop the engine's king-safety idea label in endgames (keeping any verified clause), and remove the hardcoded "is my king safe?" example from the PEDAGOGY block | **v26: landed.** King-safety frames on endgame achievement lines 8 -> 0, and the coach's own endgame text 4/18 turns -> **0/18**. Lesson concentration 57% -> **45%** (series best), composed-fact 61% -> 66%, real violations flat at 2, score 4.3 -> 4.5. The judge's endgame complaint changed from "inverted / actively wrong" to "shallowest" | kept |
 | 27 | (our finding, while checking v25) Two checker false positives at ply 60 | `Be6` naming a piece that already stands there is no longer read as a move; a capture claim attributed to the opponent is no longer judged against the victim of OUR named move | Both gone; the 2 remaining text-level violations in v25 are real coach errors | kept |
 | 28 | Harness bookkeeping leaking as pseudo-explanation ("the evaluation spread shows it was a key decision", plies 12/18/24/32/50); misses checkmate at ply 1003; never names the student's repeated flaw | **next** | — | open |
 
@@ -967,3 +967,55 @@ and the old regex could not see it.
 capture your knight on c3". Verified against the board: after the student's `Kf3`,
 Black has **no legal captures at all**. A fabricated refutation, and no check exists
 for it.
+
+## v26 — the endgame inversion is gone, and why an empty slot is worse than no slot (2026-08-13)
+
+Accept on every criterion written before the run.
+
+| | v25 | v26 |
+|---|---|---|
+| king-safety frames on endgame achievement lines | 8 | **0** |
+| endgame turns where the COACH says king safety | 4 / 18 | **0 / 18** |
+| lesson concentration | 57% | **45%** (series best; was 82% at v17) |
+| turns voicing a composed board fact | 61% | 66% |
+| real text-level violations | 2 | 2 (identical) |
+| judge score | 4.3 | 4.5 |
+
+Two of 18 endgame turns lost the achievement line entirely (plies 1000 and 1002),
+exactly as predicted — nothing verified was available to say there.
+
+**The finding worth keeping is the output-side zero.** At ply 1002 we suppressed our
+centrality clause and the model promptly invented "closer to the center" from its own
+vocabulary. Here we removed the king-safety frame and it was **not** replaced by
+anything. The difference is not the model, it is the slot: at ply 1002 the
+"What the best move achieves:" header was still in the prompt with the clause taken
+out of it, so there was a labelled hole demanding a reason. In v26 the whole line
+disappears when nothing is verified.
+
+**So: an empty slot is worse than no slot.** A header with nothing under it is an
+instruction to fabricate. That refines the earlier rule (row 20 / row 23) — facts get
+voiced, abstractions get paraphrased away, and *blanks get filled in*. It also means
+the fix only worked because the dangling-reference problem was fixed alongside it:
+three tier instruction blocks still said "use 'What the best move achieves' shown
+above", and leaving those in place would have recreated the ply-1002 failure.
+
+**The judge's endgame verdict changed character**, which is the independent
+confirmation:
+
+- v24: "most turns, worst pedagogy, and it is inverted… calls a centralized king
+  'exposed' and recommends retreating it".
+- v25: "the worst fit, and actively wrong in principle… frames it as *King safety
+  first*".
+- v26: "over-represented but shallowest… Plies 64, 70, 74, 78 are all 'move the piece
+  off the attacked square' — that is threat avoidance, not endgame technique."
+
+The inversion is gone. What remains is the hole we knowingly left, i.e. the
+"endgame facts, not endgame prose" item. "King safety" now appears exactly once in the
+whole review, under *No memory across turns* — flagged at plies 6, 16, 26, 34, 40
+without ever saying "this is the fourth time". That is the middlegame, where the frame
+is correct, so it argues for cross-turn memory rather than against this fix.
+
+**Also worth noting the concentration drop was not the target.** 57% -> 45% came free:
+removing a frame that fitted any position removed one of the three lessons everything
+was collapsing onto. The metric moved because the cause moved, which is the first time
+that has happened rather than the metric being argued with.

@@ -1578,6 +1578,15 @@ OPPONENT was judged against the victim of the move WE named.
    construction, plus a decision about what belongs in it (compact facts, per the
    standing finding that facts get voiced and abstractions get paraphrased away).
 
+   **v26 sharpened this into a concrete design.** The judge asked for the same thing
+   twice, the second time specifically: a session-level record of lessons already
+   delivered plus the student's repeated error, fed into every prompt, with a **hard
+   rule that a lesson closed in the last N turns cannot be reused**. Its evidence
+   this time was king safety flagged independently at plies 6, 16, 26, 34 and 40,
+   never once as "this is the fourth time; the root cause is that you never
+   castled". Note that the eligibility rule is a *fact* about the session, not an
+   abstraction, so it is the kind of input this model has consistently honoured.
+
 2. **Stop leaking harness bookkeeping into coaching** (carried over). "The
    evaluation spread shows it was a key decision", "the best move was also your
    move" on plies 12, 18, 24, 32, 50 — eval plumbing in the slot where a chess
