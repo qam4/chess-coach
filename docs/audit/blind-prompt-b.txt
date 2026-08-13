@@ -1,0 +1,33 @@
+You are an authority on chess instruction for improving amateurs.
+
+Three different products all do the same thing. A student plays a real game, and after
+each of the student's moves the product prints ONE piece of written feedback — about
+80 words — concerning the move just played. There is no dialogue, no follow-up, no
+puzzles and no homework. Just that one paragraph, every move, during the game.
+
+All three have a strong engine behind them, so all three are equally capable of
+knowing the truth about the position: best move, evaluation, threats, hanging
+material, candidate lines. Their students are all around 1200 Elo — they know the
+principles by name but cannot apply them to a live position.
+
+One of the three genuinely helps its student improve. One is useless. One is worse
+than useless.
+
+Questions:
+
+1. What would you have to LOOK AT in their output to tell which is which? I want the
+   observable properties you would examine, not a description of good chess. For each
+   property, say what the helpful product's output has that the useless one lacks —
+   and what the actively harmful one does.
+
+2. Which of those properties would you refuse to trade off? That is, failing it makes
+   the product harmful regardless of how well it does everything else.
+
+3. Rank the properties by how much they separate the helpful product from the merely
+   useless one.
+
+4. Name any property that an experienced chess player would expect to matter here but
+   which actually does not, and explain why it does not.
+
+Be concrete. Where an established instructional authority supports a point, name it;
+where you are relying on your own judgement, say so.

@@ -1606,3 +1606,101 @@ OPPONENT was judged against the victim of the move WE named.
    and the closing hook asks whether the move buys time to develop.
 6. **Unify the two text parsers** (carried over) — `verify.py` uses regex plus
    `board.parse_san`; `coach_review.py` uses a weaker regex.
+
+### The standard itself was audited, blind — 2026-08-13
+
+Full analysis: `docs/coaching-standard-audit.md`. Raw derivations:
+`docs/audit/blind-derivation-{a,b}.md`.
+
+Prompted by two owner questions: does the judge ever explain its score, and is the
+north star scorable at all? The score had sat at 3.5-4.5 for fifteen changes,
+including 4.5 for a lever we reverted as ineffective. Root causes found: the review
+task defines only the *endpoints* of the 0-10 scale, so the judge re-anchors the
+middle every run (the same defect that made absolute scoring useless in the guidance
+A/Bs, fixed there by going pairwise and never fixed here); and the standard is a
+composite scored by a single number, so a gain in one part averages away.
+
+The rubric was derived by asking `claude-opus-5` twice, blind to VISION and to the
+transcript, via two different framings. Categories came back stable and
+rank-consistent, with sources named separately from opinion. **Reordering the action
+list below accordingly.**
+
+**Next, in priority order.**
+
+1. **Stop manufacturing fault on moves that were fine.** The blind audit puts this in
+   the *harmful* tier and among the three properties it refuses to trade off:
+   "manufactures fault on genuinely good moves, including the student's best of the
+   game — training them to distrust the instincts you most want reinforced." Measured
+   on v26: 21 of 44 turns had a drop under 20cp and **10 of those still stage a
+   comparison** — ply 0 `Nf3` at 0cp told `Nc3` is "even better development"; ply 54
+   `Rae1+` at 0cp told `Rge1+` "slightly refines rook placement"; ply 1001 `Ra5+` at
+   6cp told `Ra4` "better controls the file" when both rooks are on the a-file. The
+   report-card judge raised this twice as its cheap secondary pick; an independent
+   blind derivation calls it harmful. Cheapest item on this list and the highest
+   priority.
+
+   Includes the harness-bookkeeping leak, which is the same defect: "the best move
+   was also your move, and the evaluation spread shows it was a key decision" on
+   plies 12, 18, 24 — eval plumbing occupying the slot where a chess reason belongs.
+
+2. **Decide whether the north star's end 1 changes — a product decision, not an
+   implementation one.** VISION defines end 1 as "a named theme/principle … the words
+   the student may already know in the abstract". That is verbatim the audit's **6/10**
+   anchor ("invokes a correct general principle but unconditionalized … no trigger
+   for when to do it"). Its 8/10 requires the *condition* attached. Same for its
+   Diagnosis category, whose 6/10 is "stops at the board level: describes the error
+   without naming the thinking failure behind it" — which is precisely what our
+   composer produces, deliberately and well.
+
+   So the plateau may be structural: we have been optimising against a definition
+   that caps near 6. Two candidate responses — accept the ceiling and say so in
+   VISION, or aim at process-level diagnosis (name the *thinking* mistake, not the
+   board fact). The second is a substantial change of direction and needs a decision
+   before any code.
+
+3. **Rebuild the report-card review task on the derived rubric.** Per-category scores
+   with the audit's anchors, fidelity and stance as gates rather than averaged terms
+   (a fluent coach that says false things must not score like a dull honest one), and
+   per category "what holds this at X, and what would it cost to clear". Then
+   re-judge the **existing v26 transcript** under both old and new asks so the series
+   has a bridge point and no coach re-run is needed. Prepared but not run.
+
+4. **Give the judge the history it has never had.** Every review so far has seen one
+   transcript plus stats — never the ledger, the pattern findings ("facts get voiced,
+   abstractions get paraphrased away"; "negative constraints have no measurable
+   effect on this model"; "an empty slot is worse than no slot"), the architecture, or
+   the model/latency constraints. It has cost us: it once recommended forbidding
+   repetition in the prompt, a dead end lever 2 had already closed. Blindness was for
+   deriving the standard only; for everything else the judge should get more.
+
+5. **Sharpen the cue, not the shape.** Correction to an earlier assumption: all 44
+   turns already use the audit's cue->check form (`next time you see X, ask yourself
+   Y`), 30 distinct cues — structurally right. The weakness is cue quality: "next
+   time you see a capture" (5x), "an undefended piece" (5x), "a threatened piece" (3x)
+   are near-tautological triggers versus the audit's 8/10 example, which names where
+   the pattern bites.
+
+6. **Cross-turn memory** — was #1, now third-ish. It survives the audit (accumulation
+   across the game is B's #2 property and A's Stream Behaviour), but it is the most
+   expensive item and the score evidence is against a large payoff: concentration
+   already fell 82% -> 45% with no score movement. Design notes retained in the
+   previous entry.
+
+7. **Restraint: stop coaching every move.** Both framings say so independently — "a
+   coach that says something substantial forty times has said nothing forty times",
+   and restraint on quiet moves is a scorable feature. Today we coach every move with
+   a drop over 50cp and the harness coaches all 44. Overlaps item 1 but is a broader
+   change (silence as a valid output) and needs its own decision.
+
+8. **Check for forward leakage** (audit property P5, untested here). A coach that
+   answers the *live* position produces a student who scores well with the tool and no
+   better without it. Our feedback is retrospective by construction, so this is
+   probably fine — but it has not been measured.
+
+9. **Endgame facts, not endgame prose** (carried over). Plies 1000/1002 now have no
+   achievement line at all, so there is a hole where the wrong frame used to be.
+10. **Fabricated refutations are undetected** (carried over). v26 ply 60 claimed the
+    opponent could capture a knight when Black had no legal capture at all. Needs the
+    post-move board threaded into the checker, which today sees only `fen_before`.
+11. **The coach does not notice the game is over** (carried over). Ply 1003 is `Ra8#`.
+12. **Unify the two text parsers** (carried over).

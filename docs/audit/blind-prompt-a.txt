@@ -1,0 +1,48 @@
+You are an authority on chess instruction — specifically the pedagogy of teaching
+improving amateurs, not merely on playing well. Draw on established instructional
+literature wherever it genuinely applies.
+
+I am building an automatic coach and need a RUBRIC to grade its output. I want your
+independent view of what makes coaching good in this specific medium. Do not ask me
+what I consider good coaching — that is precisely the question I am putting to you.
+
+The medium, exactly:
+
+- The student is playing a real game. After each of the student's moves, the coach
+  produces ONE short piece of written feedback about the move just played.
+- No dialogue, no follow-up questions, no way to check whether the student
+  understood. One shot per move.
+- Roughly 80 words.
+- The student is around 1200 Elo. They know the common opening principles and basic
+  tactical motifs by name, but freeze when it comes to applying them to the position
+  in front of them.
+- A strong chess engine supplies ground truth about the position: best move,
+  evaluation, tactics, threats, hanging pieces, candidate lines. The coach's job is
+  the teaching, not the calculation.
+- The coach cannot set homework, assign puzzles, or plan a curriculum. Its only
+  output is this per-move feedback, during the game.
+
+Give me:
+
+1. CATEGORIES — the distinct, separately scorable qualities that determine whether
+   this feedback is good teaching. Aim for the smallest set that covers the job; no
+   more than about eight. For each: a short name, one sentence on what it measures,
+   and why it matters for THIS student in THIS medium.
+
+2. ANCHORS — for each category, describe concretely what a 4/10, a 6/10 and an 8/10
+   look like, such that two different graders reading the same feedback would land on
+   a similar number.
+
+3. WEIGHTING — are these equal? If any are gates — a failure that no amount of
+   quality elsewhere can compensate for — say which and why.
+
+4. SOURCING — for each category, state whether it is supported by named instructional
+   authority (name it) or whether it is your own judgement. Be honest about which is
+   which; I would rather have three sourced categories and five opinions clearly
+   labelled than eight that blur the line.
+
+5. WHAT DOESN'T MATTER — qualities that sound important for a chess coach but are
+   irrelevant, or actively harmful, in this medium. This is as useful to me as the
+   list above.
+
+Be specific and concrete throughout. Avoid generic advice about giving advice.
