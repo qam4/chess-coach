@@ -456,8 +456,17 @@ _PIECE_NOUN = r"(pawn|knight|bishop|rook|queen)"
 # "captures/takes/grabs [the] <piece>" — a claim about WHICH piece was taken.
 # "win(s)" is deliberately excluded: "wins a pawn" is idiomatic for a material
 # edge, not necessarily capturing a pawn, and would false-positive.
+#
+# Up to two words may sit between the article and the piece noun, so adjectives do
+# not hide the claim. Without this, "capturing the undefended bishop on b4" did not
+# match at all and a real error went unflagged — and "undefended" is a word OUR OWN
+# composer uses constantly ("attacking their undefended rook on f4"), which the
+# coach echoes, so the gap was hiding precisely the errors most likely to occur.
+# Bounded at two words to stay precision-first: "takes control of the bishop's
+# diagonal" still does not match.
 _CAPTURE_CLAIM_RE = re.compile(
-    rf"\b(?:captur\w*|tak\w*|grab\w*)\s+(?:the\s+|a\s+|an\s+|your\s+|his\s+|her\s+|their\s+|my\s+)?{_PIECE_NOUN}\b",
+    rf"\b(?:captur\w*|tak\w*|grab\w*)\s+(?:the\s+|a\s+|an\s+|your\s+|his\s+|her\s+|their\s+|my\s+)?"
+    rf"(?:\w+\s+){{0,2}}{_PIECE_NOUN}\b",
     re.IGNORECASE,
 )
 

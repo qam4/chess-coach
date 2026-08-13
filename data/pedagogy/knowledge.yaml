@@ -291,6 +291,12 @@ entries:
       diagonals leading to it.
     levels: [intermediate, advanced]
     features: [exposed_king]
+    # This principle INVERTS in an endgame: with few pieces left the king is a
+    # fighting piece and centralising it is how you win, so "get it to safety" is
+    # actively wrong advice. A frontier review caught the coach applying this entry
+    # to five endgame turns, once explicitly calling a correctly centralised king
+    # "exposed" and telling the student to retreat it.
+    excludes_features: [phase:endgame]
     citation: "Seirawan, Winning Chess Strategies, ch. on attacking the king (unverified locus)"
 
   - id: principle.open_file

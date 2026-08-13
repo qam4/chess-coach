@@ -252,3 +252,102 @@ def test_property_5_level_appropriate_fallback(case: tuple[KnowledgeResource, Se
         key=lambda e: e.id,
     )[: inp.max_entries]
     assert _ids(result) == _ids(expected)
+
+
+def test_excluded_feature_blocks_selection_entirely() -> None:
+    # Some principles INVERT rather than fade. "Get your exposed king to safety" is
+    # sound until the endgame, where centralising the king is how you win — and the
+    # frontier review caught the coach applying it on five endgame turns, once
+    # calling a correctly centralised king "exposed" and telling the student to
+    # retreat it. So the entry must never be selected there, however relevant it
+    # looks by feature count.
+    from chess_coach.pedagogy.resource import GuidanceEntry, KnowledgeResource
+    from chess_coach.pedagogy.selector import SelectionInput, select
+
+    exposed_king = GuidanceEntry(
+        id="principle.exposed_king",
+        type="principle",
+        theme="king safety — exposed king",
+        focus="f",
+        how_to_apply="a",
+        levels=frozenset({"intermediate"}),
+        features=frozenset({"exposed_king"}),
+        eco_codes=frozenset(),
+        citation="c",
+        example=None,
+        excludes_features=frozenset({"phase:endgame"}),
+    )
+    resource = KnowledgeResource(
+        entries=(exposed_king,),
+        feature_vocab=frozenset({"exposed_king", "phase:endgame", "phase:middlegame"}),
+        eco_vocab=frozenset(),
+        levels=frozenset({"beginner", "intermediate", "advanced"}),
+    )
+
+    def pick(*features: str) -> list[str]:
+        return [
+            e.id
+            for e in select(
+                resource,
+                SelectionInput(features=frozenset(features), eco=None, level="intermediate", max_entries=3),
+            )
+        ]
+
+    # Middlegame: the feature matches and nothing excludes it.
+    assert pick("exposed_king", "phase:middlegame") == ["principle.exposed_king"]
+    # Endgame: excluded, and NOT resurrected by the empty-selection fallback either.
+    assert pick("exposed_king", "phase:endgame") == []
+
+
+def test_exclusion_applies_to_the_eco_path_too() -> None:
+    # A plan arrives by ECO rather than by features, so the exclusion has to be
+    # checked outside _feature_matches or it could slip in through the other door.
+    from chess_coach.pedagogy.resource import GuidanceEntry, KnowledgeResource
+    from chess_coach.pedagogy.selector import SelectionInput, select
+
+    plan = GuidanceEntry(
+        id="plan.some_opening",
+        type="plan",
+        theme="t",
+        focus="f",
+        how_to_apply="a",
+        levels=frozenset({"intermediate"}),
+        features=frozenset(),
+        eco_codes=frozenset({"C50"}),
+        citation="c",
+        example=None,
+        excludes_features=frozenset({"phase:endgame"}),
+    )
+    resource = KnowledgeResource(
+        entries=(plan,),
+        feature_vocab=frozenset({"phase:endgame"}),
+        eco_vocab=frozenset({"C50"}),
+        levels=frozenset({"beginner", "intermediate", "advanced"}),
+    )
+    inp = SelectionInput(features=frozenset({"phase:endgame"}), eco="C50", level="intermediate", max_entries=3)
+    assert select(resource, inp) == []
+
+
+def test_typo_in_an_exclusion_is_rejected_by_the_guard() -> None:
+    # An exclusion that is not in the closed vocabulary would silently never fire,
+    # leaving the entry selected exactly where it is wrong — the failure the guard
+    # exists to prevent. So exclusions are validated like features.
+    from chess_coach.pedagogy.guard import validate_entry
+    from chess_coach.pedagogy.resource import GuidanceEntry
+
+    entry = GuidanceEntry(
+        id="principle.typo",
+        type="principle",
+        theme="t",
+        focus="f",
+        how_to_apply="a",
+        levels=frozenset({"intermediate"}),
+        features=frozenset({"exposed_king"}),
+        eco_codes=frozenset(),
+        citation="c",
+        example=None,
+        excludes_features=frozenset({"phase:endgamme"}),  # typo
+    )
+    result = validate_entry(entry, feature_vocab=frozenset({"exposed_king", "phase:endgame"}))
+    assert not result.admitted
+    assert any("phase:endgamme" in reason for reason in result.reasons)

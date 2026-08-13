@@ -66,6 +66,20 @@ class GuidanceEntry:
     eco_codes: frozenset[str]  # required for plan (Req 1.5)
     citation: str  # non-empty source authority (Req 1.7)
     example: ExamplePosition | None  # optional (Req 6.3, 6.4)
+    #: Position_Features whose presence makes this entry WRONG rather than merely
+    #: irrelevant, so it must never be selected. Optional, and last with a default
+    #: so every existing construction site is unaffected.
+    #:
+    #: Exists because a principle can INVERT with the phase rather than just fade:
+    #: "a king stuck in the centre is a target" is sound in the opening and
+    #: middlegame and actively harmful in an endgame, where centralising the king is
+    #: the winning method. A frontier review caught the coach applying that entry on
+    #: five endgame turns, once calling a correctly centralised king "exposed" and
+    #: telling the student to retreat it.
+    #:
+    #: ``features`` cannot express this: they are ANDed, so keying the entry to a
+    #: phase would confine it to ONE phase and force the text to be duplicated.
+    excludes_features: frozenset[str] = frozenset()
 
     def applies_to_level(self, level: str) -> bool:
         """True when this entry is appropriate for ``level`` (Req 1.4)."""
@@ -188,6 +202,8 @@ def _parse_entry(raw: Any, index: int) -> GuidanceEntry:
     # Selection keys: principle/pattern require features (Req 1.6); plan
     # requires eco_codes (Req 1.5). Each is optional for the other type.
     features = _parse_str_set(raw, "features", ctx, required=entry_type in ("principle", "pattern"))
+    # Always optional: most principles apply everywhere they are relevant.
+    excludes_features = _parse_str_set(raw, "excludes_features", ctx, required=False)
     eco_codes = _parse_str_set(raw, "eco_codes", ctx, required=entry_type == "plan")
 
     example = _parse_example(raw.get("example"), ctx)
@@ -200,6 +216,7 @@ def _parse_entry(raw: Any, index: int) -> GuidanceEntry:
         how_to_apply=fields["how_to_apply"],
         levels=levels,
         features=features,
+        excludes_features=excludes_features,
         eco_codes=eco_codes,
         citation=fields["citation"],
         example=example,

@@ -97,8 +97,23 @@ def _feature_matches(entry: GuidanceEntry, features: frozenset[str]) -> bool:
 
     An entry with no recorded features never matches here — it can only be
     selected via the ECO path (design step 1).
+
+    Exclusion is handled by :func:`_excluded`, applied to both the feature and the
+    ECO path so an entry cannot slip in through the other door.
     """
     return bool(entry.features) and entry.features <= features
+
+
+def _excluded(entry: GuidanceEntry, features: frozenset[str]) -> bool:
+    """True when a present feature makes this entry WRONG, not merely irrelevant.
+
+    Some principles invert rather than fade: "a king stuck in the centre is a
+    target" is sound until the endgame, where centralising the king is how you win.
+    A wrong principle must never be selected, however relevant it looks by feature
+    count, so this is a hard filter rather than a ranking penalty — and it is
+    applied to the ECO path too, since a plan could otherwise arrive by that route.
+    """
+    return bool(entry.excludes_features & features)
 
 
 def _relevance(entry: GuidanceEntry, inp: SelectionInput) -> int:
@@ -174,6 +189,8 @@ def select(resource: KnowledgeResource, inp: SelectionInput) -> list[GuidanceEnt
     for entry in resource.entries:
         if inp.level not in entry.levels:
             continue
+        if _excluded(entry, inp.features):
+            continue
         if _feature_matches(entry, inp.features) or _eco_matches(entry, inp.eco):
             matched[entry.id] = entry
 
@@ -181,7 +198,9 @@ def select(resource: KnowledgeResource, inp: SelectionInput) -> list[GuidanceEnt
     if matched:
         candidates = list(matched.values())
     else:
-        candidates = [e for e in resource.principles() if inp.level in e.levels]
+        # The fallback honours exclusions too: an entry that is WRONG here should
+        # not arrive merely because nothing else matched.
+        candidates = [e for e in resource.principles() if inp.level in e.levels and not _excluded(e, inp.features)]
 
     # Step 5: rank by relevance with the deterministic tie-break, then cap.
     candidates.sort(key=lambda e: _sort_key(e, inp))

@@ -245,6 +245,30 @@ def test_capture_win_idiom_not_flagged() -> None:
     assert "piece_type" not in _kinds(v)
 
 
+def test_capture_wrong_piece_type_behind_adjective_is_flagged() -> None:
+    # Judge-found gap (v24 ply 36): an adjective between the article and the
+    # piece noun hid the claim entirely, so the checker stayed silent on a real
+    # error. "undefended" is a word our own composer uses constantly, so this
+    # gap hid exactly the mistakes most likely to occur.
+    # bxc4 takes the KNIGHT on c4; a bishop also sits on b4, which is what the
+    # coach named.
+    fen = "r1b1k1r1/pppp1p1p/8/6P1/1bnP4/1P6/P1P1K2P/RN5R w q - 0 19"
+    text = "bxc4 is strong, capturing the undefended bishop on b4."
+    v = check_coaching_fidelity(text, _report(fen), [])
+    assert "piece_type" in _kinds(v)
+    detail = next(x.detail for x in v if x.kind == "piece_type")
+    assert "knight" in detail and "bishop" in detail
+
+
+def test_takes_control_of_a_diagonal_not_flagged() -> None:
+    # The two-word bound keeps the widened pattern precision-first: three or
+    # more words between the verb and the piece noun means the phrase is about
+    # something other than the captured piece.
+    text = "dxe3 takes control of the bishop's diagonal."
+    v = check_coaching_fidelity(text, _report(CAPTURE_FEN), [])
+    assert "piece_type" not in _kinds(v)
+
+
 def test_pawn_falsely_called_isolated_is_flagged() -> None:
     text = "The isolated pawn on c4 is a long-term weakness."
     v = check_coaching_fidelity(text, _report(ADJACENT_PAWNS_FEN), [])

@@ -121,7 +121,10 @@ def _check_required_fields(entry: GuidanceEntry) -> list[str]:
 def _check_referential_integrity(entry: GuidanceEntry, feature_vocab: frozenset[str]) -> list[str]:
     """Feature/ECO references drawn from the defined sets (Req 6.2)."""
     reasons: list[str] = []
-    bad_features = entry.features - feature_vocab
+    # Exclusions go through the same closed vocabulary: a typo in one would
+    # silently never fire, which is precisely the failure this guard exists to
+    # catch — the entry would keep being selected in the positions it is wrong for.
+    bad_features = (entry.features | entry.excludes_features) - feature_vocab
     if bad_features:
         reasons.append(f"references Position_Features outside the defined set: {sorted(bad_features)}")
     bad_eco = sorted(code for code in entry.eco_codes if not ECO_PATTERN.match(code))

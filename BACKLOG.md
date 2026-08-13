@@ -1473,3 +1473,66 @@ opus-5 was right on 2 of 2 and found two defects our checker misses.
    is eval plumbing in the slot where a chess reason belongs, and it comes from our
    own critical-moment section.
 4. **Endgame facts, not endgame prose** (see the lesson above).
+
+### The two per-ply defects, the endgame inversion, and a checker hole — 2026-08-13
+
+Ledger rows 22-25 in `docs/coach-report-card.md`. Items 1 and 2 of the previous
+list are done; item 3 is still open and item 4 is unchanged.
+
+**Ply 28 (item 1) — done.** The prompt said "the opponent threatens e3" and the
+model read the bare square as a destination, producing a sentence where the
+opponent moves onto a square our own pawn occupies. `_describe_target` now resolves
+the square against the board and writes "your pawn on e3", with a "the f3 square"
+fallback when the square is genuinely empty. Verified in v24.
+
+**Ply 1002 (item 2) — done, but only half the problem was ours.** `_move_effect`
+takes the student's move now and suppresses the king-walk clause unless the
+alternative really is more central. The clause is gone from the prompt; the model
+then wrote "closer to the center" from its own vocabulary with nothing supplied.
+Same shape as the phase-gated lesson: withholding an abstraction does not stop the
+model reaching for it. Only supplying a competing FACT will.
+
+**The endgame inversion — the structural fix of this round.** The judge's phase
+note was that the endgame had the most turns, the worst pedagogy, and it was
+backwards: plies 52, 60, 1000, 1002 all hunted for a "safer square" for the king
+and ply 76 called a centralized king "exposed". Cause was ours:
+`principle.exposed_king` had no phase condition. `GuidanceEntry` gained an optional
+`excludes_features` (last, defaulted — as a required field it broke 26 tests),
+honoured on all three selection paths (features, ECO, empty-selection fallback) and
+validated by the guard against the same closed vocabulary as inclusions. Verified
+per-ply, not in aggregate: present in the v24 prompt for all five flagged plies,
+absent from all five now, replaced by `passed_pawn_endgame` /
+`endgame_king_activity` / `open_file`.
+
+This is a mechanism, not a one-off: any entry that is right in one phase and wrong
+in another can now say so.
+
+**Ply 36 — the fidelity checker had a hole shaped like an adjective.** The coach
+wrote "capturing the undefended bishop on b4" when `bxc4` took a knight, and
+`piece_type` recorded nothing, because `_CAPTURE_CLAIM_RE` needed the piece noun
+directly after the article. Up to two intervening words are allowed now. Worth
+noting why the gap mattered more than it looked: "undefended" is a word **our own
+composer emits constantly** and the coach echoes it, so the blind spot sat exactly
+where errors are most likely. The two-word bound keeps it precision-first — "takes
+control of the bishop's diagonal" is still not a capture claim — and both
+directions are pinned by tests.
+
+**Next, in order:**
+
+1. **Stop leaking harness bookkeeping into coaching** (unchanged from last round).
+   "The evaluation spread shows it was a key decision", "the best move was also
+   your move" on plies 12, 18, 24, 32, 50 — eval plumbing in the slot where a chess
+   reason belongs, from our own critical-moment section.
+2. **Endgame facts, not endgame prose**: this pawn is passed, this rook is behind
+   it, the enemy king is N squares away. Now that the wrong guidance is excluded
+   there is a hole to fill, and the exclusion alone does not teach anything.
+3. **The coach does not notice the game is over.** Ply 1003 is `Ra8#` and the
+   closing hook asks "does this move buy me time to develop or attack elsewhere?".
+   Mate needs its own branch, ahead of every other lesson.
+4. **No cumulative diagnosis.** The judge's strongest structural point: the
+   student's repeated, game-losing flaw (leaving the c4 bishop loose; walking the
+   king) is never named, and "you are a queen up — trade pieces and get the king
+   safe" is never said. That is a cross-turn feature we do not have.
+5. **Unify the two text parsers** — `verify.py` uses a regex plus
+   `board.parse_san`; `coach_review.py` uses a weaker regex. They have drifted once
+   already.

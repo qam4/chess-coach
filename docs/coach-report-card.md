@@ -41,7 +41,11 @@ our own measurement rather than the coach. Detail for each is further down.
 | 19 | Closing question recycled; "one of three templates" | Compose the closing lesson from what the move verifiably DOES, instead of letting the model pick | Bogus hooks gone ("fork opportunity" on a move that forks nothing: 3 turns -> 0); no closing repeats more than twice; concentration 68% -> 66% (metric under-reports, see below) | kept |
 | 20 | Composed lessons are phase-blind (endgame taught as opening) | Phase-gate the lesson table: endgame rook-behind-passed-pawn, king as attacker, etc. | **Did not land.** Distinct lessons 11 -> 18 and top-3 coverage 57% -> 30% in the prompt, but only 2/18 endgame turns mention a passed pawn and none mention promotion or the king as a fighting piece — the model paraphrases the lesson back into its own vocabulary | kept (free, no fidelity cost) but ineffective |
 | 21 | (our finding) The judge itself was wrong on 5 of 5 per-ply factual claims | Switched the default judge to `claude-opus-5` | On the same transcript opus-5 got 2 of 2 right and found two real defects the checker misses | kept |
-| 22 | Coach text incoherent at ply 28 ("your opponent plays e3 … your pawn on e3 is undefended"); our own centrality clause misleading at ply 1002; harness bookkeeping leaking as explanation | **next** | — | open |
+| 22 | Coach text incoherent at ply 28 ("your opponent plays e3 … your pawn on e3 is undefended") | Name the piece, not the bare square: `"threatens your pawn on e3"` via a new `_describe_target` | v24: ply 28 reads correctly | kept |
+| 23 | Our own centrality clause downgraded a more central king move (ply 1002) | Suppress the king-walk clause unless it beats the student's move (`rival_uci`) | Clause gone from the prompt — but the model now fabricates "closer to the center" unprompted | kept, insufficient |
+| 24 | "Endgame: most turns, worst pedagogy, and it is inverted" — king safety preached on plies 52, 60, 76, 1000, 1002; a centralized king called "exposed" | `excludes_features` on guidance entries; `principle.exposed_king` excludes `phase:endgame` | The entry was in all five prompts, now in none — replaced by passed-pawn / king-activity / open-file guidance | kept |
+| 25 | Ply 36: "capturing the undefended bishop on b4" when `bxc4` took a knight — and the checker said nothing | Widened `_CAPTURE_CLAIM_RE` to allow up to two words (adjectives) between the article and the piece noun | The check now fires on ply 36; "wins a pawn" idiom and "takes control of the bishop's diagonal" still clean | kept |
+| 26 | Harness bookkeeping leaking as pseudo-explanation ("the evaluation spread shows it was a key decision", plies 12/18/24/32/50); misses checkmate at ply 1003; never names the student's repeated flaw | **next** | — | open |
 
 ## Measurement philosophy (what to trust)
 
@@ -846,3 +850,55 @@ been consistently valuable — phase blindness, template closings, repetition co
 the bridge critique. Its claims about specific plies are leads to verify, not
 findings. Every one that has been checked against the board was wrong under
 sonnet; opus-5 is better but the habit stays.
+
+## Two per-ply defects, then the endgame inversion (2026-08-13)
+
+The four fixes opus-5's v24 review produced, in the order they were made.
+
+**Ply 28 — a bare square read as a destination.** The prompt said *"the opponent
+threatens e3"*. The model read that as the opponent *moving to* e3, and wrote a
+sentence where the opponent plays onto a square our own pawn occupies. Fixed by
+naming what is actually there: `_describe_target` resolves the square against the
+board and produces `"your pawn on e3"`, falling back to `"the f3 square"` when the
+square is genuinely empty. v24 confirms ply 28 now reads correctly.
+
+**Ply 1002 — our clause was comparatively wrong.** `_move_effect` now takes the
+student's move (`rival_uci`) and drops the king-walk clause unless the
+alternative is actually more central than what the student played. The clause is
+gone from the prompt. The model then said "closer to the center" anyway, from its
+own vocabulary, with nothing supplied — the same failure mode as the phase-gated
+lesson table (row 20): **a fact we hand over gets voiced faithfully; a lesson we
+hand over gets paraphrased away, and a lesson we withhold gets invented.**
+
+**The endgame inversion — the structural one.** The judge's sharpest phase note
+was that the endgame, with the most turns, had the worst pedagogy *and it was
+backwards*: plies 52, 60, 1000 and 1002 all hunted for a "safer square" for the
+king, and ply 76 called a centralized king "exposed" and recommended retreating
+it. In a rook endgame the king is a fighting piece.
+
+The cause was in our own knowledge base, not the model: `principle.exposed_king`
+had no phase condition, so it stayed eligible to the last move of the game.
+`GuidanceEntry` gained an optional `excludes_features`, checked in three places
+that select entries — the feature path, the ECO path, and the empty-selection
+fallback — with the guard validating exclusions against the same closed
+vocabulary as inclusions. Verified per-ply rather than in aggregate: the entry was
+present in the v24 prompt for all five flagged plies and is absent from all five
+now, replaced by `passed_pawn_endgame`, `endgame_king_activity` and `open_file`.
+
+Two implementation notes worth keeping. Adding `excludes_features` as a required
+field broke 26 tests; last with a `frozenset()` default it broke none. And an
+exclusion has to be applied on *every* path that can select an entry — the ECO
+path and the fallback would otherwise reintroduce exactly what the feature path
+just excluded.
+
+**Ply 36 — the checker had a hole shaped like an adjective.** The coach wrote
+*"wins material by capturing the undefended bishop on b4"* when `bxc4` captured a
+knight, and `piece_type` recorded nothing. `_CAPTURE_CLAIM_RE` required the piece
+noun to follow the article directly, so any adjective hid the claim. It now allows
+up to two intervening words. The bound matters in both directions: "undefended" is
+a word **our own composer uses constantly** ("attacking their undefended rook on
+f4") and the coach echoes it, so the gap was hiding precisely the errors most
+likely to occur — while three-or-more words still means the phrase is about
+something else, which keeps "takes control of the bishop's diagonal" unflagged.
+Both cases are pinned by tests, along with the "wins a pawn" material idiom that
+the excluded `win` verb protects.
