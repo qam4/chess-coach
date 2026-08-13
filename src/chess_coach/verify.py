@@ -205,6 +205,32 @@ _REPLY_VERBS = (
 )
 
 
+def _is_piece_reference(token: str, board: chess.Board) -> bool:
+    """True if ``token`` names a piece standing on a square rather than a move.
+
+    ``Be6`` is ambiguous notation: it is SAN for "bishop to e6", and it is also
+    how a piece on a square is commonly written — including by OUR OWN composer,
+    which emits "Re1 pins Be6 to Ke7". The coach echoes that and was flagged for
+    an illegal move it never named.
+
+    The board settles it. Plain SAN to an occupied square is impossible (a real
+    move onto a piece is a capture, written with ``x``), so when a piece of the
+    named type already stands on the named square the token can only be a
+    reference. Precision-first: this gives up flagging a genuinely illegal
+    ``Be6``, which is speculative, to stop a false positive we know we generate.
+    """
+    bare = token.rstrip("+#")
+    if len(bare) < 3 or bare[0] not in "KQRBN" or "x" in bare:
+        return False
+    piece_type = {"K": chess.KING, "Q": chess.QUEEN, "R": chess.ROOK, "B": chess.BISHOP, "N": chess.KNIGHT}[bare[0]]
+    try:
+        square = chess.parse_square(bare[-2:])
+    except ValueError:
+        return False
+    occupant = board.piece_at(square)
+    return occupant is not None and occupant.piece_type == piece_type
+
+
 def _attributed_to_opponent(text: str, start: int, board: chess.Board) -> bool:
     """True if the move at ``start`` is framed as the OPPONENT's reply.
 
@@ -351,6 +377,8 @@ def _check_named_moves(
         if _attributed_to_opponent(text, m.start(), board):
             continue  # the opponent's reply, not a student move — validated against the wrong side
         token = m.group(1)
+        if _is_piece_reference(token, board):
+            continue  # "Be6" naming the bishop that already stands there, not a move
         clearly_a_move = token[0] in "KQRBNO" or "x" in token
         try:
             move = board.parse_san(token)
@@ -526,6 +554,13 @@ def _check_capture_piece_type(text: str, board: chess.Board) -> list[Violation]:
     out: list[Violation] = []
     seen: set[str] = set()
     for m in _CAPTURE_CLAIM_RE.finditer(text):
+        # The victim type was derived from the SAN the coach named, which is the
+        # STUDENT's (or best) move. A phrase about the OPPONENT capturing is a
+        # different capture entirely, so the derived type does not apply to it.
+        # Without this, "the better move is Rxh7" (a pawn) made "your opponent can
+        # capture your knight on c3" a piece-type error.
+        if _attributed_to_opponent(text, m.start(), board):
+            continue
         claimed = m.group(1).lower()
         if claimed == actual or claimed in seen:
             continue

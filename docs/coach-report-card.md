@@ -45,7 +45,9 @@ our own measurement rather than the coach. Detail for each is further down.
 | 23 | Our own centrality clause downgraded a more central king move (ply 1002) | Suppress the king-walk clause unless it beats the student's move (`rival_uci`) | Clause gone from the prompt — but the model now fabricates "closer to the center" unprompted | kept, insufficient |
 | 24 | "Endgame: most turns, worst pedagogy, and it is inverted" — king safety preached on plies 52, 60, 76, 1000, 1002; a centralized king called "exposed" | `excludes_features` on guidance entries; `principle.exposed_king` excludes `phase:endgame` | The entry was in all five prompts, now in none — replaced by passed-pawn / king-activity / open-file guidance | kept |
 | 25 | Ply 36: "capturing the undefended bishop on b4" when `bxc4` took a knight — and the checker said nothing | Widened `_CAPTURE_CLAIM_RE` to allow up to two words (adjectives) between the article and the piece noun | The check now fires on ply 36; "wins a pawn" idiom and "takes control of the bishop's diagonal" still clean | kept |
-| 26 | Harness bookkeeping leaking as pseudo-explanation ("the evaluation spread shows it was a key decision", plies 12/18/24/32/50); misses checkmate at ply 1003; never names the student's repeated flaw | **next** | — | open |
+| 26 | (v25) Same endgame complaint again, because the guidance entry was only one of three sources of "king safety" | Drop the engine's king-safety idea label in endgames (keeping any verified clause), and remove the hardcoded "is my king safe?" example from the PEDAGOGY block | Label dropped on 8 of 18 endgame turns; on 6 of them the board-derived clause survives, so the fact stays and only the wrong frame goes | kept, unmeasured (needs v26) |
+| 27 | (our finding, while checking v25) Two checker false positives at ply 60 | `Be6` naming a piece that already stands there is no longer read as a move; a capture claim attributed to the opponent is no longer judged against the victim of OUR named move | Both gone; the 2 remaining text-level violations in v25 are real coach errors | kept |
+| 28 | Harness bookkeeping leaking as pseudo-explanation ("the evaluation spread shows it was a key decision", plies 12/18/24/32/50); misses checkmate at ply 1003; never names the student's repeated flaw | **next** | — | open |
 
 ## Measurement philosophy (what to trust)
 
@@ -902,3 +904,66 @@ likely to occur — while three-or-more words still means the phrase is about
 something else, which keeps "takes control of the bishop's diagonal" unflagged.
 Both cases are pinned by tests, along with the "wins a pawn" material idiom that
 the excluded `win` verb protects.
+
+## v25 — the fix worked and the complaint stayed (2026-08-13)
+
+Score 4.2 -> 4.3, which is noise. The interesting part is that the judge repeated
+the endgame complaint almost verbatim, and was right to.
+
+**The exclusion did exactly what it claimed.** The exposed-king guidance was in the
+prompt on 16 of 18 endgame plies in v24 and on 0 of 18 in v25, still correctly
+present on the middlegame plies 34-50.
+
+**It was one of three sources.** Two more, both ours, were untouched:
+
+1. **The engine's `best_move_idea` label**, rendered as "What the best move
+   achieves: king safety — repositioning the king". Present on 14 turns, 8 of them
+   endgame — *the same count in v24 and v25*. This is the loudest source and it
+   sits in the highest-value line of the prompt.
+2. **A hardcoded example in our own PEDAGOGY block**: `ask yourself: is my king
+   safe?`, on every turn of every game, endgames included.
+
+So the source that was easy to see was not the source that mattered. The lesson
+generalises: when a review complains after a fix, count how many places produce
+the thing complained about before concluding the fix failed.
+
+**What we did.** Dropped the king-safety label in endgame positions using the same
+phase heuristic the feature extractor uses (`phase_of_board`), and replaced the
+PEDAGOGY example. Deliberately **no substitute label** — swapping one category word
+for another is precisely what failed when the lesson table was phase-gated (row
+20). On 6 of the 8 affected turns the composer already had a verified clause
+("moving your king off e5 where it was attacked", "hitting their rook on f4 and
+their bishop on g4" — the engine had mislabelled a double attack as king safety),
+so the fact survives and only the frame goes. Only plies 1000 and 1002 lose the
+whole line, and that is honest: we have nothing verified to say there.
+
+**A dangling reference the test caught.** Three tier instruction blocks tell the
+model to *use "What the best move achieves" shown above*. Removing the line left
+that pointing at a section no longer in the prompt — an open invitation to invent
+what it would have said, which is how "closer to the center" appeared on a turn
+where we supplied nothing. The reference is now redirected when the line is
+dropped.
+
+**Two checker false positives, found by checking our own new violations.** v25
+reported 4 text-level violations against v24's 2. Reading them:
+
+- `illegal_move: Be6` at ply 60. The coach wrote "the pin on Be6 and f7", using
+  `Be6` to mean *the bishop on e6*. Our own composer emits that notation ("Re1 pins
+  Be6 to Ke7") and the coach echoed it. The board settles the ambiguity: plain SAN
+  onto an occupied square is impossible, so when a piece of the named type already
+  stands on the named square the token can only be a reference.
+- `piece_type: "capture your knight"` at ply 60. The turn names one SAN capture
+  (`Rxh7`, taking a pawn) and the checker applied that victim type to every capture
+  phrase — including one about what the *opponent* could capture. Opponent-attributed
+  capture claims are now skipped, reusing the same attribution helper the illegal-move
+  check already had.
+
+After both fixes, the two remaining violations are real: ply 36 names a bishop for a
+knight capture, ply 40 puts the king on an empty f2. **And `piece_type` 1 -> 2 was
+the checker improving, not the coach degrading** — ply 36 made the same error in v24
+and the old regex could not see it.
+
+**One real defect nothing catches.** At ply 60 the coach says "your opponent can
+capture your knight on c3". Verified against the board: after the student's `Kf3`,
+Black has **no legal captures at all**. A fabricated refutation, and no check exists
+for it.

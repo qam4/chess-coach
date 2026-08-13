@@ -472,6 +472,68 @@ def test_best_move_achievement_falls_back_to_label_without_invention() -> None:
     assert _best_move_achievement(report) == "pawn structure — improving pawn position"
 
 
+# White Kf2, pawn d5, black Ke7 — a king-and-pawn endgame by the shared phase
+# heuristic (major/minor count is 0).
+ENDGAME_KINGS_FEN = "8/4k3/8/3P4/8/8/5K2/8 w - - 0 40"
+
+
+def test_king_safety_label_dropped_in_the_endgame() -> None:
+    # The label inverts in an endgame: the king is a fighting piece there, so
+    # "king safety — repositioning the king" told the student to do the opposite
+    # of the winning idea. It arrived on 8 of 18 endgame turns in a 44-turn game,
+    # in the highest-value line of the prompt. No substitute label — swapping one
+    # category word for another is what failed when the lesson table was
+    # phase-gated — so the line is omitted entirely.
+    from chess_coach.prompts import _best_move_achievement, _best_move_achievement_line
+
+    report = _move_eval_report(ENDGAME_KINGS_FEN, "f2e3", "f2f3")
+    report = dataclasses.replace(report, best_move_idea="king safety — repositioning the king")
+    assert _best_move_achievement(report) == ""
+    assert _best_move_achievement_line(report) == ""
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "What the best move achieves:" not in prompt
+    # And the instructions must not still point at the dropped section — a
+    # dangling reference is an invitation to invent what it would have said.
+    assert '"What the best move achieves" shown above' not in prompt
+    # The only surviving mention is the instruction telling it NOT to close on
+    # king safety; nothing asserts king safety as a fact about this position.
+    assert "king safety — repositioning" not in prompt
+
+
+def test_endgame_keeps_the_verified_clause_and_drops_only_the_label() -> None:
+    # The common case: on 6 of the 8 affected turns in a real game the composer
+    # HAD a board-derived clause and the engine's label was simply the wrong frame
+    # for it. Keep the fact, drop the frame — never the other way round.
+    from chess_coach.prompts import _best_move_achievement
+
+    # White Kf2 with a black rook on f4 attacking down the file; Ke3 steps off f2.
+    fen = "8/4k3/8/8/5r2/8/5K2/8 w - - 0 40"
+    report = _move_eval_report(fen, "f2e2", "f2e3")
+    report = dataclasses.replace(report, best_move_idea="king safety — repositioning the king")
+    out = _best_move_achievement(report)
+    assert out
+    assert "king safety" not in out
+    assert "(" not in out  # no empty parenthetical left behind
+
+
+def test_king_safety_label_kept_outside_the_endgame() -> None:
+    # Same label, middlegame position: here it is correct advice and stays.
+    from chess_coach.prompts import _best_move_achievement
+
+    report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
+    report = dataclasses.replace(report, best_move_idea="king safety — castling to a safer position")
+    assert "king safety" in _best_move_achievement(report)
+
+
+def test_pedagogy_block_does_not_plant_king_safety_every_turn() -> None:
+    # The hardcoded example seeded "is my king safe?" into all 44 turns of a game,
+    # endgames included — the same wrong lesson the guidance exclusion removed,
+    # arriving by another route.
+    from chess_coach.prompts import SYSTEM_PROMPT_V2
+
+    assert "is my king safe" not in SYSTEM_PROMPT_V2.lower()
+
+
 def test_numbered_san_marks_whose_move_it_is() -> None:
     # A bare SAN sequence hid side: the coach read "Nfg4 f4" and announced "the
     # opponent plays f4" — f4 is the STUDENT's move. Numbering makes the

@@ -201,9 +201,9 @@ most misleading error you can make.
 - If the engine data is empty or incomplete, say so honestly.
 
 PEDAGOGY:
-- Teach the student how to think about the position (e.g., "ask yourself: \
-is my king safe?" or "before moving, check if any of your pieces are \
-undefended").
+- Teach the student how to think about the position (e.g., "before moving, \
+check if any of your pieces are undefended" or "ask yourself: what is my \
+opponent threatening?").
 - Connect advice to a general chess principle — help the student build \
 habits they can apply in every game.
 - Acknowledge good aspects of the student's position before pointing out \
@@ -333,9 +333,7 @@ Best move evaluation: {best_eval_cp} centipawns
 Evaluation drop: {eval_drop_cp} centipawns
 Classification: {classification}
 Annotation: {nag}
-
-What the best move achieves: {best_move_idea}
-
+{best_move_line}
 {sections}
 
 {move_instructions}\
@@ -415,6 +413,11 @@ placements, tactics, or "and then..." continuations.
 # tight WORD LIMIT (the prominent final instruction the model follows) plus a
 # MAX_TOKENS ceiling (a mechanical backstop, sized well above the word target so
 # it caps runaway length without truncating a normal answer). A best move gets
+# The exact phrase the tier blocks above use to point at the achievement line.
+# Kept as a constant so dropping that line can redirect the reference instead of
+# leaving the model pointed at a section that is not in the prompt.
+_ACHIEVEMENT_REFERENCE = '"What the best move achieves" shown above'
+
 # one sentence; a serious mistake gets room to be specific.
 _TIER_INSTRUCTIONS = {
     "best": _MOVE_EVAL_INSTRUCTIONS_BEST,
@@ -1402,10 +1405,48 @@ def _best_move_achievement(report: ComparisonReport) -> str:
     # The student's move is the comparison this description is implicitly making,
     # so pass it: a clause that does not distinguish the two moves is not a reason.
     _category, effect = _move_effect(board, report.best_move, target_possessive="their ", rival_uci=report.user_move)
+    label = report.best_move_idea
+    if board is not None and _label_wrong_for_phase(label, board):
+        # No substitute label: swapping one category word for another is what
+        # failed when the lesson table was phase-gated. Say the verified thing or
+        # say nothing.
+        label = ""
     if not effect:
-        return report.best_move_idea
+        return label
     concrete = effect.removeprefix(", ").strip()
-    return f"{concrete} ({report.best_move_idea})"
+    return f"{concrete} ({label})" if label else concrete
+
+
+# The engine's king-safety ideas (MoveComparator.cpp: "king safety — castling to
+# a safer position" / "king safety — repositioning the king"). They are correct
+# in the opening and middlegame and INVERTED in an endgame, where the king is a
+# fighting piece and centralising it is how you win.
+_KING_SAFETY_IDEA = "king safety"
+
+
+def _label_wrong_for_phase(label: str, board: chess.Board) -> bool:
+    """Is the engine's idea label actively misleading in this phase?
+
+    Only one case so far, and it is the one a frontier review kept flagging: the
+    king-safety label on an endgame turn. It arrived on 8 of 18 endgame turns in a
+    44-turn game and, unlike the guidance entry that was excluded alongside it,
+    it sits in the highest-value line of the prompt — so the coach kept preaching
+    "get your king safe" while the correct lesson was to march the king in.
+    """
+    return _KING_SAFETY_IDEA in label.lower() and phase_of_board(board) == PHASE_ENDGAME
+
+
+def _best_move_achievement_line(report: ComparisonReport) -> str:
+    """The rendered "What the best move achieves" line, or '' to omit it.
+
+    The line is omitted rather than left blank: a dangling header is an invitation
+    for the model to fill it in from its own vocabulary, which is exactly how
+    "closer to the center" appeared on a turn where we supplied nothing.
+    """
+    achievement = _best_move_achievement(report)
+    if not achievement:
+        return ""
+    return f"\nWhat the best move achieves: {achievement}\n"
 
 
 def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str:
@@ -1592,7 +1633,14 @@ def build_rich_move_evaluation_prompt(
     # tier so a best move gets one sentence and a blunder gets room to be
     # specific.
     tier = _move_feedback_tier(report)
+    best_move_line = _best_move_achievement_line(report)
     move_instructions = _TIER_INSTRUCTIONS[tier]
+    if not best_move_line:
+        # Three tier blocks tell the model to "use 'What the best move achieves'
+        # shown above". With the line dropped that points at nothing, which is an
+        # invitation to invent one — so redirect the instruction to the data that
+        # IS there.
+        move_instructions = move_instructions.replace(_ACHIEVEMENT_REFERENCE, "the position facts above")
     word_limit = _TIER_WORD_LIMIT[tier]
     takeaway_instruction = _build_takeaway_instruction(report)
 
@@ -1608,7 +1656,7 @@ def build_rich_move_evaluation_prompt(
         eval_drop_cp=report.eval_drop_cp,
         classification=report.classification,
         nag=report.nag,
-        best_move_idea=_best_move_achievement(report),
+        best_move_line=best_move_line,
         sections="\n\n".join(sections),
         move_instructions=move_instructions,
         takeaway_instruction=takeaway_instruction,

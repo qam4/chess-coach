@@ -1536,3 +1536,64 @@ directions are pinned by tests.
 5. **Unify the two text parsers** — `verify.py` uses a regex plus
    `board.parse_san`; `coach_review.py` uses a weaker regex. They have drifted once
    already.
+
+### v25 — three sources of one complaint, and two checker false positives — 2026-08-13
+
+Ledger rows 26-27 in `docs/coach-report-card.md`. Score 4.2 -> 4.3 (noise).
+
+**Done this round.** The endgame guidance exclusion worked (16 of 18 endgame plies
+-> 0), but the judge repeated the complaint because two other sources were
+untouched: the engine's `best_move_idea` label ("king safety — repositioning the
+king", on 8 endgame turns, unchanged between v24 and v25) and a hardcoded
+"ask yourself: is my king safe?" example in our own PEDAGOGY block, present on
+every turn. Both fixed. No substitute label — on 6 of the 8 turns a verified clause
+already existed, so the fact stays and only the wrong frame goes.
+
+Also fixed two fidelity false positives: `Be6` used to name the bishop standing on
+e6 (our own composer's notation) was read as a move, and a capture claim about the
+OPPONENT was judged against the victim of the move WE named.
+
+**Next, in priority order.**
+
+1. **Cross-turn memory — the judge's own highest-leverage recommendation, and the
+   biggest thing on this list.** Every lesson today is chosen from the current ply
+   alone, so the coach has no idea what it has already taught or what the student
+   keeps getting wrong. Concretely, in the v25 game: it recommended a3 against the
+   b4 bishop on plies 38, 44, 46 and 48 without ever escalating or noting the
+   student was not seeing it; it never connected Ng5 (ply 6) to losing that knight
+   (ply 20), or Nxc4 (ply 14) to the identical Nxc4 blunder at ply 34; and it never
+   said the one thing that would have saved the game — "you are a queen up from ply
+   18, so trade pieces and get the king safe".
+
+   The judge's claim is that this single change also breaks the 57% lesson
+   concentration by construction, since a lesson already given becomes ineligible.
+   That makes it the first change that would attack repetition at the cause instead
+   of measuring it.
+
+   Shape (not designed yet): the coaching call needs a rolling summary of the game
+   so far — lessons already delivered, the student's recurring error categories, and
+   the running material balance — and lesson selection needs to read it. The
+   game-coaching harness already produces exactly this trajectory per turn, so the
+   data exists; what is missing is a per-turn *state* threaded into prompt
+   construction, plus a decision about what belongs in it (compact facts, per the
+   standing finding that facts get voiced and abstractions get paraphrased away).
+
+2. **Stop leaking harness bookkeeping into coaching** (carried over). "The
+   evaluation spread shows it was a key decision", "the best move was also your
+   move" on plies 12, 18, 24, 32, 50 — eval plumbing in the slot where a chess
+   reason belongs, from our own critical-moment section. The judge's cheap second
+   pick: when the student's move drops ~0cp, endorse it and stop offering a "better"
+   move. In v25 that happened on 8 turns and produced vacuous differentiators
+   ("Ra4 slightly improves rook activity" when both rooks are on the a-file).
+3. **Fabricated refutations are undetected.** At ply 60 the coach claimed the
+   opponent could capture a knight on c3; after the student's move Black had no
+   legal capture at all. A check is possible — the claim is about the position AFTER
+   the student's move, which we can construct — but it needs the post-move board
+   threaded into the checker, which today only sees `fen_before`.
+4. **Endgame facts, not endgame prose** (carried over). Now more pressing: plies
+   1000 and 1002 lose their achievement line entirely because nothing verified is
+   available, so there is a hole where the wrong frame used to be.
+5. **The coach does not notice the game is over** (carried over). Ply 1003 is `Ra8#`
+   and the closing hook asks whether the move buys time to develop.
+6. **Unify the two text parsers** (carried over) — `verify.py` uses regex plus
+   `board.parse_san`; `coach_review.py` uses a weaker regex.

@@ -269,6 +269,36 @@ def test_takes_control_of_a_diagonal_not_flagged() -> None:
     assert "piece_type" not in _kinds(v)
 
 
+# White to move. A BLACK bishop sits on e6, pinned by Re1 to Ke7; White has no
+# bishop at all, so "Be6" cannot be a White move. Rxh7 captures a PAWN.
+PIN_REFERENCE_FEN = "4r3/p1p1kpRp/1pp1b3/8/1r6/2N5/5K2/4R3 w - - 0 31"
+
+
+def test_piece_reference_not_read_as_a_move() -> None:
+    # "Be6" here names the bishop standing on e6. Our own composer writes exactly
+    # this ("Re1 pins Be6 to Ke7") and the coach echoes it, so reading it as a
+    # bishop move produced a phantom illegal_move.
+    text = "The pin on Be6 and f7 means you can attack without fear of recapture."
+    v = check_coaching_fidelity(text, _report(PIN_REFERENCE_FEN), [])
+    assert "illegal_move" not in _kinds(v)
+
+
+def test_opponent_capture_claim_not_judged_against_our_move() -> None:
+    # Rxh7 takes a pawn; the knight claim is about what the OPPONENT can capture,
+    # a different capture entirely, so the pawn victim must not be applied to it.
+    text = "Your opponent can capture your knight on c3. The better move is Rxh7."
+    v = check_coaching_fidelity(text, _report(PIN_REFERENCE_FEN), [])
+    assert "piece_type" not in _kinds(v)
+
+
+def test_our_own_capture_claim_still_checked() -> None:
+    # The opponent-attribution escape must not disable the check for the coach's
+    # own claims: Rxh7 takes a pawn, so calling it a bishop is still an error.
+    text = "The better move is Rxh7, capturing their bishop."
+    v = check_coaching_fidelity(text, _report(PIN_REFERENCE_FEN), [])
+    assert "piece_type" in _kinds(v)
+
+
 def test_pawn_falsely_called_isolated_is_flagged() -> None:
     text = "The isolated pawn on c4 is a long-term weakness."
     v = check_coaching_fidelity(text, _report(ADJACENT_PAWNS_FEN), [])
