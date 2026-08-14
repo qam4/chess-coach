@@ -657,6 +657,41 @@ def _run_fidelity_checks(text: str, board: chess.Board, menu: list[MenuMove]) ->
     return deduped
 
 
+#: Violation kinds that justify BLOCKING a response from reaching the student,
+#: as opposed to merely counting it on a scoreboard.
+#:
+#: These are statements the board contradicts outright — a piece said to be
+#: somewhere it is not, the wrong piece named as captured, a move that is not
+#: legal. A 1200 cannot detect any of them, so a confident falsehood does not
+#: merely fail to teach: it installs a false pattern. An external audit of what
+#: makes coaching good put this above every teaching quality, as a gate rather
+#: than a weighted term (docs/coaching-standard-audit.md).
+#:
+#: ``off_menu`` and ``unsound_move`` are deliberately EXCLUDED. They measure
+#: adherence to our own "only name sound moves" rule rather than truth about the
+#: board, and the warn-context guard that protects them is documented as
+#: imprecise: a warning phrased AFTER the move ("Nxe4 loses a piece") is not
+#: detected and still counts. That pattern is most likely in exactly the
+#: mistake-explanation turns we least want to replace with a template. They stay
+#: reported, and un-gated.
+GATING_VIOLATION_KINDS = frozenset(
+    {
+        "placement",
+        "piece_type",
+        "empty_source",
+        "illegal_move",
+        "pawn_structure",
+        "geometry",
+        "development",
+    }
+)
+
+
+def gating_violations(violations: list[Violation]) -> list[Violation]:
+    """The subset of ``violations`` that should stop a response being sent."""
+    return [v for v in violations if v.kind in GATING_VIOLATION_KINDS]
+
+
 def check_coaching_fidelity(
     coaching_text: str,
     report: PositionReport,

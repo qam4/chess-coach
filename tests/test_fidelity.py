@@ -387,3 +387,25 @@ def test_attribution_does_not_leak_across_sentences() -> None:
     text = "Your opponent has ideas on the queenside. You should play exd4 yourself."
     hit = next(m for m in _SAN_RE.finditer(text) if m.group(1) == "exd4")
     assert not _attributed_to_opponent(text, hit.start(), board)
+
+
+def test_adherence_kinds_do_not_gate_the_send_path() -> None:
+    # off_menu and unsound_move measure adherence to OUR "only name sound moves"
+    # rule, not truth about the board, and the warn-context guard protecting them
+    # is documented as imprecise: a warning phrased AFTER the move ("Nxe4 loses a
+    # piece") is not detected and still counts. That pattern is likeliest in
+    # exactly the mistake-explanation turns we least want replaced by a template,
+    # so they stay reported and un-gated.
+    from chess_coach.verify import GATING_VIOLATION_KINDS, gating_violations
+
+    assert "off_menu" not in GATING_VIOLATION_KINDS
+    assert "unsound_move" not in GATING_VIOLATION_KINDS
+    # And the board-contradiction kinds do gate.
+    for kind in ("placement", "piece_type", "illegal_move", "empty_source"):
+        assert kind in GATING_VIOLATION_KINDS
+
+    mixed = [
+        Violation("off_menu", "Nxe4", "not on the menu"),
+        Violation("placement", "king on f2", "f2 is empty"),
+    ]
+    assert [v.kind for v in gating_violations(mixed)] == ["placement"]

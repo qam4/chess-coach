@@ -14,7 +14,7 @@ from chess_coach.coaching_phrases import DUBIOUS_MAX_DROP_CP, SOUND_MAX_DROP_CP
 from chess_coach.coaching_templates import generate_move_coaching, generate_position_coaching
 from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol, UciEngine
 from chess_coach.llm.base import LLMProvider
-from chess_coach.models import PositionReport
+from chess_coach.models import ComparisonReport, PositionReport
 from chess_coach.openings import lookup_fen
 from chess_coach.prompts import (
     build_coaching_prompt,
@@ -25,6 +25,7 @@ from chess_coach.prompts import (
     build_socratic_prompt,
     move_feedback_max_tokens,
 )
+from chess_coach.verify import check_text_fidelity, gating_violations
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,8 @@ class Coach:
         guidance: bool = False,
         guidance_max: int = 3,
         constrain_moves: bool = True,
+        verify_output: bool = True,
+        verify_retries: int = 1,
     ):
         self.engine = engine
         self.llm = llm
@@ -127,6 +130,11 @@ class Coach:
         self.guidance = guidance
         self.guidance_max = guidance_max
         self.constrain_moves = constrain_moves
+        # Check the finished text against the board before the student sees it,
+        # rather than only counting violations on an eval scoreboard. See
+        # verify.GATING_VIOLATION_KINDS for what blocks a send and why.
+        self.verify_output = verify_output
+        self.verify_retries = max(0, verify_retries)
         self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
         self._last_position_report: PositionReport | None = None  # for breakdown diffs
 
@@ -507,6 +515,65 @@ class Coach:
         else:
             return "blunder"
 
+    def _verified_move_feedback(
+        self,
+        prompt: str,
+        report: ComparisonReport,
+        max_tokens: int,
+        trace: typing.Callable[..., None],
+    ) -> str:
+        """Generate move feedback and refuse to return a false claim about the board.
+
+        The deterministic checker already existed but only ever fed an eval
+        scoreboard, so a response contradicting the board still reached the
+        student. An external audit of coaching quality made truth a GATE rather
+        than a weighted quality — a false claim is worse than silence, because a
+        1200 cannot detect it and will act on it for months.
+
+        On a gating violation: regenerate once (the same prompt — the model is
+        sampled, so a retry is a genuinely different draw), then fall back to the
+        composed template, which is built from engine facts and cannot invent a
+        piece. The fallback is degraded, not wrong, which is the right way round.
+
+        Only :data:`verify.GATING_VIOLATION_KINDS` blocks; adherence kinds with
+        known false positives stay reported and un-gated.
+        """
+        # No menu is passed: it only enables the off_menu / unsound_move checks,
+        # which are excluded from the gate anyway (see GATING_VIOLATION_KINDS).
+        attempts = self.verify_retries + 1
+        last = ""
+        for attempt in range(1, attempts + 1):
+            feedback = self.llm.generate(prompt, max_tokens=max_tokens, temperature=self.temperature)
+            if not feedback.strip():
+                raise ValueError("Empty LLM response")
+            last = feedback
+            if not self.verify_output:
+                return feedback
+            bad = gating_violations(check_text_fidelity(feedback, report.fen))
+            if not bad:
+                return feedback
+            detail = "; ".join(f"{v.kind}: {v.text} — {v.detail}" for v in bad)
+            logger.warning(
+                "evaluate_move: response contradicts the board (attempt %d/%d): %s",
+                attempt,
+                attempts,
+                detail,
+            )
+            trace(
+                "eval_verify_failed",
+                f"Response contradicts the board (attempt {attempt}/{attempts}): {detail}",
+                tool="llm",
+                violations=[{"kind": v.kind, "text": v.text, "detail": v.detail} for v in bad],
+            )
+        # Every attempt made a false claim — send the composed text instead.
+        fallback = generate_move_coaching(report, level=self.level)
+        trace(
+            "eval_verify_fallback",
+            "Falling back to composed template — every attempt contradicted the board",
+            tool="engine",
+        )
+        return fallback or last
+
     def evaluate_move(
         self,
         fen_before: str,
@@ -617,15 +684,14 @@ class Coach:
                 )
                 t2 = time.perf_counter()
                 try:
-                    feedback = self.llm.generate(
+                    feedback = self._verified_move_feedback(
                         prompt,
+                        report,
                         # Per-tier ceiling (lever 4): a serious mistake gets room
                         # to be specific; a sound move is kept short.
                         max_tokens=min(self.max_tokens, move_feedback_max_tokens(report)),
-                        temperature=self.temperature,
+                        trace=_trace,
                     )
-                    if not feedback.strip():
-                        raise ValueError("Empty LLM response")
                 except Exception as e:
                     logger.warning("LLM failed for move evaluation (coaching path): %s — falling back to templates", e)
                     feedback = generate_move_coaching(report, level=self.level)

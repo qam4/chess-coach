@@ -214,3 +214,103 @@ class TestCoachKnobs:
         coach = Coach(engine=_mock_coaching_engine(), llm=llm)
         coach.explain(STARTING_FEN)
         llm.generate.assert_called_once()
+
+
+# --------------------------------------------------------------------------
+# Output verification on the SEND path (not just the eval scoreboard).
+# --------------------------------------------------------------------------
+#
+# The deterministic checker existed for a long time but only ever fed an eval
+# scoreboard, so a response contradicting the board still reached the student. An
+# external audit of coaching quality made truth a GATE rather than a weighted
+# quality: a false claim is worse than silence, because a 1200 cannot detect it.
+# The concrete case was v26 ply 36 — a capture described as taking a bishop when
+# it took a knight, with the bishop still sitting there twelve plies later.
+
+# Black to move; the black d4 pawn captures the white KNIGHT on e3 (dxe3).
+_VERIFY_FEN = "4k3/8/8/8/3p4/4N3/8/4K3 b - - 0 1"
+_FALSE_CLAIM = "Nice — you capture the pawn with dxe3, winning material."
+_TRUE_CLAIM = "Good, you take the knight with dxe3."
+
+
+def _verify_report():
+    from chess_coach.models import ComparisonReport
+
+    return ComparisonReport(
+        fen=_VERIFY_FEN,
+        user_move="d4e3",
+        user_eval_cp=0,
+        best_move="d4e3",
+        best_eval_cp=0,
+        eval_drop_cp=0,
+        classification="good",
+        nag="",
+        best_move_idea="material gain — winning capture",
+        refutation_line=None,
+        missed_tactics=[],
+        top_lines=[],
+        critical_moment=False,
+        critical_reason=None,
+    )
+
+
+def _noop_trace(*_args, **_kwargs) -> None:
+    return None
+
+
+class TestVerifiedMoveFeedback:
+    def test_clean_response_passes_through_with_one_call(self):
+        llm = _mock_llm()
+        llm.generate.return_value = _TRUE_CLAIM
+        coach = Coach(engine=_mock_engine(), llm=llm)
+        out = coach._verified_move_feedback("prompt", _verify_report(), max_tokens=100, trace=_noop_trace)
+        assert out == _TRUE_CLAIM
+        assert llm.generate.call_count == 1
+
+    def test_false_claim_is_regenerated_once(self):
+        llm = _mock_llm()
+        llm.generate.side_effect = [_FALSE_CLAIM, _TRUE_CLAIM]
+        coach = Coach(engine=_mock_engine(), llm=llm)
+        out = coach._verified_move_feedback("prompt", _verify_report(), max_tokens=100, trace=_noop_trace)
+        assert out == _TRUE_CLAIM
+        assert llm.generate.call_count == 2
+
+    def test_persistent_false_claim_falls_back_to_composed_text(self):
+        # Degraded, not wrong — the template is built from engine facts and cannot
+        # invent a piece. That is the right way round.
+        llm = _mock_llm()
+        llm.generate.side_effect = [_FALSE_CLAIM, _FALSE_CLAIM]
+        coach = Coach(engine=_mock_engine(), llm=llm)
+        out = coach._verified_move_feedback("prompt", _verify_report(), max_tokens=100, trace=_noop_trace)
+        assert out != _FALSE_CLAIM
+        assert "capture the pawn" not in out
+        assert out.strip()
+        assert llm.generate.call_count == 2
+
+    def test_switch_off_sends_the_first_draft_unchecked(self):
+        # The knob has to actually disable the gate so the change can be A/B'd.
+        llm = _mock_llm()
+        llm.generate.return_value = _FALSE_CLAIM
+        coach = Coach(engine=_mock_engine(), llm=llm, verify_output=False)
+        out = coach._verified_move_feedback("prompt", _verify_report(), max_tokens=100, trace=_noop_trace)
+        assert out == _FALSE_CLAIM
+        assert llm.generate.call_count == 1
+
+    def test_zero_retries_falls_back_immediately(self):
+        llm = _mock_llm()
+        llm.generate.return_value = _FALSE_CLAIM
+        coach = Coach(engine=_mock_engine(), llm=llm, verify_retries=0)
+        out = coach._verified_move_feedback("prompt", _verify_report(), max_tokens=100, trace=_noop_trace)
+        assert out != _FALSE_CLAIM
+        assert llm.generate.call_count == 1
+
+    def test_empty_response_still_raises_for_the_existing_fallback(self):
+        # evaluate_move catches this and uses the template path; the verification
+        # wrapper must not swallow it.
+        import pytest
+
+        llm = _mock_llm()
+        llm.generate.return_value = "   "
+        coach = Coach(engine=_mock_engine(), llm=llm)
+        with pytest.raises(ValueError, match="Empty LLM response"):
+            coach._verified_move_feedback("prompt", _verify_report(), max_tokens=100, trace=_noop_trace)

@@ -229,6 +229,7 @@ def explain(ctx: click.Context, fen: str, depth: int | None, level: str | None, 
             template_only=coaching_cfg.get("template_only", False),
             guidance=coaching_cfg.get("guidance", False),
             constrain_moves=coaching_cfg.get("constrain_moves", True),
+            verify_output=coaching_cfg.get("verify_output", True),
             guidance_max=coaching_cfg.get("guidance_max", 3),
         )
 
@@ -462,6 +463,7 @@ def serve(ctx: click.Context, port: int) -> None:
         guidance=coaching_cfg.get("guidance", False),
         guidance_max=coaching_cfg.get("guidance_max", 3),
         constrain_moves=coaching_cfg.get("constrain_moves", True),
+        verify_output=coaching_cfg.get("verify_output", True),
     )
 
     app = create_app(coach)
