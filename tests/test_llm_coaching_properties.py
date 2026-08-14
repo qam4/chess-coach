@@ -25,6 +25,7 @@ from hypothesis import strategies as st
 
 from chess_coach.coaching_phrases import (
     DUBIOUS_MAX_DROP_CP,
+    EQUAL_MAX_DROP_CP,
     SOUND_MAX_DROP_CP,
     describe_tactic,
     select_tactics,
@@ -482,6 +483,10 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     played_best = report.user_move == report.best_move
     if played_best:
         assert "there is no better move here" in prompt_lower  # BUG-014
+    elif report.eval_drop_cp <= EQUAL_MAX_DROP_CP:
+        # No comparison at all below this band: offering a "better" move on a move
+        # that was fine is in the harmful tier of the coaching-standard audit.
+        assert "as good as anything else here" in prompt_lower
     elif report.eval_drop_cp <= SOUND_MAX_DROP_CP:
         assert "sound, reasonable move" in prompt_lower  # BUG-016 (affirm)
     elif report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
@@ -498,8 +503,13 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     # Eval drop value present (Req 3.4)
     assert str(report.eval_drop_cp) in prompt, f"Prompt must contain eval drop value {report.eval_drop_cp}"
 
-    # Best move idea present (Req 3.4)
-    assert report.best_move_idea in prompt, "Prompt must contain best move idea"
+    # Best move idea present (Req 3.4) — but only on the tiers that COMPARE the
+    # student's move against the engine's. Below EQUAL_MAX_DROP_CP the two moves are
+    # not meaningfully different, so the alternative is withheld entirely rather than
+    # supplied with an instruction not to mention it; the engine's label describes
+    # that withheld move, so it goes too. See test_equal_tier_* for that behaviour.
+    if played_best or report.eval_drop_cp > EQUAL_MAX_DROP_CP:
+        assert report.best_move_idea in prompt, "Prompt must contain best move idea"
 
     # A concise word-limit instruction is present (Req 7.3). The exact number
     # is now per severity tier (lever 4), so assert the concise-limit line

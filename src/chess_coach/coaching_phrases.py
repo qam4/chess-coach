@@ -529,6 +529,18 @@ def king_safety_relevant(report: PositionReport) -> bool:
 # Single source of the centipawn boundaries for "how far from best is still
 # acceptable". Shared by the move-menu tags below and ``Coach.classify_move``
 # (good/inaccuracy/blunder), so the numbers live in exactly one place.
+# Below this, the student's move and the engine's are not meaningfully different
+# and NO comparison should be offered. A blind audit of what makes coaching good
+# (docs/coaching-standard-audit.md) puts "manufactures fault on genuinely good
+# moves" in the actively-harmful tier — it trains the student to distrust the
+# instincts you most want to reinforce. Measured on one game, 10 of 44 turns did
+# exactly that, at drops of 0, 0, 0, 0, 0, 0, 6, 17 and 17cp.
+#
+# 25 is deliberately conservative: it covers every observed case and stays well
+# inside the "sound" band rather than redefining it. The audit argues for roughly a
+# pawn, which would swallow the whole inaccuracy band — a much larger behavioural
+# change than the evidence so far supports.
+EQUAL_MAX_DROP_CP = 25
 SOUND_MAX_DROP_CP = 50
 DUBIOUS_MAX_DROP_CP = 100
 

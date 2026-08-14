@@ -8,6 +8,7 @@ import chess
 
 from chess_coach.coaching_phrases import (
     DUBIOUS_MAX_DROP_CP,
+    EQUAL_MAX_DROP_CP,
     SOUND_MAX_DROP_CP,
     build_move_menu,
     describe_hanging,
@@ -364,6 +365,21 @@ move) — not a generic principle. No motivational sign-off.
 placements, tactics, or "and then..." continuations.
 """
 
+# Student's move was EQUAL to the engine's in practical terms (drop under
+# EQUAL_MAX_DROP_CP). No alternative is named and none is described in the prompt,
+# so there is nothing to compare against — the positive form of the rule, because
+# an instruction NOT to mention something we supplied has never worked on this
+# model (lever 2), while withholding it has.
+_MOVE_EVAL_INSTRUCTIONS_EQUAL = """\
+COACHING INSTRUCTIONS:
+- The student's move is as good as anything else here. Endorse it and move on. \
+Do NOT offer an alternative, a refinement, or a "better" move — there isn't one.
+- Keep it SHORT (1-2 sentences): say what their move achieves, using "What your \
+move achieves" shown above, then the takeaway. No motivational sign-off.
+- Stay grounded: only facts in the data above; no invented analysis, \
+placements, tactics, or "and then..." continuations.
+"""
+
 # Student played a SOUND move (small eval drop, not the top move). Affirm; a
 # genuinely better move may be noted as a refinement, never a rebuke (BUG-016).
 _MOVE_EVAL_INSTRUCTIONS_SOUND = """\
@@ -413,20 +429,28 @@ placements, tactics, or "and then..." continuations.
 # tight WORD LIMIT (the prominent final instruction the model follows) plus a
 # MAX_TOKENS ceiling (a mechanical backstop, sized well above the word target so
 # it caps runaway length without truncating a normal answer). A best move gets
-# The exact phrase the tier blocks above use to point at the achievement line.
-# Kept as a constant so dropping that line can redirect the reference instead of
+# The exact phrases the tier blocks above use to point at the achievement line.
+# Kept as constants so dropping that line can redirect the reference instead of
 # leaving the model pointed at a section that is not in the prompt.
-_ACHIEVEMENT_REFERENCE = '"What the best move achieves" shown above'
+_ACHIEVEMENT_REFERENCES = (
+    '"What the best move achieves" shown above',
+    '"What your move achieves" shown above',
+)
 
 # one sentence; a serious mistake gets room to be specific.
 _TIER_INSTRUCTIONS = {
     "best": _MOVE_EVAL_INSTRUCTIONS_BEST,
+    "equal": _MOVE_EVAL_INSTRUCTIONS_EQUAL,
     "sound": _MOVE_EVAL_INSTRUCTIONS_SOUND,
     "inaccuracy": _MOVE_EVAL_INSTRUCTIONS_INACCURACY,
     "serious": _MOVE_EVAL_INSTRUCTIONS_SERIOUS,
 }
-_TIER_WORD_LIMIT = {"best": 40, "sound": 55, "inaccuracy": 80, "serious": 120}
-_TIER_MAX_TOKENS = {"best": 120, "sound": 150, "inaccuracy": 200, "serious": 300}
+_TIER_WORD_LIMIT = {"best": 40, "equal": 40, "sound": 55, "inaccuracy": 80, "serious": 120}
+_TIER_MAX_TOKENS = {"best": 120, "equal": 120, "sound": 150, "inaccuracy": 200, "serious": 300}
+
+#: Tiers where the coach describes the STUDENT's move rather than the engine's,
+#: because no comparison is being made.
+_OWN_MOVE_TIERS = frozenset({"best", "equal"})
 
 
 def _move_feedback_tier(report: ComparisonReport) -> str:
@@ -438,6 +462,8 @@ def _move_feedback_tier(report: ComparisonReport) -> str:
     """
     if report.user_move == report.best_move:
         return "best"
+    if report.eval_drop_cp <= EQUAL_MAX_DROP_CP:
+        return "equal"
     if report.eval_drop_cp <= SOUND_MAX_DROP_CP:
         return "sound"
     if report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
@@ -1359,10 +1385,10 @@ _TAKEAWAY_FALLBACK = (
 )
 
 
-def _build_takeaway_instruction(report: ComparisonReport) -> str:
+def _build_takeaway_instruction(report: ComparisonReport, tier: str = "serious") -> str:
     """The closing-takeaway instruction, with the lesson composed where possible.
 
-    The subject of the takeaway is derived from what the best move verifiably DOES
+    The subject of the takeaway is derived from what the relevant move verifiably DOES
     (:func:`_move_effect`), not chosen by the model. Left to choose, the coach
     closed on one of the same three ideas on 68% of turns and sometimes on an idea
     that did not apply at all — "next time you see a fork opportunity" about a move
@@ -1374,7 +1400,12 @@ def _build_takeaway_instruction(report: ComparisonReport) -> str:
     claim.
     """
     board = _safe_board(report.fen)
-    category, _clause = _move_effect(board, report.best_move, target_possessive="their ", rival_uci=report.user_move)
+    # On the tiers that make no comparison, the lesson must come from the move the
+    # student actually played — keying it to an alternative we are not naming would
+    # close on a lesson the rest of the response never mentions.
+    subject = report.user_move if tier in _OWN_MOVE_TIERS else report.best_move
+    rival = "" if tier in _OWN_MOVE_TIERS else report.user_move
+    category, _clause = _move_effect(board, subject, target_possessive="their ", rival_uci=rival)
     phase = phase_of_board(board) if board is not None else ""
     lesson = effect_takeaway(category, phase)
     if not lesson:
@@ -1401,12 +1432,23 @@ def _best_move_achievement(report: ComparisonReport) -> str:
     theme. Composed, never derived — if nothing is verifiable, the label alone
     is returned unchanged.
     """
+    return _move_achievement(report, report.best_move, rival_uci=report.user_move)
+
+
+def _move_achievement(report: ComparisonReport, uci: str, *, rival_uci: str = "") -> str:
+    """What ``uci`` achieves, as a composed clause plus the engine's label.
+
+    ``uci`` is the best move on the tiers that compare, and the STUDENT's own move
+    on the tiers that do not (see :data:`_OWN_MOVE_TIERS`). The engine's
+    ``best_move_idea`` describes the best move only, so it is dropped when
+    describing anything else rather than misattributed.
+    """
     board = _safe_board(report.fen)
-    # The student's move is the comparison this description is implicitly making,
-    # so pass it: a clause that does not distinguish the two moves is not a reason.
-    _category, effect = _move_effect(board, report.best_move, target_possessive="their ", rival_uci=report.user_move)
-    label = report.best_move_idea
-    if board is not None and _label_wrong_for_phase(label, board):
+    # ``rival_uci`` is the move this description is implicitly compared against, if
+    # any: a clause that does not distinguish the two moves is not a reason.
+    _category, effect = _move_effect(board, uci, target_possessive="their ", rival_uci=rival_uci)
+    label = report.best_move_idea if uci == report.best_move else ""
+    if label and board is not None and _label_wrong_for_phase(label, board):
         # No substitute label: swapping one category word for another is what
         # failed when the lesson table was phase-gated. Say the verified thing or
         # say nothing.
@@ -1434,6 +1476,25 @@ def _label_wrong_for_phase(label: str, board: chess.Board) -> bool:
     "get your king safe" while the correct lesson was to march the king in.
     """
     return _KING_SAFETY_IDEA in label.lower() and phase_of_board(board) == PHASE_ENDGAME
+
+
+def _achievement_line(report: ComparisonReport, tier: str) -> str:
+    """The rendered achievement line for ``tier``, or '' to omit it.
+
+    On the tiers that make no comparison the line describes the STUDENT's move and
+    is headed accordingly, so the alternative is never put in front of the model at
+    all. Supplying the engine's move and instructing the coach not to mention it
+    would be a negative constraint, and those do not work here.
+    """
+    if tier in _OWN_MOVE_TIERS:
+        achievement = _move_achievement(report, report.user_move)
+        header = "What your move achieves"
+    else:
+        achievement = _best_move_achievement(report)
+        header = "What the best move achieves"
+    if not achievement:
+        return ""
+    return f"\n{header}: {achievement}\n"
 
 
 def _best_move_achievement_line(report: ComparisonReport) -> str:
@@ -1609,13 +1670,20 @@ def build_rich_move_evaluation_prompt(
     # Top lines for context
     sections.append(_format_comparison_top_lines(report))
 
-    # Critical moment
+    # Critical moment. The engine's ``critical_reason`` is DELIBERATELY not passed
+    # on: its only format is "eval spread between best and 3rd-best line is 107cp"
+    # (MoveComparator/PositionAnalyzer), which is our own bookkeeping, not a chess
+    # reason. Handed it, the coach dutifully voiced it — "this was a critical moment
+    # because the best move was also your move, and the evaluation spread shows it
+    # was a key decision" on plies 12, 18 and 24 — occupying the slot where a reason
+    # belongs. The flag still earns a fuller explanation; the number never reaches
+    # the student. (It also carried BUG-021 into the prompt: 98542cp at a mate.)
     if report.critical_moment:
         critical_section = (
-            "⚠ CRITICAL MOMENT: This was a critical decision point. "
-            f"Reason: {report.critical_reason}\n"
+            "⚠ CRITICAL MOMENT: This was a critical decision point.\n"
             "Please provide a MORE DETAILED explanation of what was missed "
-            "and why this moment was so important.\n\n"
+            "and why this moment was so important, in terms of the position — "
+            "never in terms of evaluations, centipawns or engine line rankings.\n\n"
         )
     else:
         critical_section = ""
@@ -1633,16 +1701,16 @@ def build_rich_move_evaluation_prompt(
     # tier so a best move gets one sentence and a blunder gets room to be
     # specific.
     tier = _move_feedback_tier(report)
-    best_move_line = _best_move_achievement_line(report)
+    best_move_line = _achievement_line(report, tier)
     move_instructions = _TIER_INSTRUCTIONS[tier]
     if not best_move_line:
-        # Three tier blocks tell the model to "use 'What the best move achieves'
-        # shown above". With the line dropped that points at nothing, which is an
-        # invitation to invent one — so redirect the instruction to the data that
-        # IS there.
-        move_instructions = move_instructions.replace(_ACHIEVEMENT_REFERENCE, "the position facts above")
+        # Four tier blocks tell the model to "use '<header>' shown above". With the
+        # line dropped that points at nothing, which is an invitation to invent one —
+        # so redirect the instruction to the data that IS there.
+        for reference in _ACHIEVEMENT_REFERENCES:
+            move_instructions = move_instructions.replace(reference, "the position facts above")
     word_limit = _TIER_WORD_LIMIT[tier]
-    takeaway_instruction = _build_takeaway_instruction(report)
+    takeaway_instruction = _build_takeaway_instruction(report, tier)
 
     return RICH_MOVE_EVALUATION_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,

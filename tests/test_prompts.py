@@ -56,6 +56,7 @@ class TestBuildCoachingPrompt:
 # BUG-011 regression: the rich prompts must state side-to-move / student color
 # --------------------------------------------------------------------------
 
+from chess_coach.coaching_phrases import EQUAL_MAX_DROP_CP  # noqa: E402
 from chess_coach.coaching_phrases import uci_to_san as _uci_to_san  # noqa: E402
 from chess_coach.models import (  # noqa: E402
     ComparisonReport,
@@ -532,6 +533,70 @@ def test_pedagogy_block_does_not_plant_king_safety_every_turn() -> None:
     from chess_coach.prompts import SYSTEM_PROMPT_V2
 
     assert "is my king safe" not in SYSTEM_PROMPT_V2.lower()
+
+
+def test_equal_tier_withholds_the_alternative_entirely() -> None:
+    # A blind audit of good coaching puts "manufactures fault on genuinely good
+    # moves" in the actively-harmful tier: it trains the student to distrust the
+    # instincts you most want reinforced. On one game 10 of 44 turns did it, at
+    # drops of 0-17cp. Below EQUAL_MAX_DROP_CP the alternative is withheld from the
+    # prompt rather than supplied with an instruction not to mention it — the
+    # positive form, because negative constraints do not work on this model.
+    report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
+    report = dataclasses.replace(
+        report,
+        eval_drop_cp=EQUAL_MAX_DROP_CP,
+        best_move_idea="pawn structure — improving pawn position",
+    )
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "as good as anything else here" in prompt
+    # The engine's move and its label describe the withheld alternative.
+    assert "What the best move achieves" not in prompt
+    assert "pawn structure — improving pawn position" not in prompt
+    # What IS supplied is a fact about the move the student actually played.
+    assert "What your move achieves" in prompt
+
+
+def test_just_above_equal_still_offers_the_refinement() -> None:
+    # The band has to have an upper edge, and above it the old behaviour stands:
+    # a genuinely better move may be named as a refinement (BUG-016).
+    report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
+    report = dataclasses.replace(report, eval_drop_cp=EQUAL_MAX_DROP_CP + 1)
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "sound, reasonable move" in prompt
+    assert "What the best move achieves" in prompt
+
+
+def test_equal_tier_takeaway_is_about_the_move_played() -> None:
+    # The closing lesson must come from the student's own move on this tier.
+    # Keyed to an alternative we are deliberately not naming, the response would
+    # close on a lesson the rest of it never mentions.
+    from chess_coach.prompts import _build_takeaway_instruction
+
+    # White Kf2 with a black rook on f4; the student's Ke2 escapes the attacked square.
+    fen = "8/4k3/8/8/5r2/8/5K2/8 w - - 0 40"
+    report = _move_eval_report(fen, "f2e2", "f2e3")
+    own = _build_takeaway_instruction(report, "equal")
+    compared = _build_takeaway_instruction(report, "serious")
+    assert own != compared
+
+
+def test_critical_moment_never_leaks_the_eval_spread() -> None:
+    # The engine's critical_reason has exactly one format — "eval spread between
+    # best and 3rd-best line is 107cp" — so it is always our own bookkeeping, not a
+    # chess reason. Handed it, the coach voiced it verbatim as an explanation on
+    # plies 12, 18 and 24, in the slot where a reason belongs.
+    report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
+    report = dataclasses.replace(
+        report,
+        critical_moment=True,
+        critical_reason="eval spread between best and 3rd-best line is 107cp",
+        eval_drop_cp=200,
+    )
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "CRITICAL MOMENT" in prompt  # the flag still earns a fuller explanation
+    assert "eval spread" not in prompt
+    assert "107" not in prompt
 
 
 def test_numbered_san_marks_whose_move_it_is() -> None:
