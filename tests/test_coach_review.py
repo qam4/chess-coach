@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from chess_coach.eval.coach_review import (
     PHASE_ENDGAME,
     PHASE_MIDDLEGAME,
@@ -157,6 +159,41 @@ def test_review_prompt_contains_standard_stats_and_transcript() -> None:
     assert "engine best: Nc3" in prompt
     assert "Great central move." in prompt
     assert "Too early." in prompt
+
+
+def test_rubric_v2_asks_per_category_with_gates() -> None:
+    # The single 0-10 defined only its endpoints, so the judge re-anchored the middle
+    # every run, and one number over a composite standard averages away a gain in any
+    # one part. Rubric v2 scores categories against externally derived anchors and
+    # gates on the two failures that make coaching worse than silence.
+    turns = [_turn(0, PHASE_OPENING, played="e4", best="e4", feedback="Great central move.")]
+    prompt = build_coach_review_prompt(turns, aggregate_review(turns), rubric="v2")
+    for category in ("FIDELITY", "DIAGNOSIS", "TRANSFER HANDLE", "STREAM BEHAVIOUR"):
+        assert category in prompt
+    # Anchors, not just names — the anchors are the fix for the re-anchoring noise.
+    assert "caps the overall at 2/10" in prompt
+    assert "GATES" in prompt
+    # Still asks for a parseable headline so the progression table keeps working.
+    assert "SCORE: X/10" in prompt
+    # And asks the two questions the old ask never did.
+    assert "WHAT HOLDS THE LOWEST TWO CATEGORIES BACK" in prompt
+    assert "WHAT TO REMOVE" in prompt
+
+
+def test_rubric_v1_is_unchanged_and_the_default() -> None:
+    # The v1 series has to stay comparable: 15 runs of history are scored under it.
+    turns = [_turn(0, PHASE_OPENING, played="e4", best="e4", feedback="Great central move.")]
+    stats = aggregate_review(turns)
+    assert build_coach_review_prompt(turns, stats) == build_coach_review_prompt(turns, stats, rubric="v1")
+    assert "GATES" not in build_coach_review_prompt(turns, stats, rubric="v1")
+
+
+def test_unknown_rubric_is_rejected() -> None:
+    # A silent fallback would record the wrong instrument against a run — the same
+    # class of bug as --judge-model and --judge-command disagreeing.
+    turns = [_turn(0, PHASE_OPENING, played="e4", best="e4", feedback="ok")]
+    with pytest.raises(ValueError, match="unknown rubric"):
+        build_coach_review_prompt(turns, aggregate_review(turns), rubric="v3")
 
 
 def test_square_detection_sees_squares_inside_san_tokens() -> None:

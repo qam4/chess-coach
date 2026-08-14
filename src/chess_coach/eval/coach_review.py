@@ -455,6 +455,129 @@ Return:
 """
 
 
+# ---------------------------------------------------------------------------
+# Rubric v2 — per-category scoring against an EXTERNALLY derived standard.
+# ---------------------------------------------------------------------------
+#
+# Why replace the single 0-10: it sat at 3.5-4.5 across fifteen changes,
+# including 4.5 for a lever we reverted as ineffective. Two causes, both fixed
+# here. (1) The old task defined only the ENDPOINTS of the scale, so the judge
+# re-anchored the middle every run — the same defect that made absolute scoring
+# useless in the guidance A/Bs, where the fix was to stop asking for a bare
+# number. (2) One number over a composite standard averages away a gain in any
+# single part: lesson concentration fell 82% -> 45% with no score movement, and
+# the judge once called a 14% factual-defect rate "the single most disqualifying
+# fact" and then scored mid-band. Its words and its number did not agree.
+#
+# The categories are NOT ours. VISION forbids sourcing the standard from inside
+# the project ("the standard for good coaching cannot be sourced from the product
+# owner's chess judgment; it must come from outside"), and a rubric decomposed
+# from VISION.md would be circular. They come from asking claude-opus-5 twice,
+# blind to VISION and to any transcript, via two different framings; the
+# categories came back stable and rank-consistent. Full derivation and sourcing:
+# docs/coaching-standard-audit.md and docs/audit/blind-derivation-{a,b}.md.
+_RUBRIC_V2 = """\
+Score each category 0-10 against these anchors. The anchors matter more than your
+overall impression: two graders reading the same transcript should land close.
+
+1. FIDELITY — is every factual claim about the position true?
+   4 = contains a plausible-sounding falsehood (wrong piece captured, a threat that
+       does not exist, a move that is not legal).
+   6 = all material claims true; one loose imprecision that does not mislead.
+   8 = every claim checks out against the board and the engine output.
+
+2. DIAGNOSIS — does it address the thing that actually decided this move, and name
+   the CAUSE rather than only the existence of the error?
+   4 = discusses a real but secondary feature while the game is being decided
+       elsewhere; or "that was a mistake, X was better" with no account of what
+       went wrong.
+   6 = identifies the right board feature but stops at board level — describes the
+       error without naming the thinking failure behind it.
+   8 = names the specific process failure (e.g. "that rook was doing a job and you
+       moved it anyway"), and it is genuinely the failure this move exhibits.
+
+3. TRANSFER HANDLE — does it attach a recognizable CUE to a concrete check, so the
+   lesson can fire again in a position that looks nothing like this one?
+   4 = nothing reusable, or a slogan with no condition attached.
+   6 = a correct principle, unconditionalized ("remember to count defenders") —
+       true, already known to this student, no trigger for when to do it.
+   8 = cue and action both present and both concrete, naming where the pattern
+       bites.
+
+4. EXECUTABILITY — could THIS student carry the advice out unaided, in-game?
+   4 = requires strength they lack: assessing the resulting endgame, prophylaxis,
+       or a refutation resting on a long tactic.
+   6 = doable but expensive — a check they can perform but not sustain every move.
+   8 = a single check a 1200 can complete in seconds from what is on the board.
+
+5. LOAD DISCIPLINE — one takeaway, in what is visible, nothing to hold in the head.
+   4 = two or more ideas of comparable weight, or a variation needing blind
+       visualization past a couple of plies.
+   6 = one main idea plus an aside. Survivable, diluted.
+   8 = exactly one takeaway, everything it points at visible on the current board.
+
+6. STANCE — about the move and the process, never about the student; honest about
+   the size of the error without amplifying or softening it into a lie.
+   4 = person-level attribution ("careless again"), catastrophizing, or false
+       praise on a bad move.
+   6 = mild compliment-sandwich framing; accurate content, padded.
+   8 = move and process only, cost stated plainly and once, no padding either way.
+
+7. STREAM BEHAVIOUR (judge across the whole game, not per move) — does it build a
+   thread, revisit the student's actual recurring weakness with increasing
+   specificity, stay quiet when there is nothing worth saying, and avoid repeating
+   itself?
+   4 = near-verbatim repetition, or a brand-new unrelated theme every move with no
+       thread, or full-length commentary on every move.
+   6 = a recognizable thread plus several unrelated one-offs.
+   8 = two or three themes for the game; the dominant weakness revisited at
+       increasing specificity; unremarkable moves get a clause or nothing; no
+       message duplicates an earlier one.
+
+GATES. These are not averaged — they cap the whole score, because a failure here
+means the coaching would have been better unsent:
+- FIDELITY at or below 4 caps the overall at 2/10. A confident falsehood is worse
+  than silence: the student cannot detect it and will apply it for months.
+- STANCE at or below 4, in the person-attribution or false-praise varieties, caps
+  the overall at 3/10.
+- DIAGNOSIS at or below 3 caps the overall at 4/10. Teaching an irrelevance
+  elegantly trains the student to attend to the wrong feature.
+
+Otherwise weight: Diagnosis 25, Transfer Handle 25, Executability 15, Load
+Discipline 10, Stance 10, Stream Behaviour 10, Fidelity gate-only (there is no
+credit for being true, only a penalty for being false).
+
+ALSO TREAT AS DEFECTS, not neutral: engine evaluations or centipawns shown to the
+student; variations beyond a couple of plies; recommending a best move the student
+could not have found by a repeatable method; opening names and book moves;
+listing everything wrong with a move rather than the one thing that matters;
+praise as content rather than tone; commenting at full length on every move.\
+"""
+
+_REVIEW_TASK_V2 = """\
+You are a strong chess teacher AND a hard-nosed product reviewer. Judge HONESTLY
+against the rubric above. Low scores are welcome if deserved; do not flatter.
+Ground every point in specific plies.
+
+Return, in this order:
+
+1. CATEGORY SCORES — one line per category, as "NAME: X/10", each followed by one
+   sentence citing the plies that set it. Use the anchors, not your impression.
+2. GATES — state explicitly whether any gate fired, and which.
+3. OVERALL: X/10 — applying the weights and any gate cap. State the arithmetic in
+   one line so it can be checked. Say "SCORE: X/10" as well, on its own line.
+4. WHAT HOLDS THE LOWEST TWO CATEGORIES BACK — for each, the specific blocker, and
+   what would have to become true to move it two points. Estimate the
+   implementation cost of each as SMALL / MEDIUM / LARGE.
+5. WHAT TO REMOVE — anything the coach is doing that it should stop doing. Answer
+   even if the answer is "nothing"; deletions have been our highest-yield changes.
+6. PHASE FIT — does the coaching suit each phase present (opening / middlegame /
+   endgame)? Note any phase under-covered in this transcript.
+7. HIGHEST-LEVERAGE CHANGE — one change, with its cost, and what you would expect
+   to move if we made it.\
+"""
+
+
 def _fmt_stats(stats: ReviewStats) -> str:
     phases = ", ".join(f"{_PHASE_LABEL.get(k, k)}: {v}" for k, v in sorted(stats.phase_counts.items()))
     cls = ", ".join(f"{k}: {v}" for k, v in sorted(stats.classification_counts.items()))
@@ -508,24 +631,41 @@ def _fmt_turn(t: ReviewTurn) -> str:
     )
 
 
-def build_coach_review_prompt(turns: list[ReviewTurn], stats: ReviewStats) -> str:
+#: Rubric versions the report card can be judged under. ``v1`` is the original
+#: single holistic 0-10 against the bridge standard, kept so the progression table
+#: has a comparable series and so a change of ASK can be A/B'd on one transcript.
+#: ``v2`` is the externally-derived per-category rubric with gates.
+RUBRIC_VERSIONS = ("v1", "v2")
+
+
+def build_coach_review_prompt(turns: list[ReviewTurn], stats: ReviewStats, rubric: str = "v1") -> str:
     """Compose the single holistic-review prompt for a frontier reviewer.
 
     Bundles the teaching standard, the objective stats, and the full coached
-    transcript, then asks for a 0-10 score + honest critique + phase-fit
-    assessment. Pure string assembly so it is unit-testable.
+    transcript, then asks for a score + honest critique + phase-fit assessment.
+    Pure string assembly so it is unit-testable.
+
+    ``rubric`` selects the ask: ``v1`` requests one holistic 0-10, ``v2`` requests
+    per-category scores against externally derived anchors with gates. The two are
+    deliberately runnable on the SAME transcript, because changing the ask has
+    already been shown to change the answer materially — re-judging an identical
+    v21 transcript with a corrected stats block turned its top weakness into its
+    second strength.
     """
+    if rubric not in RUBRIC_VERSIONS:
+        raise ValueError(f"unknown rubric {rubric!r}; expected one of {RUBRIC_VERSIONS}")
     transcript = "\n\n".join(_fmt_turn(t) for t in turns)
-    return (
+    head = (
         "=== TEACHING STANDARD (the bar) ===\n"
         f"{_BRIDGE_STANDARD}\n\n"
         "=== OBJECTIVE STATS (deterministic, engine-derived) ===\n"
         f"{_fmt_stats(stats)}\n\n"
         "=== COACHING TRANSCRIPT (one real game, shipping config) ===\n"
         f"{transcript}\n\n"
-        "=== YOUR REVIEW ===\n"
-        f"{_REVIEW_TASK}"
     )
+    if rubric == "v1":
+        return head + "=== YOUR REVIEW ===\n" + _REVIEW_TASK
+    return head + "=== RUBRIC ===\n" + f"{_RUBRIC_V2}\n\n" + "=== YOUR REVIEW ===\n" + _REVIEW_TASK_V2
 
 
 # ---------------------------------------------------------------------------

@@ -49,7 +49,10 @@ our own measurement rather than the coach. Detail for each is further down.
 | 27 | (our finding, while checking v25) Two checker false positives at ply 60 | `Be6` naming a piece that already stands there is no longer read as a move; a capture claim attributed to the opponent is no longer judged against the victim of OUR named move | Both gone; the 2 remaining text-level violations in v25 are real coach errors | kept |
 | 28 | (blind audit) Manufacturing fault on moves that were fine — classed **harmful**, not imperfect: 10 of 44 turns, at drops of 0-17cp | New `equal` tier under 25cp that withholds the alternative from the prompt entirely, describing the student's own move instead | All 10 turns now on a no-comparison tier; prompt-side verified, output unmeasured (needs v27) | kept, unmeasured |
 | 29 | Harness bookkeeping voiced as a chess reason ("the evaluation spread shows it was a key decision", plies 12/18/24) | Stop passing the engine's `critical_reason` — its only format is "eval spread between best and Nth-best line is Xcp" — while keeping the critical-moment flag | Eval-spread text in the prompt: 20 turns -> 0 | kept, unmeasured |
-| 30 | Misses checkmate at ply 1003; never names the student's repeated flaw; cue quality is near-tautological | **next** | — | open |
+| 30 | (our finding) The score never discriminated between coach versions | Rebuilt the ask as a per-category rubric with gates, derived externally (rubric v2), and re-judged the **identical** v26 transcript under both asks | Old ask 4.5, new rubric **2/10** — pre-gate weighted 4.3, capped by the fidelity gate on one false claim at ply 36. The two asks agree on quality and disagree on what to do about it | kept |
+| 31 | (rubric v2) One false board claim makes everything else worth nothing — "nothing else you do can score above 2/10 while ply 36 is possible" | **next** — wire the existing fidelity check into the send path (regenerate once, then a composed fallback) | — | open |
+| 32 | (rubric v2) The prompt orients around the engine's best move, so the model explains why THAT move is good and reverse-engineers a lesson from it | **next** — supply the cause of the student's loss as a first-class composer field and key the takeaway to it | — | open |
+| 33 | Misses checkmate at ply 1003; intent attribution the coach cannot know ("aimed to develop your king's bishop"); cue quality near-tautological | **next** | — | open |
 
 ## Measurement philosophy (what to trust)
 
@@ -1021,3 +1024,66 @@ is correct, so it argues for cross-turn memory rather than against this fix.
 removing a frame that fitted any position removed one of the three lessons everything
 was collapsing onto. The metric moved because the cause moved, which is the first time
 that has happened rather than the metric being argued with.
+
+## Rebuilding the ask: same transcript, two rubrics (2026-08-14)
+
+The coach's output and the judge's *ask* are two independent variables and we had
+been changing them together. `scripts/eval_coach_rejudge.py` now re-judges a saved
+transcript with no coach, no engine and no tunnel, so the ask can be isolated.
+
+Run on the **identical** v26 transcript:
+
+| | old ask (v1) | rubric v2 |
+|---|---|---|
+| headline | 4.5/10 | **2/10** |
+| pre-gate weighted | — | 4.3/10 |
+| fidelity | — | 4/10 — **gate fired** |
+| diagnosis | — | 4/10 |
+| transfer handle | — | 4/10 |
+| executability | — | 6/10 |
+| load discipline | — | 5/10 |
+| stance | — | 6/10 |
+| stream behaviour | — | 3/10 |
+
+**The two asks agree on quality and disagree on what to do about it.** 4.3 pre-gate
+against 4.5 is the same judgement. The gate is the new information: one false claim
+about the board caps everything, because the student cannot detect it.
+
+It fired on ply 36 — `bxc4` described as capturing "the undefended bishop on b4"
+when it captured a knight. **Independently confirmed**: our own deterministic
+checker flags that exact ply. The judge added a detail we had missed — b4 was still
+occupied by that bishop twelve plies later (attacked at 44 and 46, hit by a3 at 48,
+captured at 50), so the student would have carried a false board state for a quarter
+of the game.
+
+**The recommendation flipped.** Under the old ask, twice, it was cross-turn memory.
+Under the rubric it is: verify claims about named pieces and squares *before
+sending*, regenerate once, fall back to a composed sentence — noting that we already
+run these checks and merely report them to a scoreboard. Cross-turn memory dropped
+to being the Stream Behaviour blocker, and was split by cost: a silence rule for
+quiet moves and an n-gram duplicate block are SMALL, the recurring-error tally is
+MEDIUM.
+
+**It reached the audit's Finding 2 independently**, from the transcript alone:
+
+> The prompt orients around the engine's best move, so the model explains why that
+> move is good and then reverse-engineers a lesson from it — which is why the
+> student's hanging knight at ply 20 produced a lesson about attacking b4.
+
+Its fix is concrete and cheaper than expected: give the composer the *cause of the
+student's loss* as a first-class field (what was left undefended, which defender
+moved away, what the moved piece had been doing) and require the takeaway to come
+from that field, never from the best move's virtues. MEDIUM, and it observes the
+engine data is largely present already.
+
+**It also listed both fixes we shipped the same morning** under "what to remove" —
+eval-machinery talk, and inventing a difference on 0cp moves — from a transcript
+that predates them. Two independent routes to the same two changes.
+
+**A correction to an earlier claim.** The flat 3.5-4.5 series was described here as
+mostly judge re-anchoring noise. That is wrong: the old ask reproduced **4.5
+exactly** on a transcript it had already scored 4.5. It is stable within a
+transcript; what it fails to do is discriminate *between* coach versions. The
+instrument was insensitive, not noisy — same conclusion, different diagnosis.
+
+Raw reviews: `docs/audit/rejudge-v26-{v1,v2}.md`.

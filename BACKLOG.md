@@ -1704,3 +1704,76 @@ list below accordingly.**
     post-move board threaded into the checker, which today sees only `fen_before`.
 11. **The coach does not notice the game is over** (carried over). Ply 1003 is `Ra8#`.
 12. **Unify the two text parsers** (carried over).
+
+### Rubric v2 landed, and it reordered the list again — 2026-08-14
+
+Ledger rows 30-33 in `docs/coach-report-card.md`. Raw reviews in
+`docs/audit/rejudge-v26-{v1,v2}.md`.
+
+Audit action items 1 and 3 are **done**: the harmful comparison on moves that were
+fine and the eval-bookkeeping leak shipped in `74823fc`, and the per-category rubric
+with gates shipped with `scripts/eval_coach_rejudge.py`, which re-judges a saved
+transcript with no coach, engine or tunnel — so the judge's *ask* can now be A/B'd
+independently of the coach's output.
+
+First result, on the identical v26 transcript: old ask 4.5/10, rubric v2 **2/10**,
+pre-gate weighted 4.3. The two agree on quality; the gate is the new information.
+
+**Next, in priority order (the judge's own ordering, with its cost estimates).**
+
+1. **Wire fidelity into the send path.** SMALL-MEDIUM. Verify every claim of the
+   form "your/their <piece> on <square>", every capture object, and the check/mate
+   label against the board at that ply; on violation regenerate once, then fall back
+   to a composed sentence. We already run these checks — `off_menu`, `piece_type`,
+   `placement`, `unsound_move` — and only report them to a scoreboard. The judge's
+   argument for putting this first: "nothing else you do to this coach can score
+   above 2/10 while ply 36 is possible", and the ceiling it unlocks is the 4.3
+   already earned.
+
+   Design question to settle first: regenerate-then-fallback changes the shipping
+   path, not just the eval harness, and adds a second LLM call on the failing turns
+   (latency). Decide whether the fallback is the existing template or a narrower
+   composed sentence.
+
+2. **Give the composer the student's failure cause as a first-class field.** MEDIUM.
+   Today the prompt orients around the engine's best move, so the model explains why
+   THAT move is good and reverse-engineers a lesson from it — the hanging knight at
+   ply 20 produced a lesson about attacking b4. Supply what was left undefended,
+   which defender moved away, and what the moved piece had been doing; require the
+   takeaway to come from that field. The judge notes the engine data is largely
+   present already, so this is a composer + prompt change rather than new analysis.
+
+   **This is also backlog item "north star end 1" made concrete** — it is the move
+   from board-level description (the audit's 6/10 anchor for Diagnosis) to
+   process-level cause (its 8). Doing it answers the product question by
+   demonstration rather than by decree, which is the cheaper way round.
+
+3. **Cross-turn memory, now split by cost.** Was #1 under the old ask, then sixth,
+   now third and decomposed: a silence rule for moves at or under ~30cp drop and an
+   n-gram block on near-duplicate closings are SMALL and fix plies 74/78 (word-for-
+   word identical) and 56/58; the recurring-error tally that lets it say "third time
+   this bishop has been the cost" is MEDIUM.
+
+4. **Stop attributing intent the coach cannot know.** "aimed to develop your king's
+   bishop" (ply 38), "aimed to challenge Black's position" (44), "was a good attempt
+   to secure your king" (58). The judge's observation is that the fabrications
+   cluster exactly where the model fills a slot it has no data for — the same
+   mechanism as the empty achievement slot. Probably SMALL.
+
+5. **Drop the second and third idea in mistake turns.** Plies 22, 34, 42, 60 stack
+   the refutation plus a positional aside. Keep the refutation. SMALL.
+
+6. **Check the curated positions use the same code path.** The judge inferred from
+   the ply numbering that 1000-1003 come through different code — correct, they are
+   the appended curated positions. Confirm they get identical composer output.
+
+7. **Praise as content, not tone.** Thirteen turns open with "Great move —". The
+   audit lists it as a defect: at 80 words a compliment costs a fifth of the message
+   and buys the variety of feedback the evidence says does not work.
+
+8. **Re-judge the v26 successor under both rubrics** once items 1-2 land, so the v1
+   series stays comparable while v2 becomes the working instrument.
+
+Carried over, unchanged in priority: endgame facts rather than endgame prose;
+fabricated refutations undetected (v26 ply 60 claimed a capture Black could not
+make); the coach not noticing mate at ply 1003; unifying the two text parsers.
