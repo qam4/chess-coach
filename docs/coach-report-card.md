@@ -52,7 +52,11 @@ our own measurement rather than the coach. Detail for each is further down.
 | 30 | (our finding) The score never discriminated between coach versions | Rebuilt the ask as a per-category rubric with gates, derived externally (rubric v2), and re-judged the **identical** v26 transcript under both asks | Old ask 4.5, new rubric **2/10** — pre-gate weighted 4.3, capped by the fidelity gate on one false claim at ply 36. The two asks agree on quality and disagree on what to do about it | kept |
 | 31 | (rubric v2) One false board claim makes everything else worth nothing — "nothing else you do can score above 2/10 while ply 36 is possible" | **next** — wire the existing fidelity check into the send path (regenerate once, then a composed fallback) | — | open |
 | 32 | (rubric v2) The prompt orients around the engine's best move, so the model explains why THAT move is good and reverse-engineers a lesson from it | **next** — supply the cause of the student's loss as a first-class composer field and key the takeaway to it | — | open |
-| 33 | Misses checkmate at ply 1003; intent attribution the coach cannot know ("aimed to develop your king's bishop"); cue quality near-tautological | **next** | — | open |
+| 33 | (v27) Verified the three shipped fixes | `equal` tier, no eval bookkeeping, fidelity gate on the send path — all measured in output | Comparisons on fine moves **7/7 -> 0/7**; eval talk 6 turns -> 1; gating violations **2 -> 0**. Gate fired exactly once (ply 40) and fell back to composed text. Pre-gate rubric score **4.3 -> 5.2**; old ask still 4.5 | kept |
+| 34 | (v27, rubric v2) The gate fired on an **ownership** error our checker cannot see: ply 44 "your own bishop on b4" when b4 is Black's | **next** — add an ownership check, and put a side tag on every composed fact ("developed minors: Bb4" has none) | — | open |
+| 35 | (our finding) The composed fallback prints raw evals (`eval -12.9 -> -14.3`), a listed defect, and the coach parroted the new "What your move achieves:" header verbatim at ply 0 | **next** | — | open |
+| 36 | Lesson concentration regressed 45% -> 55%: cues got blunter ("a check" for "a check that forces an answer"), mean cue length 4.0 -> 3.88 words | **next** — cue sharpening | — | open |
+| 37 | Misses checkmate at ply 1003; intent attribution the coach cannot know; three near-verbatim repeats (plies 64/74/78) | **next** | — | open |
 
 ## Measurement philosophy (what to trust)
 
@@ -1087,3 +1091,69 @@ transcript; what it fails to do is discriminate *between* coach versions. The
 instrument was insensitive, not noisy — same conclusion, different diagnosis.
 
 Raw reviews: `docs/audit/rejudge-v26-{v1,v2}.md`.
+
+## v27 — the gate works, and the fabrication moved house (2026-08-14)
+
+One run, three hypotheses, all three confirmed. Criteria were written before it ran.
+
+| | v26 | v27 |
+|---|---|---|
+| near-equal turns (<=25cp) staging a comparison | 7 / 7 | **0 / 7** |
+| turns voicing eval bookkeeping | 6 | **1** |
+| gating fidelity violations in the output | 2 | **0** |
+| rubric v2, pre-gate weighted | 4.3 | **5.2** |
+| rubric v2, after gate | 2/10 | 2/10 |
+| old ask (v1) | 4.5 | 4.5 |
+| lesson concentration | 45% | 55% (worse) |
+| composed-fact rate | 66% | 59% |
+| latency mean / max (s) | 6.5 / 40.7 | 5.3 / 21.7 |
+
+**The gate fired exactly once**, on ply 40 — the same turn that carried the phantom
+"king on f2" in v26. It retried, the retry also contradicted the board, and composed
+text was sent. Precise rather than trigger-happy, which was the risk.
+
+**A measurement correction, mine.** The first pass reported 1 of 7 comparisons
+surviving. That was my own regex matching "covers 5 squares *instead* of 2". The real
+figure is 0 of 7.
+
+**The surviving eval-talk turn is the fallback itself.** Ply 40's composed template
+reads "That's a mistake — it costs about 1.4 pawns (eval -12.9 → -14.3). Kd3 was
+stronger here." Truthful, and it violates a different audit item: eval numbers mean
+nothing to a 1200 and train outcome-orientation. The safety net is analyst-era text.
+
+### The finding worth the run: fabrication moved to a class we do not check
+
+Rubric v2 capped v27 at 2/10 again, on a **different** defect. Ply 44:
+
+> Your move, c5, aimed to challenge Black's position but overlooked an immediate
+> threat to **your own bishop on b4**.
+
+Verified against the board — `r1b5/ppppkp1p/8/8/1bPP3P/5K2/P1r5/RN4R1 w`, White to
+move, so the student is White and the b4 bishop is **Black's**. Our checker passed it
+because a bishop really is on b4 and it really is a bishop. The error is *ownership*,
+which we do not check at all.
+
+The judge named our own cause, and it checks out: the prompt says "attacking **their**
+undefended bishop on b4" in one place and "developed minors: Bb4" in another with no
+side tag. Its wording: *"facts reach the model without an owner… so the model guesses
+owner."*
+
+So the gate did its job and the model's fabrications relocated. That is the expected
+shape of this work — each closed class exposes the next — but it is worth stating
+plainly that a gate only gates what it checks.
+
+**Underneath the cap, quality moved.** Pre-gate weighted 4.3 -> 5.2, with Diagnosis
+4 -> 5, Transfer Handle 4 -> 5, Load Discipline 5 -> 6. The old ask stayed at 4.5,
+which is the fourth run in a row it has failed to discriminate.
+
+**One real regression.** Lesson concentration 45% -> 55%. Variety did not collapse —
+30 vs 29 distinct cues, recycled phrasing 19% -> 18% — but mean cue length fell from
+4.0 to 3.88 words and the cues got blunter, "a check" replacing "a check that forces
+an answer". Fewer distinct content words is exactly what the metric counts. This is
+the cue-quality weakness the audit predicted, now with a number on it.
+
+**And one defect I introduced.** At ply 0 the coach echoed the new header verbatim:
+its reply opens "What your move achieves: moving your knight from g1 to f3…". A new
+label in the prompt became a new thing to parrot.
+
+Raw review: `docs/audit/rejudge-v27-v2.md`.

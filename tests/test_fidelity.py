@@ -409,3 +409,56 @@ def test_adherence_kinds_do_not_gate_the_send_path() -> None:
         Violation("placement", "king on f2", "f2 is empty"),
     ]
     assert [v.kind for v in gating_violations(mixed)] == ["placement"]
+
+
+# ---------------------------------------------------------------------------
+# Ownership: whose piece is it? Invisible to the placement check.
+# ---------------------------------------------------------------------------
+
+# v27 ply 44. White to move (so the student is White); the bishop on b4 is BLACK's.
+# The coach wrote "an immediate threat to your own bishop on b4" and every existing
+# check passed it, because a bishop really is on b4 and really is a bishop.
+OWNERSHIP_FEN = "r1b5/ppppkp1p/8/8/1bPP3P/5K2/P1r5/RN4R1 w - - 2 23"
+
+
+def test_opponent_piece_called_the_students_own_is_flagged() -> None:
+    text = "Your move c5 overlooked an immediate threat to your own bishop on b4."
+    v = check_coaching_fidelity(text, _report(OWNERSHIP_FEN), [])
+    assert "ownership" in _kinds(v)
+    detail = next(x.detail for x in v if x.kind == "ownership")
+    assert "opponent's" in detail
+
+
+def test_correct_owner_is_not_flagged() -> None:
+    text = "a3 attacks their undefended bishop on b4."
+    v = check_coaching_fidelity(text, _report(OWNERSHIP_FEN), [])
+    assert "ownership" not in _kinds(v)
+
+
+def test_students_own_piece_correctly_claimed_is_not_flagged() -> None:
+    # The c4 pawn IS White's, and White is to move.
+    text = "Your pawn on c4 is doing useful work in the centre."
+    v = check_coaching_fidelity(text, _report(OWNERSHIP_FEN), [])
+    assert "ownership" not in _kinds(v)
+
+
+def test_unowned_reference_is_not_flagged() -> None:
+    # "the" asserts no owner, so there is nothing to contradict.
+    text = "The bishop on b4 is undefended."
+    v = check_coaching_fidelity(text, _report(OWNERSHIP_FEN), [])
+    assert "ownership" not in _kinds(v)
+
+
+def test_ownership_defers_to_placement_on_an_empty_square() -> None:
+    # One mistake must not be counted twice: if the square is empty or holds another
+    # piece type, that is a placement error and placement reports it.
+    text = "Your queen on b4 is in danger."
+    v = check_coaching_fidelity(text, _report(OWNERSHIP_FEN), [])
+    assert "placement" in _kinds(v)
+    assert "ownership" not in _kinds(v)
+
+
+def test_ownership_gates_the_send_path() -> None:
+    from chess_coach.verify import GATING_VIOLATION_KINDS
+
+    assert "ownership" in GATING_VIOLATION_KINDS

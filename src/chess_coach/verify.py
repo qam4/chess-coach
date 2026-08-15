@@ -130,6 +130,23 @@ _SAN_RE = re.compile(r"\b([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(
 # Coordinate move: "f6-e4", "f6 to e4", "f6–e4", "f6→e4". Unambiguously a move.
 _COORD_RE = re.compile(r"\b([a-h][1-8])\s*(?:-|to|\u2013|\u2192)\s*([a-h][1-8])\b", re.IGNORECASE)
 
+# "your/their <piece> on <square>" — a claim about WHOSE piece it is.
+#
+# Separate from the placement check because the two fail independently, and this
+# one is invisible to it: at v27 ply 44 the coach warned about "an immediate threat
+# to your own bishop on b4" when b4 held BLACK's bishop and the student was White.
+# Placement passed — a bishop really is on b4 — so a false claim reached the
+# student. The board settles ownership as cleanly as it settles occupancy.
+#
+# "my" and "our" are treated as the student's; "their/his/her/its" as the
+# opponent's. "the" is excluded: it asserts no owner.
+_OWNERSHIP_RE = re.compile(
+    r"\b(your|our|my|their|his|her|its)\s+(?:own\s+)?(?:\w+\s+){0,2}?"
+    r"(pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+([a-h][1-8])\b",
+    re.IGNORECASE,
+)
+_STUDENT_POSSESSIVES = frozenset({"your", "our", "my"})
+
 # "piece on/at square" placement claim.
 _PLACEMENT_RE = re.compile(
     r"\b(pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+([a-h][1-8])\b",
@@ -276,9 +293,9 @@ class Violation:
     """One detected contradiction in coaching text.
 
     ``kind`` is one of ``illegal_move`` / ``unsound_move`` / ``off_menu`` /
-    ``placement`` / ``development`` / ``empty_source`` / ``piece_type`` /
-    ``pawn_structure`` / ``geometry``; ``text`` is the offending fragment;
-    ``detail`` explains why it is wrong.
+    ``placement`` / ``ownership`` / ``development`` / ``empty_source`` /
+    ``piece_type`` / ``pawn_structure`` / ``geometry``; ``text`` is the offending
+    fragment; ``detail`` explains why it is wrong.
     """
 
     kind: str
@@ -395,6 +412,36 @@ def _check_named_moves(
         if violation is not None:
             out.append(violation)
 
+    return out
+
+
+def _check_ownership(text: str, board: chess.Board) -> list[Violation]:
+    """Flag "your/their <piece> on <square>" claims that name the wrong side.
+
+    The student is the side to move, which is what the coaching prompt is built
+    around. Only fires when a piece of the CLAIMED TYPE is actually on the square:
+    if the square is empty or holds something else, that is a placement error and
+    the placement check already reports it — flagging both would double-count one
+    mistake.
+    """
+    out: list[Violation] = []
+    student = board.turn
+    for m in _OWNERSHIP_RE.finditer(text):
+        possessive, name, square = m.group(1).lower(), m.group(2).lower(), m.group(3)
+        if _attributed_to_opponent(text, m.start(), board):
+            continue  # inside a clause about the opponent's move — the frame of reference flips
+        try:
+            sq = chess.parse_square(square)
+        except ValueError:
+            continue
+        piece = board.piece_at(sq)
+        if piece is None or piece.piece_type != _PIECE_NAME_TO_TYPE[name]:
+            continue  # placement's business, not ours
+        claimed_student = possessive in _STUDENT_POSSESSIVES
+        if (piece.color == student) is claimed_student:
+            continue
+        owner = "yours" if piece.color == student else "your opponent's"
+        out.append(Violation("ownership", m.group(0), f"the {name} on {square} is {owner}"))
     return out
 
 
@@ -638,6 +685,7 @@ def _run_fidelity_checks(text: str, board: chess.Board, menu: list[MenuMove]) ->
     violations: list[Violation] = []
     violations.extend(_check_named_moves(text, board, by_uci))
     violations.extend(_check_placement(text, board))
+    violations.extend(_check_ownership(text, board))
     violations.extend(_check_development(text, board))
     violations.extend(_check_empty_source(text, board))
     violations.extend(_check_capture_piece_type(text, board))
@@ -678,6 +726,7 @@ def _run_fidelity_checks(text: str, board: chess.Board, menu: list[MenuMove]) ->
 GATING_VIOLATION_KINDS = frozenset(
     {
         "placement",
+        "ownership",
         "piece_type",
         "empty_source",
         "illegal_move",

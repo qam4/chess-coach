@@ -374,8 +374,9 @@ _MOVE_EVAL_INSTRUCTIONS_EQUAL = """\
 COACHING INSTRUCTIONS:
 - The student's move is as good as anything else here. Endorse it and move on. \
 Do NOT offer an alternative, a refinement, or a "better" move — there isn't one.
-- Keep it SHORT (1-2 sentences): say what their move achieves, using "What your \
-move achieves" shown above, then the takeaway. No motivational sign-off.
+- Keep it SHORT (1-2 sentences): say what their move achieves, using "Your move \
+does this" shown above, then the takeaway. Write it as your own sentence — do NOT \
+copy the label. No motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -434,7 +435,7 @@ placements, tactics, or "and then..." continuations.
 # leaving the model pointed at a section that is not in the prompt.
 _ACHIEVEMENT_REFERENCES = (
     '"What the best move achieves" shown above',
-    '"What your move achieves" shown above',
+    '"Your move does this" shown above',
 )
 
 # one sentence; a serious mistake gets room to be specific.
@@ -597,9 +598,23 @@ def _format_placement(fen: str) -> str | None:
     Gives the model the board as plain text (it can't reliably read the FEN),
     so it stops inventing pieces / mis-stating what's developed.
     """
-    text = describe_placement(_safe_board(fen))
+    board = _safe_board(fen)
+    text = describe_placement(board)
     if not text:
         return None
+    # Mark which side list is the student's, in the block itself. The side names
+    # were already there, but on the line ABOVE the developed/home summary, and the
+    # model did not carry them down: at v27 ply 44 it called Black's b4 bishop "your
+    # own bishop on b4" while the prompt listed it under "Black:" with the summary
+    # line "developed minors: Bb4" carrying no side at all. A frontier review named
+    # the cause as facts reaching the model without an owner. Labelling costs
+    # nothing and removes the guess.
+    if board is not None:
+        student = "White" if board.turn == chess.WHITE else "Black"
+        opponent = "Black" if board.turn == chess.WHITE else "White"
+        text = text.replace(f"\n{student}:", f"\n{student} (YOURS — the student):").replace(
+            f"\n{opponent}:", f"\n{opponent} (THEIRS — the opponent):"
+        )
     return "--- Board (piece placement) ---\n" + text
 
 
@@ -1488,7 +1503,11 @@ def _achievement_line(report: ComparisonReport, tier: str) -> str:
     """
     if tier in _OWN_MOVE_TIERS:
         achievement = _move_achievement(report, report.user_move)
-        header = "What your move achieves"
+        # Not "What your move achieves:" — the model copied that header verbatim as
+        # the opening of its reply (v27 ply 0 began "What your move achieves: moving
+        # your knight from g1 to f3..."). A label that reads like a sentence opener
+        # invites being used as one, so this one states the fact as data.
+        header = "Your move does this"
     else:
         achievement = _best_move_achievement(report)
         header = "What the best move achieves"

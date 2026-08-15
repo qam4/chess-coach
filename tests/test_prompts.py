@@ -554,7 +554,12 @@ def test_equal_tier_withholds_the_alternative_entirely() -> None:
     assert "What the best move achieves" not in prompt
     assert "pawn structure — improving pawn position" not in prompt
     # What IS supplied is a fact about the move the student actually played.
-    assert "What your move achieves" in prompt
+    assert "Your move does this:" in prompt
+    # The label must not read like a sentence opener: the model copied the previous
+    # wording verbatim as the first words of its reply (v27 ply 0).
+    assert "What your move achieves" not in prompt
+    # And the instruction must name the label that is actually in the prompt.
+    assert '"Your move does this" shown above' in prompt
 
 
 def test_just_above_equal_still_offers_the_refinement() -> None:

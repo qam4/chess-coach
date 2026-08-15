@@ -1777,3 +1777,61 @@ pre-gate weighted 4.3. The two agree on quality; the gate is the new information
 Carried over, unchanged in priority: endgame facts rather than endgame prose;
 fabricated refutations undetected (v26 ply 60 claimed a capture Black could not
 make); the coach not noticing mate at ply 1003; unifying the two text parsers.
+
+### v27 verified the gate; the fabrication moved to ownership — 2026-08-14
+
+Ledger rows 33-37 in `docs/coach-report-card.md`. Raw review:
+`docs/audit/rejudge-v27-v2.md`.
+
+Three hypotheses tested at once and all confirmed: comparisons on moves that were
+fine 7/7 -> **0/7**, eval bookkeeping 6 turns -> 1, gating fidelity violations
+**2 -> 0**. The gate fired exactly once, on the one turn known to be bad. Pre-gate
+rubric score 4.3 -> **5.2**; the old ask stayed at 4.5 for the fourth run running.
+
+**Next, in priority order.**
+
+1. **Ownership check in the fidelity gate.** SMALL. Rubric v2 capped v27 at 2/10 on
+   ply 44 — "an immediate threat to your own bishop on b4" when b4 is Black's. Our
+   checker passed it because a bishop really is on b4 and really is a bishop; the
+   error is whose. Same shape as the checks we already have: resolve
+   "your/their/my/his <piece> on <square>" against the side to move. This is the
+   current gate blocker, so nothing else moves the rubric score until it lands.
+
+2. **Put an owner on every composed fact.** SMALL-MEDIUM, and it is the cause rather
+   than the symptom. Verified: the ply-44 prompt says "attacking **their** undefended
+   bishop on b4" in one place and "developed minors: Bb4" in another with no side
+   tag. The judge's diagnosis — "facts reach the model without an owner, so the model
+   guesses owner" — holds. Audit the placement block, the developed/home summary and
+   the pawn-structure grounding for untagged pieces.
+
+3. **The composed fallback is analyst-era text.** SMALL. Ply 40's template reads
+   "it costs about 1.4 pawns (eval -12.9 → -14.3)". It is the only turn in v27 still
+   showing the student an evaluation, and it is our own safety net doing it. Either
+   strip evals from `generate_move_coaching` or give the fallback a narrower composed
+   sentence built from the same `_move_effect` clause the prompt uses.
+
+4. **Stop the header being parroted.** SMALL. Ply 0's reply opens "What your move
+   achieves: moving your knight from g1 to f3…" — the new label became a new thing to
+   copy. Consider a bare fact line with no header, since the tier instruction already
+   tells the model what the line is for.
+
+5. **Sharpen the cue.** Now measured: lesson concentration regressed 45% -> 55% with
+   distinct cues flat (30 -> 29) and mean cue length 4.0 -> 3.88 words, i.e. the cues
+   got blunter ("a check" for "a check that forces an answer"). The audit's 8/10
+   anchor names where the pattern bites; ours names the piece type. MEDIUM.
+
+6. **Give the composer the student's failure cause as a first-class field** (carried
+   over, unchanged in priority behind the gate work). The judge repeated it for v27:
+   "Diagnosis and Transfer sit at 5 and carry 50% of the weight, so they are where the
+   uncapped score lives — but no work there moves the number at all until the fidelity
+   gate is cleared." That is an explicit sequencing instruction: gate first, teaching
+   second.
+
+7. **Three near-verbatim repeats** (plies 64, 74, 78 — the same sentence three times),
+   worse than v26's two. Stream Behaviour stuck at 3/10 across both runs. The SMALL
+   half of cross-turn memory (an n-gram block on near-duplicate closings, plus a
+   silence rule for quiet moves) addresses this directly.
+
+Carried over: mate not noticed at ply 1003; intent attribution the coach cannot know;
+endgame facts rather than endgame prose; fabricated refutations undetected; unify the
+two text parsers.

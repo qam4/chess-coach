@@ -373,7 +373,13 @@ def describe_placement(board: chess.Board | None) -> str:
                 (home if sq in start else developed).append(tag)
         label = "White" if color == chess.WHITE else "Black"
         lines.append(f"{label}: {', '.join(parts)}")
-        lines.append(f"  developed minors: {', '.join(developed) or 'none'}; still home: {', '.join(home) or 'none'}")
+        # Repeat the side on the summary line. It reads as redundant under the label
+        # above, and it is — but a model reading this line in isolation had no owner
+        # for it, and duly told a student that the opponent's bishop was their own
+        # (v27 ply 44). Ambiguity in a fact block is where fabrication starts.
+        lines.append(
+            f"  {label} developed minors: {', '.join(developed) or 'none'}; still home: {', '.join(home) or 'none'}"
+        )
     return "\n".join(lines)
 
 

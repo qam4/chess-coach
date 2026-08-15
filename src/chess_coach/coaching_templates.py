@@ -408,19 +408,20 @@ def generate_move_coaching(
     if cls == "good":
         sections.append("Good move!")
     else:
-        before = report.best_eval_cp / 100
-        after = report.user_eval_cp / 100
-        eval_shift = f" (eval {before:+.1f} → {after:+.1f})"
+        # No raw evaluations. A cost in pawns is something a student can picture;
+        # "(eval -12.9 → -14.3)" is engine bookkeeping, and an external audit of
+        # coaching quality lists it as a defect — not information to a 1200, and it
+        # trains attention on the outcome rather than the process. This text is also
+        # the fidelity gate's fallback, so it is what a student sees precisely when
+        # the model could not be trusted; it should not introduce a different defect
+        # while fixing a falsehood (it was the only turn in v27 still showing an
+        # evaluation, and it was our own safety net doing it).
         if cls == "inaccuracy":
-            sections.append(
-                f"That's a small inaccuracy — you lost about {drop / 100:.1f} pawns of advantage{eval_shift}."
-            )
+            sections.append(f"That's a small inaccuracy — you lost about {drop / 100:.1f} pawns of advantage.")
         elif cls == "mistake":
-            sections.append(f"That's a mistake — it costs about {drop / 100:.1f} pawns{eval_shift}.")
+            sections.append(f"That's a mistake — it costs about {drop / 100:.1f} pawns.")
         elif cls == "blunder":
-            sections.append(
-                f"That's a blunder — it drops {drop / 100:.1f} pawns{eval_shift}. Let's look at what went wrong."
-            )
+            sections.append(f"That's a blunder — it drops {drop / 100:.1f} pawns. Let's look at what went wrong.")
 
     # What was stronger
     if report.best_move and cls != "good":
