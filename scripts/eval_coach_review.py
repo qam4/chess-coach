@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from chess_coach.cli import _resolve_engine_path, load_config  # noqa: E402
 from chess_coach.coaching_phrases import build_move_menu, uci_to_san  # noqa: E402
+from chess_coach.coaching_templates import generate_move_coaching  # noqa: E402
 from chess_coach.engine import CoachingEngine  # noqa: E402
 from chess_coach.eval.coach_review import ReviewTurn, aggregate_review, build_coach_review_prompt  # noqa: E402
 from chess_coach.eval.game_coaching import TurnRecord, play_game, student_moves  # noqa: E402
@@ -54,7 +55,7 @@ from chess_coach.pedagogy.resource import KnowledgeResource, default_resource_pa
 from chess_coach.pedagogy.selector import guidance_for_position  # noqa: E402
 from chess_coach.pedagogy.theme_map import theme_features  # noqa: E402
 from chess_coach.prompts import build_rich_move_evaluation_prompt, move_feedback_max_tokens  # noqa: E402
-from chess_coach.verify import check_coaching_fidelity  # noqa: E402
+from chess_coach.verify import check_coaching_fidelity, generate_verified  # noqa: E402
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -99,8 +100,20 @@ def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multip
     )
     prompt = build_rich_move_evaluation_prompt(comparison, level=level, guidance=guidance, guidance_facts=facts)
     t0 = time.monotonic()
-    text = model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0)
+    # Verify the finished text against the board before accepting it, exactly as
+    # the shipping Coach does — via the SAME helper, so the report card cannot
+    # grade a configuration that does not ship. Without this the harness measured
+    # a coach with no output verification while the product had it.
+    fallbacks: list[int] = []
+    text = generate_verified(
+        lambda: model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0),
+        fen,
+        lambda: generate_move_coaching(comparison, level=level),
+        on_fallback=lambda: fallbacks.append(ply),
+    )
     latency = time.monotonic() - t0
+    if fallbacks:
+        print(f"  ply {ply}: every attempt contradicted the board — sent composed text instead")
     menu = build_move_menu(pos_report)
     fid = Counter(v.kind for v in check_coaching_fidelity(text, pos_report, menu))
     return ReviewTurn(

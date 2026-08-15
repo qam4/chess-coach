@@ -25,7 +25,7 @@ from chess_coach.prompts import (
     build_socratic_prompt,
     move_feedback_max_tokens,
 )
-from chess_coach.verify import check_text_fidelity, gating_violations
+from chess_coach.verify import Violation, generate_verified
 
 logger = logging.getLogger(__name__)
 
@@ -538,26 +538,20 @@ class Coach:
         Only :data:`verify.GATING_VIOLATION_KINDS` blocks; adherence kinds with
         known false positives stay reported and un-gated.
         """
-        # No menu is passed: it only enables the off_menu / unsound_move checks,
-        # which are excluded from the gate anyway (see GATING_VIOLATION_KINDS).
-        attempts = self.verify_retries + 1
-        last = ""
-        for attempt in range(1, attempts + 1):
-            feedback = self.llm.generate(prompt, max_tokens=max_tokens, temperature=self.temperature)
+
+        def _generate() -> str:
+            return self.llm.generate(prompt, max_tokens=max_tokens, temperature=self.temperature)
+
+        if not self.verify_output:
+            feedback = _generate()
             if not feedback.strip():
                 raise ValueError("Empty LLM response")
-            last = feedback
-            if not self.verify_output:
-                return feedback
-            bad = gating_violations(check_text_fidelity(feedback, report.fen))
-            if not bad:
-                return feedback
+            return feedback
+
+        def _on_violation(attempt: int, attempts: int, bad: list[Violation]) -> None:
             detail = "; ".join(f"{v.kind}: {v.text} — {v.detail}" for v in bad)
             logger.warning(
-                "evaluate_move: response contradicts the board (attempt %d/%d): %s",
-                attempt,
-                attempts,
-                detail,
+                "evaluate_move: response contradicts the board (attempt %d/%d): %s", attempt, attempts, detail
             )
             trace(
                 "eval_verify_failed",
@@ -565,14 +559,22 @@ class Coach:
                 tool="llm",
                 violations=[{"kind": v.kind, "text": v.text, "detail": v.detail} for v in bad],
             )
-        # Every attempt made a false claim — send the composed text instead.
-        fallback = generate_move_coaching(report, level=self.level)
-        trace(
-            "eval_verify_fallback",
-            "Falling back to composed template — every attempt contradicted the board",
-            tool="engine",
+
+        def _on_fallback() -> None:
+            trace(
+                "eval_verify_fallback",
+                "Falling back to composed template — every attempt contradicted the board",
+                tool="engine",
+            )
+
+        return generate_verified(
+            _generate,
+            report.fen,
+            lambda: generate_move_coaching(report, level=self.level),
+            retries=self.verify_retries,
+            on_violation=_on_violation,
+            on_fallback=_on_fallback,
         )
-        return fallback or last
 
     def evaluate_move(
         self,

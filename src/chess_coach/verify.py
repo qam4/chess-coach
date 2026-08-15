@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import dataclasses
 import re
+from collections.abc import Callable
 
 import chess
 
@@ -690,6 +691,49 @@ GATING_VIOLATION_KINDS = frozenset(
 def gating_violations(violations: list[Violation]) -> list[Violation]:
     """The subset of ``violations`` that should stop a response being sent."""
     return [v for v in violations if v.kind in GATING_VIOLATION_KINDS]
+
+
+def generate_verified(
+    generate: Callable[[], str],
+    fen: str,
+    fallback: Callable[[], str],
+    *,
+    retries: int = 1,
+    on_violation: Callable[[int, int, list[Violation]], None] | None = None,
+    on_fallback: Callable[[], None] | None = None,
+) -> str:
+    """Generate text that does not contradict the board, else use ``fallback``.
+
+    Kept here, next to the checks themselves, because BOTH the shipping coach and
+    the report-card harness must do this identically. They had already drifted
+    once — the harness mirrors ``Coach._select_guidance`` by hand, with a comment
+    explaining that otherwise the report card grades a configuration that does not
+    ship — and a divergence here would be worse: the harness would measure a coach
+    with no output verification while the product had it, or the reverse.
+
+    A retry is worthwhile because the model is sampled, so the same prompt is a
+    genuinely different draw. After ``retries`` further attempts all contradict the
+    board, ``fallback`` is used: composed text is degraded rather than wrong, which
+    is the right way round when the reader cannot check the claim.
+
+    Raises ``ValueError`` on an empty generation, so an existing caller's
+    empty-response handling still fires.
+    """
+    attempts = max(0, retries) + 1
+    last = ""
+    for attempt in range(1, attempts + 1):
+        text = generate()
+        if not text.strip():
+            raise ValueError("Empty LLM response")
+        last = text
+        bad = gating_violations(check_text_fidelity(text, fen))
+        if not bad:
+            return text
+        if on_violation is not None:
+            on_violation(attempt, attempts, bad)
+    if on_fallback is not None:
+        on_fallback()
+    return fallback() or last
 
 
 def check_coaching_fidelity(
