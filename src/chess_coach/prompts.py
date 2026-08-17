@@ -359,7 +359,7 @@ COACHING INSTRUCTIONS:
 Do NOT suggest a different or "better" move, and do NOT imply a superior \
 alternative exists.
 - Keep it SHORT (1-2 sentences): affirm the move, then state the specific idea \
-it achieves — use "What the best move achieves" shown above (that is this \
+it achieves — use the line above stating what the move does (that is this \
 move) — not a generic principle. No motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
@@ -374,9 +374,9 @@ _MOVE_EVAL_INSTRUCTIONS_EQUAL = """\
 COACHING INSTRUCTIONS:
 - The student's move is as good as anything else here. Endorse it and move on. \
 Do NOT offer an alternative, a refinement, or a "better" move — there isn't one.
-- Keep it SHORT (1-2 sentences): say what their move achieves, using "Your move \
-does this" shown above, then the takeaway. Write it as your own sentence — do NOT \
-copy the label. No motivational sign-off.
+- Keep it SHORT (1-2 sentences): say what their move achieves, using the line \
+above stating what the move does, then the takeaway. Write it in your own words. \
+No motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -388,7 +388,7 @@ COACHING INSTRUCTIONS:
 - The student played a sound, reasonable move — do NOT call it a mistake or \
 invent a correction the data does not support.
 - Keep it SHORT (2-3 sentences): affirm it and state the specific idea it \
-achieves (use "What the best move achieves" shown above), not a generic \
+achieves (use the line above stating what the move does), not a generic \
 principle. If the engine's top move differs, you may briefly point it out as a \
 refinement — affirm first, never imply the move was bad. No motivational \
 sign-off.
@@ -402,8 +402,8 @@ _MOVE_EVAL_INSTRUCTIONS_INACCURACY = """\
 COACHING INSTRUCTIONS:
 - The student's move slightly missed the mark — a small inaccuracy, not a \
 disaster. Give a BRIEF redirect (2-3 sentences): acknowledge the intent in a \
-few words, then name the stronger move and its specific idea — use "What the \
-best move achieves" shown above — not a generic principle. No motivational \
+few words, then name the stronger move and its specific idea — use the line \
+above stating what the move does — not a generic principle. No motivational \
 sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
@@ -433,10 +433,7 @@ placements, tactics, or "and then..." continuations.
 # The exact phrases the tier blocks above use to point at the achievement line.
 # Kept as constants so dropping that line can redirect the reference instead of
 # leaving the model pointed at a section that is not in the prompt.
-_ACHIEVEMENT_REFERENCES = (
-    '"What the best move achieves" shown above',
-    '"Your move does this" shown above',
-)
+_ACHIEVEMENT_REFERENCES = ("the line above stating what the move does",)
 
 # one sentence; a serious mistake gets room to be specific.
 _TIER_INSTRUCTIONS = {
@@ -1493,6 +1490,52 @@ def _label_wrong_for_phase(label: str, board: chess.Board) -> bool:
     return _KING_SAFETY_IDEA in label.lower() and phase_of_board(board) == PHASE_ENDGAME
 
 
+def compose_safe_move_feedback(report: ComparisonReport) -> str:
+    """Composed move feedback for the fidelity gate's fallback, or '' if nothing verifies.
+
+    This is what a student reads precisely when the model could not be trusted, so it
+    has to be the best sentence we can build without one — and until now it was the
+    worst. The general template was reused, which in one 44-turn game (a) showed the
+    cost in pawn units, a defect the coaching-standard audit names alongside
+    centipawns, (b) named an off-menu move, and (c) emitted raw tactic data — "moving
+    d5 reveals Bc8 hitting Rg4" — which the reviewer called unusable, "no owner or
+    purpose".
+
+    So: severity in words rather than numbers, the stronger move with the SAME
+    board-verified clause the prompt supplies, and the composed lesson, keeping the
+    cue-and-check shape. No evaluations, no variations, no tactic dumps. Every part is
+    derived from the board, so it cannot contain the class of claim that sent us here.
+    """
+    board = _safe_board(report.fen)
+    if board is None:
+        return ""
+    tier = _move_feedback_tier(report)
+    opening = {
+        "best": "Good move.",
+        "equal": "That works — it is as good as anything else here.",
+        "sound": "A reasonable move.",
+        "inaccuracy": "That slightly missed the mark.",
+        "serious": "That was a serious mistake.",
+    }[tier]
+    parts = [opening]
+
+    if tier in _OWN_MOVE_TIERS:
+        category, clause = _move_effect(board, report.user_move, target_possessive="their ")
+    else:
+        category, clause = _move_effect(board, report.best_move, target_possessive="their ", rival_uci=report.user_move)
+        best_san = uci_to_san(report.fen, report.best_move)
+        if best_san:
+            detail = clause.removeprefix(", ").strip()
+            parts.append(f"{best_san} was stronger here{' — ' + detail if detail else ''}.")
+    if tier in _OWN_MOVE_TIERS and clause:
+        parts.append(f"Your move is {clause.removeprefix(', ').strip()}.")
+
+    lesson = effect_takeaway(category, phase_of_board(board))
+    if lesson:
+        parts.append(f"Worth remembering: {lesson}.")
+    return " ".join(parts)
+
+
 def _achievement_line(report: ComparisonReport, tier: str) -> str:
     """The rendered achievement line for ``tier``, or '' to omit it.
 
@@ -1503,17 +1546,18 @@ def _achievement_line(report: ComparisonReport, tier: str) -> str:
     """
     if tier in _OWN_MOVE_TIERS:
         achievement = _move_achievement(report, report.user_move)
-        # Not "What your move achieves:" — the model copied that header verbatim as
-        # the opening of its reply (v27 ply 0 began "What your move achieves: moving
-        # your knight from g1 to f3..."). A label that reads like a sentence opener
-        # invites being used as one, so this one states the fact as data.
-        header = "Your move does this"
+        subject = "Your move"
     else:
         achievement = _best_move_achievement(report)
-        header = "What the best move achieves"
+        subject = f"The best move ({uci_to_san(report.fen, report.best_move) or report.best_move})"
     if not achievement:
         return ""
-    return f"\n{header}: {achievement}\n"
+    # A bare statement, not a labelled field. Renaming the label did not stop the
+    # model copying it — turns echoing a prompt header went 0 -> 6 -> 8 across three
+    # runs, and the rename happened between the last two. It copies whatever label it
+    # is given, so there is no label: the line now reads as a sentence it can absorb
+    # rather than a heading it can quote.
+    return f"\n{subject} does this: {achievement}.\n"
 
 
 def _best_move_achievement_line(report: ComparisonReport) -> str:

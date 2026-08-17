@@ -462,3 +462,76 @@ def test_ownership_gates_the_send_path() -> None:
     from chess_coach.verify import GATING_VIOLATION_KINDS
 
     assert "ownership" in GATING_VIOLATION_KINDS
+
+
+# ---------------------------------------------------------------------------
+# Relation claims: does that piece actually defend that square?
+# ---------------------------------------------------------------------------
+#
+# The third class of falsehood found in three review rounds, after the wrong
+# captured piece and the wrong owner. One check for the family rather than a fourth
+# special case: all three assert a relation between a piece and a square, and the
+# board settles all three.
+
+# v28 ply 26. White to move; a white pawn sits on g2 and the king is on d1.
+RELATION_FEN = "r1b1k1r1/pppp1p1p/4p3/6P1/1bB4n/1P2P3/PBP3PP/RN1K3R w q - 1 14"
+# v28 ply 1002. White Kf2, pawn d5, black king f7.
+ENDGAME_RELATION_FEN = "8/5k2/8/3P4/8/8/5K2/8 w - - 0 1"
+
+
+def test_king_cannot_defend_a_square_it_does_not_touch() -> None:
+    # Real v28 text. A king on e2 covers f2, never g2 — false by geometry alone,
+    # which is what makes it safe to check: no blocker, turn or move-choice
+    # assumption can make it true.
+    text = (
+        "The best choice was Ke2, improving king safety by repositioning it. "
+        "The king is currently exposed, and moving it to e2 helps protect your pawn on g2."
+    )
+    v = check_coaching_fidelity(text, _report(RELATION_FEN), [])
+    assert "relation" in _kinds(v)
+    detail = next(x.detail for x in v if x.kind == "relation")
+    assert "can never defend g2" in detail
+
+
+def test_relation_resolves_a_defender_named_in_an_earlier_sentence() -> None:
+    # Real v28 text: the piece is named in one sentence and the claim made in the
+    # next ("Your move Ke3 is sound… It supports your passed pawn on d5").
+    text = "Your move Ke3 is sound and helps control the center. It supports your passed pawn on d5."
+    v = check_coaching_fidelity(text, _report(ENDGAME_RELATION_FEN), [])
+    assert "relation" in _kinds(v)
+
+
+def test_true_defence_claims_are_not_flagged() -> None:
+    # All four true claims from the same transcript must stay clean, or the check
+    # would replace good coaching with a template.
+    for text, fen in (
+        ("The best move was Ke2, which adds a defender to your pawn on e3.", RELATION_FEN),
+        ("The better move is Ke3, which defends your pawn on d4.", "8/4k3/8/8/3P4/8/5K2/8 w - - 0 40"),
+        (
+            "The better move was Kf4, advancing your king to support the passed pawn on e4.",
+            "8/4k3/8/8/4P3/8/5K2/8 w - - 0 40",
+        ),
+    ):
+        v = check_coaching_fidelity(text, _report(fen), [])
+        assert "relation" not in _kinds(v), text
+
+
+def test_relation_stays_silent_without_a_named_defender() -> None:
+    # "supports future central control" names no piece and no target square; a claim
+    # we cannot pair with a defender is left alone rather than guessed at.
+    text = "Your move e3 supports future central control and prepares for development."
+    v = check_coaching_fidelity(text, _report(RELATION_FEN), [])
+    assert "relation" not in _kinds(v)
+
+
+def test_relation_defers_to_placement_on_an_empty_target() -> None:
+    # An empty target square is a placement error, and placement reports it.
+    text = "Ke2 protects your pawn on a5."
+    v = check_coaching_fidelity(text, _report(RELATION_FEN), [])
+    assert "relation" not in _kinds(v)
+
+
+def test_relation_gates_the_send_path() -> None:
+    from chess_coach.verify import GATING_VIOLATION_KINDS
+
+    assert "relation" in GATING_VIOLATION_KINDS

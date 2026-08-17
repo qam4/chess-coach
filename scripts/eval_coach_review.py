@@ -54,7 +54,11 @@ from chess_coach.pedagogy.instantiate import feature_facts  # noqa: E402
 from chess_coach.pedagogy.resource import KnowledgeResource, default_resource_path, load_resource  # noqa: E402
 from chess_coach.pedagogy.selector import guidance_for_position  # noqa: E402
 from chess_coach.pedagogy.theme_map import theme_features  # noqa: E402
-from chess_coach.prompts import build_rich_move_evaluation_prompt, move_feedback_max_tokens  # noqa: E402
+from chess_coach.prompts import (  # noqa: E402
+    build_rich_move_evaluation_prompt,
+    compose_safe_move_feedback,
+    move_feedback_max_tokens,
+)
 from chess_coach.verify import check_coaching_fidelity, generate_verified  # noqa: E402
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -108,7 +112,7 @@ def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multip
     text = generate_verified(
         lambda: model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0),
         fen,
-        lambda: generate_move_coaching(comparison, level=level),
+        lambda: compose_safe_move_feedback(comparison) or generate_move_coaching(comparison, level=level),
         on_fallback=lambda: fallbacks.append(ply),
     )
     latency = time.monotonic() - t0

@@ -1835,3 +1835,65 @@ rubric score 4.3 -> **5.2**; the old ask stayed at 4.5 for the fourth run runnin
 Carried over: mate not noticed at ply 1003; intent attribution the coach cannot know;
 endgame facts rather than endgame prose; fabricated refutations undetected; unify the
 two text parsers.
+
+### v28: ownership landed, the falsehood relocated a third time — 2026-08-14
+
+Ledger rows 37-41 in `docs/coach-report-card.md`. Raw review:
+`docs/audit/rejudge-v28-v2.md`.
+
+Ownership violations 1 -> 0; the check fired on the exact turn it was built for.
+Ungated rubric 5.2 -> **5.7**, concentration 55% -> 50%, recycled 18% -> 15%. Gated
+score still 2/10, because the gate fired on a third class of falsehood.
+
+**Decision taken: report BOTH scores from now on** — gated for shippability, ungated
+for progress. The gate has read 2/10 for three runs while the coaching measurably
+improved, which is the same failure that made the old single 0-10 worthless.
+
+**Decision pending: whether the gate-first approach finishes.** Three rounds, three
+classes (wrong captured piece -> wrong owner -> wrong relationship). One more round of
+evidence before changing approach, because the relocation has a pattern worth
+exploiting first (item 1). If a FOURTH unrelated class appears after that, switch
+approach; the candidates, in increasing order of change:
+
+- **One check per family** (where we are heading with item 1).
+- **Invert the default** — allow only board claims we supplied, rather than blocking
+  the ones we can prove false. We know supplied facts are voiced faithfully (0%
+  invented squares across every run), so this is feasible; the cost is stiffer prose.
+- **Move more of the sentence to the composer**, model only phrases it — the "Layer 1
+  facts, Layer 2 voice" idea in IDEAS.md. The extreme is templates, which teach worse.
+
+**Next, in priority order.**
+
+1. **One general relation check.** SMALL-MEDIUM. All three failures assert a relation
+   between a piece and a square that the board settles: captures what, belongs to
+   whom, protects what. Cover "X defends / protects / supports / guards / attacks Y"
+   in one check rather than adding a fourth special case. Concrete v28 cases: "Ke2
+   helps protect your pawn on g2" (e2 covers f2, not g2) and "Ke3 supports your passed
+   pawn on d5" (e3 does not touch d5).
+
+2. **Make the fallback our best sentence, not our worst.** SMALL. It is what a student
+   sees exactly when the model is not trusted, and today it (a) shows pawn-unit costs
+   the audit lists as a defect, (b) names an off-menu move, and (c) reads as raw tactic
+   data — "moving d5 reveals Bc8 hitting Rg4", which the judge called unusable, "no
+   owner or purpose". Build it from the same `_move_effect` clause the prompt uses.
+
+3. **Remove the achievement label rather than rename it.** SMALL. Echoes went 0 -> 6 ->
+   8 across v26/v27/v28; renaming did nothing. Supply the fact as a bare line and let
+   the tier instruction say what it is for.
+
+4. **A cause field for Diagnosis.** MEDIUM, and the judge is specific that the data
+   exists: "which piece the student moved, what job it was doing before (defender count
+   on squares it covered), and which of those counts went negative. 'That rook was the
+   only thing holding e3' is derivable today." Diagnosis is stuck at 5 and carries 25%
+   of the weight.
+
+5. **Cross-turn memory, split by cost.** Killing the exact-duplicate case (plies 74 and
+   78 are byte-identical) is a hash comparison: SMALL. The full ledger of recent lesson
+   IDs plus a suppression path — a turn may legally emit one clause or nothing when the
+   drop is under ~30cp and the lesson is a repeat — is MEDIUM. Stream Behaviour has
+   been 3, 3, 4 across three runs and every one of 44 moves still gets full-length
+   commentary, including a king shuffle and a 6cp check.
+
+Carried over: mate not noticed at ply 1003; intent attribution the coach cannot know;
+cue sharpening; endgame facts rather than endgame prose; fabricated refutations
+undetected; unify the two text parsers.

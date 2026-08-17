@@ -56,7 +56,11 @@ our own measurement rather than the coach. Detail for each is further down.
 | 34 | (v27, rubric v2) The gate fired on an **ownership** error our checker cannot see: ply 44 "your own bishop on b4" when b4 is Black's | **next** — add an ownership check, and put a side tag on every composed fact ("developed minors: Bb4" has none) | — | open |
 | 35 | (our finding) The composed fallback prints raw evals (`eval -12.9 -> -14.3`), a listed defect, and the coach parroted the new "What your move achieves:" header verbatim at ply 0 | **next** | — | open |
 | 36 | Lesson concentration regressed 45% -> 55%: cues got blunter ("a check" for "a check that forces an answer"), mean cue length 4.0 -> 3.88 words | **next** — cue sharpening | — | open |
-| 37 | Misses checkmate at ply 1003; intent attribution the coach cannot know; three near-verbatim repeats (plies 64/74/78) | **next** | — | open |
+| 37 | (v28) Ownership check landed | Gates the send path; fired on ply 44 and fell back to composed text | Ownership violations **1 -> 0**. Ungated rubric score 5.2 -> **5.7**; concentration 55% -> 50%, recycled 18% -> 15%. Still 2/10 gated | kept |
+| 38 | (v28, rubric v2) The gate fired on a **third** class: relationship geometry — "Ke2 helps protect your pawn on g2" (e2 covers f2), "Ke3 supports your passed pawn on d5" (e3 does not touch d5) | **next** — one general check for the family (X defends/protects/attacks Y), not a fourth patch | — | open |
+| 39 | (our finding, retraction) The eval fix was HALF a fix and the header rename FAILED | Raw evals 1 -> 0, but pawn-unit costs remain and the judge flagged them under Stance. Header echoes went **0 (v26) -> 6 (v27) -> 8 (v28)** — renaming a label does not stop it being copied | eval: partial; header: **reverted in effect, needs removing not renaming** |
+| 40 | (our finding) `off_menu` 1 -> 3, and one is our own fallback template naming `d5`; the judge called that same text unusable ("no owner or purpose") | **next** — the fallback is what a student sees when we distrust the model; it should be our best composed sentence, not our worst | — | open |
+| 41 | Misses checkmate at ply 1003; intent attribution the coach cannot know; plies 74/78 byte-identical | **next** | — | open |
 
 ## Measurement philosophy (what to trust)
 
@@ -1157,3 +1161,75 @@ its reply opens "What your move achieves: moving your knight from g1 to f3…". 
 label in the prompt became a new thing to parrot.
 
 Raw review: `docs/audit/rejudge-v27-v2.md`.
+
+## v28 — the fix worked, the strategy is on notice (2026-08-14)
+
+The accept criteria were written before the run and one of them was a *strategy*
+criterion: "reject if the gate fires on yet another unchecked class — that would mean
+the model relocates its fabrications faster than we can close classes." It did. This
+is recorded as a reject on the approach, not on the fix.
+
+| | v26 | v27 | v28 |
+|---|---|---|---|
+| gating violations in output | 2 | 0 | **0** |
+| ownership violations | (unchecked) | 1 | **0** |
+| **ungated** rubric weighted | 4.3 | 5.2 | **5.7** |
+| gated (shipped) rubric score | 2 | 2 | 2 |
+| lesson concentration | 45% | 55% | **50%** |
+| recycled phrasing | 19% | 18% | **15%** |
+| composed-fact rate | 66% | 59% | 61% |
+| turns falling back to composed text | 0 | 1 | 2 |
+
+### Three rounds, three classes of falsehood
+
+- v26: the wrong piece named as captured -> piece-type check widened.
+- v27: the opponent's piece called the student's -> ownership check added.
+- v28: **relationship geometry** — "Ke2 helps protect your pawn on g2" (a king on e2
+  covers f2) and "Ke3 supports your passed pawn on d5" (e3 does not touch d5).
+  Nothing checks this.
+
+Each check worked on the case it was built for. Each time, the fabrication moved.
+
+**But the relocation has a pattern, and that is the useful part.** All three are the
+same shape: the model asserts a *relation between a piece and a square* it cannot
+verify — captures what, belongs to whom, protects what. So the next step is one
+general check over that family (defends / protects / supports / attacks), not a
+fourth special case. If a fourth unrelated class appears after that, the approach
+itself needs replacing rather than extending; the candidates are recorded in the
+backlog.
+
+### The gate is right as a standard and useless as a progress measure
+
+It has read 2/10 for three consecutive runs while the coaching measurably improved —
+ungated 4.3 -> 5.2 -> 5.7, Transfer Handle 4 -> 5 -> 6, Executability 6 -> 6 -> 7,
+Stream Behaviour 3 -> 3 -> 4. A number that cannot move is the exact failure that
+made the old single 0-10 worthless at 4.5 for fifteen changes.
+
+**So from now on both are reported: gated for "is this shippable", ungated for "did
+this round help".** The gate stays as the product standard — a beginner cannot detect
+a falsehood, so the reasoning behind it is sound — but it is not the steering signal.
+
+### Two of the four fixes were worse than first reported
+
+Retractions, because the first report of them was wrong.
+
+**The eval fix was half a fix.** Raw evaluations did go 1 turn -> 0, so that part
+worked; the earlier claim of "2 turns" was our own regex matching "1.4 pawns". But the
+audit names *pawn units* as a defect alongside centipawns, and the judge independently
+flagged it under Stance: "the cost is shown to the student in pawns". The parenthetical
+was removed and the thing it was parenthetical to was left.
+
+**The header rename failed.** Turns echoing a prompt header: **0 (v26) -> 6 (v27) -> 8
+(v28)**. The v27 report said one, because only the ply the judge cited was checked.
+Renaming the label achieved nothing — the model copies whatever label it is given, so
+the fix is to remove the label, not reword it.
+
+### And the safety net is now a defect source
+
+`off_menu` went 1 -> 3, one of which is our own fallback template emitting "moving d5
+reveals Bc8 hitting Rg4" — an off-menu move named by composed text. The judge called
+that same sentence unusable: "no owner or purpose". The fallback is what a student sees
+precisely when the model is not trusted, so it should be the best composed sentence
+available, not the worst.
+
+Raw review: `docs/audit/rejudge-v28-v2.md`.

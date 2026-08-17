@@ -260,8 +260,10 @@ class TestPlayedBestMove:
         assert "there is no better move here" in prompt
         assert 'Do NOT suggest a different or "better" move' in prompt
         assert "No motivational sign-off" in prompt  # severity/verbosity fix (lever 3)
-        # Lever 9: voice the engine's specific idea, not a generic principle.
-        assert 'use "What the best move achieves"' in prompt
+        # Lever 9: voice the engine's specific idea, not a generic principle. The
+        # reference is a description rather than a quoted label, because the model
+        # copied every label it was given (echoes 0 -> 6 -> 8 across three runs).
+        assert "use the line above stating what the move does" in prompt
         # Not the mistake-tier framing.
         assert "serious mistake" not in prompt
         assert "slightly missed the mark" not in prompt
@@ -492,10 +494,10 @@ def test_king_safety_label_dropped_in_the_endgame() -> None:
     assert _best_move_achievement(report) == ""
     assert _best_move_achievement_line(report) == ""
     prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-    assert "What the best move achieves:" not in prompt
-    # And the instructions must not still point at the dropped section — a
-    # dangling reference is an invitation to invent what it would have said.
-    assert '"What the best move achieves" shown above' not in prompt
+    assert "does this:" not in prompt
+    # And the instructions must not still point at the dropped line — a dangling
+    # reference is an invitation to invent what it would have said.
+    assert "the line above stating what the move does" not in prompt
     # The only surviving mention is the instruction telling it NOT to close on
     # king safety; nothing asserts king safety as a fact about this position.
     assert "king safety — repositioning" not in prompt
@@ -553,13 +555,14 @@ def test_equal_tier_withholds_the_alternative_entirely() -> None:
     # The engine's move and its label describe the withheld alternative.
     assert "What the best move achieves" not in prompt
     assert "pawn structure — improving pawn position" not in prompt
-    # What IS supplied is a fact about the move the student actually played.
+    # What IS supplied is a fact about the move the student actually played, stated
+    # as a sentence rather than a labelled field: the model copied every label we
+    # gave it (header echoes went 0 -> 6 -> 8 across three runs, the rename landing
+    # between the last two), so there is no label left to copy.
     assert "Your move does this:" in prompt
-    # The label must not read like a sentence opener: the model copied the previous
-    # wording verbatim as the first words of its reply (v27 ply 0).
     assert "What your move achieves" not in prompt
-    # And the instruction must name the label that is actually in the prompt.
-    assert '"Your move does this" shown above' in prompt
+    # And the instruction must point at the line that is actually there.
+    assert "the line above stating what the move does" in prompt
 
 
 def test_just_above_equal_still_offers_the_refinement() -> None:
@@ -569,7 +572,7 @@ def test_just_above_equal_still_offers_the_refinement() -> None:
     report = dataclasses.replace(report, eval_drop_cp=EQUAL_MAX_DROP_CP + 1)
     prompt = build_rich_move_evaluation_prompt(report, "intermediate")
     assert "sound, reasonable move" in prompt
-    assert "What the best move achieves" in prompt
+    assert "does this:" in prompt
 
 
 def test_equal_tier_takeaway_is_about_the_move_played() -> None:
@@ -602,6 +605,41 @@ def test_critical_moment_never_leaks_the_eval_spread() -> None:
     assert "CRITICAL MOMENT" in prompt  # the flag still earns a fuller explanation
     assert "eval spread" not in prompt
     assert "107" not in prompt
+
+
+def test_safe_fallback_teaches_without_numbers() -> None:
+    # This is what a student reads when the model could not be trusted, so it has to
+    # be our best composed sentence. It was our worst: the general template showed
+    # pawn-unit costs (a listed defect), named an off-menu move, and dumped raw
+    # tactic data ("moving d5 reveals Bc8 hitting Rg4") the reviewer called unusable.
+    from chess_coach.prompts import compose_safe_move_feedback
+
+    # White to move; a3 attacks the undefended black bishop on b4.
+    fen = "r1b5/ppppkp1p/8/8/1bPP3P/5K2/P1r5/RN4R1 w - - 2 23"
+    report = _move_eval_report(fen, "c4c5", "a2a3")
+    report = dataclasses.replace(report, eval_drop_cp=50, classification="inaccuracy")
+    out = compose_safe_move_feedback(report)
+    assert "a3 was stronger here" in out
+    # A board-verified clause, not a category label.
+    assert "bishop on b4" in out
+    # And the lesson, so the fallback keeps the teaching shape.
+    assert "Worth remembering:" in out
+    # No evaluations in any form.
+    assert "eval" not in out.lower()
+    assert "pawns" not in out.lower()
+    assert "cp" not in out.lower().split()
+
+
+def test_safe_fallback_names_no_alternative_on_the_equal_tier() -> None:
+    # The tier that withholds the alternative must withhold it here too, or the
+    # fallback would reintroduce exactly the comparison the tier exists to prevent.
+    from chess_coach.prompts import compose_safe_move_feedback
+
+    report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
+    report = dataclasses.replace(report, eval_drop_cp=EQUAL_MAX_DROP_CP)
+    out = compose_safe_move_feedback(report)
+    assert "as good as anything else here" in out
+    assert "stronger here" not in out
 
 
 def test_numbered_san_marks_whose_move_it_is() -> None:

@@ -415,6 +415,98 @@ def _check_named_moves(
     return out
 
 
+_DEFENCE_VERBS = r"protect\w*|defend\w*|support\w*|guard\w*"
+
+# "<defence verb> ... <piece> on <square>" — the CLAIM. The defender is resolved
+# separately, by looking back for the nearest named piece-and-square, because the
+# two are routinely in different sentences: "the best choice was Ke2, improving king
+# safety. … moving it to e2 helps protect your pawn on g2."
+_DEFENCE_TARGET_RE = re.compile(
+    rf"\b(?:{_DEFENCE_VERBS})\b[^.!?]{{0,60}}?\b(?:pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+([a-h][1-8])\b",
+    re.IGNORECASE,
+)
+
+# A piece named with its square: "Ke2", "Nd2". Searched BACKWARDS from the claim so
+# the nearest one wins — pairing a distant SAN with an unrelated target is the one
+# way this check could produce a false positive.
+_PIECE_AT_SQUARE_RE = re.compile(r"\b([KQRBN])([a-h][1-8])\b")
+
+#: How far back to look for the defender. Two sentences' worth; beyond that the
+#: pairing is guesswork and the check stays silent instead.
+_DEFENDER_LOOKBACK = 220
+
+_SAN_LETTER_TO_TYPE = {"K": chess.KING, "Q": chess.QUEEN, "R": chess.ROOK, "B": chess.BISHOP, "N": chess.KNIGHT}
+
+
+def _can_ever_attack(piece_type: int, frm: int, to: int) -> bool:
+    """Could a ``piece_type`` on ``frm`` attack ``to`` on an OTHERWISE EMPTY board?
+
+    Deliberately the most generous possible reading — blockers are ignored, so a
+    rook's whole file counts. That makes a negative answer conclusive: if the piece
+    cannot reach the square with the board swept clean, no arrangement of pieces
+    makes the claim true. Precision-first by construction.
+    """
+    probe = chess.BaseBoard.empty()
+    probe.set_piece_at(frm, chess.Piece(piece_type, chess.WHITE))
+    return to in probe.attacks(frm)
+
+
+def _check_defence_relation(text: str, board: chess.Board) -> list[Violation]:
+    """Flag "moving to X protects your piece on Y" when X can never cover Y.
+
+    The third class of falsehood found in three review rounds, after the wrong
+    captured piece and the wrong owner. All three assert a RELATION between a piece
+    and a square that the board settles; this one covers the defence family in one
+    check rather than adding a fourth special case.
+
+    The v28 cases: "moving it to e2 helps protect your pawn on g2" — a king on e2
+    covers f2, never g2 — and "Ke3 … supports your passed pawn on d5", where e3 does
+    not touch d5. A frontier review called them "false by geometry alone, needing no
+    board", which is exactly what makes them safe to check: the test is whether the
+    piece could reach the square on an empty board, so blockers, whose turn it is,
+    and which move is actually played cannot produce a false positive.
+
+    Only fires when the target square really holds a piece (otherwise it is a
+    placement error, already reported) and the claimed defender square differs from
+    the target.
+    """
+    out: list[Violation] = []
+    seen: set[tuple[str, str]] = set()
+    for m in _DEFENCE_TARGET_RE.finditer(text):
+        to_name = m.group(1).lower()
+        window = text[max(0, m.start() - _DEFENDER_LOOKBACK) : m.start()]
+        defenders = list(_PIECE_AT_SQUARE_RE.finditer(window))
+        if not defenders:
+            continue  # no named defender to check the claim against
+        nearest = defenders[-1]
+        letter, frm_name = nearest.group(1).upper(), nearest.group(2).lower()
+        if frm_name == to_name:
+            continue
+        try:
+            frm = chess.parse_square(frm_name)
+            to = chess.parse_square(to_name)
+        except ValueError:
+            continue
+        if board.piece_at(to) is None:
+            continue  # placement's business
+        key = (frm_name, to_name)
+        if key in seen:
+            continue
+        piece_type = _SAN_LETTER_TO_TYPE[letter]
+        if _can_ever_attack(piece_type, frm, to):
+            continue
+        seen.add(key)
+        name = chess.piece_name(piece_type)
+        out.append(
+            Violation(
+                "relation",
+                f"{letter}{frm_name} … {m.group(0).strip()}",
+                f"a {name} on {frm_name} can never defend {to_name}",
+            )
+        )
+    return out
+
+
 def _check_ownership(text: str, board: chess.Board) -> list[Violation]:
     """Flag "your/their <piece> on <square>" claims that name the wrong side.
 
@@ -686,6 +778,7 @@ def _run_fidelity_checks(text: str, board: chess.Board, menu: list[MenuMove]) ->
     violations.extend(_check_named_moves(text, board, by_uci))
     violations.extend(_check_placement(text, board))
     violations.extend(_check_ownership(text, board))
+    violations.extend(_check_defence_relation(text, board))
     violations.extend(_check_development(text, board))
     violations.extend(_check_empty_source(text, board))
     violations.extend(_check_capture_piece_type(text, board))
@@ -727,6 +820,7 @@ GATING_VIOLATION_KINDS = frozenset(
     {
         "placement",
         "ownership",
+        "relation",
         "piece_type",
         "empty_source",
         "illegal_move",

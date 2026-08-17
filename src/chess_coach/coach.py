@@ -23,6 +23,7 @@ from chess_coach.prompts import (
     build_rich_coaching_prompt,
     build_rich_move_evaluation_prompt,
     build_socratic_prompt,
+    compose_safe_move_feedback,
     move_feedback_max_tokens,
 )
 from chess_coach.verify import Violation, generate_verified
@@ -570,7 +571,9 @@ class Coach:
         return generate_verified(
             _generate,
             report.fen,
-            lambda: generate_move_coaching(report, level=self.level),
+            # Composed from the board, keeping the teaching shape — not the general
+            # template, which showed pawn-unit costs and dumped raw tactic data.
+            lambda: compose_safe_move_feedback(report) or generate_move_coaching(report, level=self.level),
             retries=self.verify_retries,
             on_violation=_on_violation,
             on_fallback=_on_fallback,
