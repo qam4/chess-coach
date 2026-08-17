@@ -423,6 +423,19 @@ def _check_named_moves(
 _MATE_WORDING_RE = re.compile(r"\b(?:checkmate|checkmates|mate|mated|mating)\b", re.IGNORECASE)
 _DRAW_WORDING_RE = re.compile(r"\b(?:stalemate|stalemated|draw|drawn)\b", re.IGNORECASE)
 
+# "aimed to develop your king's bishop" — a claim about the student's INTENTION that
+# names a piece. The piece noun must not be followed by an apostrophe, or "your king's
+# bishop" would match "king" and check the wrong piece.
+# The gap may not cross a comma or semicolon. Without that it bled into the next
+# clause and read "attempt to develop, but Re4 is stronger — it hits the rook" as an
+# intent to develop a ROOK, when the rook belongs to the opponent and the intent clause
+# names no piece at all. Same failure the relation check had: pairing across clauses.
+_INTENT_CLAIM_RE = re.compile(
+    r"\b(?:aim\w*|attempt\w*|tried|trying|intend\w*|meant|hoped|wanted)\b[^.!?,;]{0,60}?"
+    r"\b(?:your|the)\s+(?:\w+['\u2019]?s?\s+){0,2}?(pawn|knight|bishop|rook|queen|king)(?!['\u2019])\b",
+    re.IGNORECASE,
+)
+
 _DEFENCE_VERBS = r"protect\w*|defend\w*|support\w*|guard\w*"
 
 # "<defence verb> ... <piece> on <square>" — the CLAIM. The defender is resolved
@@ -525,6 +538,52 @@ def _check_terminal_label(text: str, board: chess.Board, played_uci: str = "") -
                 f"{draws[0]} is stalemate and the game is drawn — the text never says so",
             )
         )
+    return out
+
+
+def _check_intent_attribution(text: str, board: chess.Board, played_uci: str = "") -> list[Violation]:
+    """Flag an "aimed to ... your <piece>" claim the move or the board contradicts.
+
+    The student's intention is the one slot we can never fill: the coach is told what
+    the move DOES, never why it was played, so anything it says about intent is
+    invented. Measured across four runs it invents 5-7 of these per game, and most are
+    unfalsifiable ("aimed to challenge Black's position") — but the ones that name a
+    PIECE are checkable, and that is where it goes wrong.
+
+    The case that made this the reviewer's second item, v29 ply 38: "Your move, h4,
+    aimed to develop your king's bishop" — h4 moves a pawn, and White had no bishops
+    at all. Two independent contradictions in one clause.
+
+    Only fires on a named piece type, so the vague forms are left alone rather than
+    guessed at. Verified against the same transcripts: ply 26's "aimed to develop the
+    bishop" stays clean, because the move really was Bd4.
+    """
+    out: list[Violation] = []
+    student = board.turn
+    moved_type: int | None = None
+    if played_uci:
+        try:
+            move = chess.Move.from_uci(played_uci)
+        except ValueError:
+            move = chess.Move.null()
+        if move in board.legal_moves:
+            piece = board.piece_at(move.from_square)
+            moved_type = piece.piece_type if piece else None
+
+    seen: set[str] = set()
+    for m in _INTENT_CLAIM_RE.finditer(text):
+        name = m.group(1).lower()
+        if name in seen:
+            continue
+        claimed = _PIECE_NAME_TO_TYPE[name]
+        fragment = " ".join(m.group(0).split())
+        if not board.pieces(claimed, student):
+            seen.add(name)
+            out.append(Violation("intent", fragment, f"you have no {name} on the board"))
+        elif moved_type is not None and moved_type != claimed:
+            seen.add(name)
+            actual = chess.piece_name(moved_type)
+            out.append(Violation("intent", fragment, f"the move played moves a {actual}, not a {name}"))
     return out
 
 
@@ -862,6 +921,7 @@ def _run_fidelity_checks(
     violations.extend(_check_ownership(text, board))
     violations.extend(_check_defence_relation(text, board))
     violations.extend(_check_terminal_label(text, board, played_uci))
+    violations.extend(_check_intent_attribution(text, board, played_uci))
     violations.extend(_check_development(text, board))
     violations.extend(_check_empty_source(text, board))
     violations.extend(_check_capture_piece_type(text, board))
@@ -905,6 +965,7 @@ GATING_VIOLATION_KINDS = frozenset(
         "ownership",
         "relation",
         "terminal_label",
+        "intent",
         "piece_type",
         "empty_source",
         "illegal_move",

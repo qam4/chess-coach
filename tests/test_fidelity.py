@@ -605,3 +605,83 @@ def test_terminal_label_gates_the_send_path() -> None:
     from chess_coach.verify import GATING_VIOLATION_KINDS
 
     assert "terminal_label" in GATING_VIOLATION_KINDS
+
+
+# ---------------------------------------------------------------------------
+# Intent: the coach is never told WHY the student moved, so it invents it.
+# ---------------------------------------------------------------------------
+
+# v29 ply 38. White to move, h4 is a PAWN move, and White has no bishops at all.
+INTENT_FEN = "r1b1k3/pppp1p1p/8/6r1/1bPP4/8/P1P1K2P/RN5R w q - 0 20"
+# v29 ply 26. Same shape of sentence, but the move really was Bd4 and White has
+# bishops on b2 and c4 — this one must stay clean.
+INTENT_OK_FEN = "r1b1k1r1/pppp1p1p/4p3/6P1/1bB4n/1P2P3/PBP3PP/RN1K3R w q - 1 14"
+
+
+def test_intent_naming_a_piece_the_student_lacks_is_flagged() -> None:
+    # The real v29 text. Two independent contradictions in one clause: h4 moves a
+    # pawn, and there is no bishop to develop.
+    text = (
+        "Your move, h4, aimed to develop your king's bishop, but the better choice was a3, "
+        "which attacks the opponent's undefended bishop on b4."
+    )
+    from chess_coach.verify import check_text_fidelity
+
+    v = check_text_fidelity(text, INTENT_FEN, played_uci="h2h4")
+    kinds = [x.kind for x in v]
+    assert "intent" in kinds
+    detail = next(x.detail for x in v if x.kind == "intent")
+    assert "no bishop" in detail
+
+
+def test_intent_about_a_different_piece_than_the_one_moved_is_flagged() -> None:
+    # Board HAS bishops, so only the move contradicts the claim.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "Your move, h3, aimed to develop your bishop."
+    v = check_text_fidelity(text, INTENT_OK_FEN, played_uci="h2h3")
+    assert "intent" in [x.kind for x in v]
+    detail = next(x.detail for x in v if x.kind == "intent")
+    assert "moves a pawn, not a bishop" in detail
+
+
+def test_true_intent_claim_is_not_flagged() -> None:
+    # Real v29 ply-26 text: the move WAS Bd4 and White has two bishops.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "Your move aimed to develop the bishop, but the stronger choice is Ke2."
+    v = check_text_fidelity(text, INTENT_OK_FEN, played_uci="c4d4")
+    assert "intent" not in [x.kind for x in v]
+
+
+def test_vague_intent_is_left_alone() -> None:
+    # "aimed to challenge Black's position" names no piece and cannot be checked, so
+    # it is not guessed at. Unfalsifiable intent is a teaching problem, not a
+    # fidelity one, and belongs in the prompt rather than the gate.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "Your move, c5, aimed to challenge Black's position but overlooked a key opportunity."
+    v = check_text_fidelity(text, INTENT_FEN, played_uci="c4c5")
+    assert "intent" not in [x.kind for x in v]
+
+
+def test_intent_does_not_bleed_into_the_next_clause() -> None:
+    # A false positive this check produced on its first run, caught by sweeping all
+    # four stored transcripts: it read "attempt to develop, but Re4 is stronger — it
+    # hits the rook on d4" as an intent to develop a ROOK. The rook is the opponent's
+    # and the intent clause names no piece at all. The window may not cross a comma.
+    from chess_coach.verify import check_text_fidelity
+
+    fen = "4r3/p1p1kpRp/1pp1b3/8/1P1r4/2N2K2/8/4R3 w - - 4 30"
+    text = (
+        "Your move, Kf2, was a good attempt to develop, but Re4 is stronger — it hits the "
+        "rook on d4 and the bishop on e6, giving you a powerful attack."
+    )
+    v = check_text_fidelity(text, fen, played_uci="f3f2")
+    assert "intent" not in [x.kind for x in v]
+
+
+def test_intent_gates_the_send_path() -> None:
+    from chess_coach.verify import GATING_VIOLATION_KINDS
+
+    assert "intent" in GATING_VIOLATION_KINDS
