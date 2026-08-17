@@ -1934,13 +1934,21 @@ attribution with no such piece on the board — not a new class invented by the 
    17% -> under 10%. Plies 74 and 78 are word-for-word identical, 64 is a near-copy,
    and 43 of 44 moves get full-length commentary.
 
-4. **Breadth: the report card has always been ONE game.** Its own doc claimed `--seed`
-   fixed the game; in fact the seed never reaches the engine (no seed option exists)
-   and the game repeats because the engine is deterministic at fixed Elo and depth.
-   Verified byte-identical across v26-v29. The determinism is *correct* for
-   before/after work and should stay the default, but every conclusion so far comes
-   from one game the reviewer has repeatedly called unrepresentative: "a shooting
-   gallery", quiet positions "barely tested", the opening never past ply 10 of theory.
+4. **Breadth — DONE (2026-08-17), and it cleared the checks.**
+   `scripts/eval_check_breadth.py` runs five fixed games, no randomness, no judge.
+   Result: **zero false positives and zero leaks across all five**; four games at 0-6%
+   fallback, one quiet Queen's Gambit at 21% whose three flagged claims were all
+   verified as real coach errors (a bishop called a pawn, and the opponent's f6 knight
+   called "your knight" twice). So the checks generalise off the game they were written
+   on, and the gate-first approach is converging.
+
+   Two findings worth keeping. Quiet positional play is harder for the coach — the
+   French game produced zero violations, the Queen's Gambit three in 14 coached turns —
+   which is the gap the standard audit predicted and the fixed game cannot show. And
+   the sweep mirrors the SHIPPING skip rules, so it coaches ~16 turns where the report
+   card coaches 44; the rates are comparable but the denominators are not.
+
+   Re-run it after adding any new gating check, and before shipping. Not every round.
 
    **Agreed shape: five FIXED games, no randomness.** An earlier draft of this item
    proposed a seeded random opening; that was wrong. Randomness would make the sweep

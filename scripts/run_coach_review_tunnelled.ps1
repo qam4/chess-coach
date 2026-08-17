@@ -5,6 +5,15 @@
 # request confirms the model is loaded, the eval starts immediately. A port check
 # alone is not enough — the port answers before Ollama does.
 param(
+    # Which driver to run once the tunnel is confirmed. Defaults to the report card;
+    # any script taking --model/--base-url/--out works (e.g. eval_check_breadth.py).
+    [string]$Script = "scripts/eval_coach_review.py",
+    # Extra flags for a non-default driver, as ONE string: "--only queens-gambit".
+    # Deliberately not string[]: passed as separate tokens, PowerShell reads a
+    # leading "--flag" as a parameter name and silently binds the value that follows
+    # to the next positional parameter — which set $Model to "queens-gambit" and made
+    # the readiness loop wait three minutes for a model that does not exist.
+    [string]$ScriptArgLine = "",
     [string]$Out = "output/coach_review_v25",
     [string]$Model = "qwen3:14b",
     [string]$BaseUrl = "http://localhost:11435",
@@ -47,10 +56,16 @@ while (-not (Test-ModelReady -Url $BaseUrl -Want $Model)) {
 Write-Host "$Model ready - starting run"
 
 try {
-    uv run python scripts/eval_coach_review.py `
-        --model $Model --base-url $BaseUrl `
-        --student-elo $StudentElo --opponent-elo $OpponentElo `
-        --ply-cap $PlyCap --seed $Seed --out $Out
+    if ($Script -eq "scripts/eval_coach_review.py") {
+        uv run python $Script `
+            --model $Model --base-url $BaseUrl `
+            --student-elo $StudentElo --opponent-elo $OpponentElo `
+            --ply-cap $PlyCap --seed $Seed --out $Out
+    } else {
+        # Other drivers take the common flags plus whatever they need.
+        $extra = if ($ScriptArgLine) { $ScriptArgLine -split '\s+' } else { @() }
+        uv run python $Script --model $Model --base-url $BaseUrl --out $Out @extra
+    }
     $code = $LASTEXITCODE
 } finally {
     if ($tunnel) { Stop-Process -Id $tunnel.Id -Force -ErrorAction SilentlyContinue }

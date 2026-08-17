@@ -63,7 +63,7 @@ our own measurement rather than the coach. Detail for each is further down.
 | 41 | (v29) The relation check closed the family | One geometric check over defends/protects/supports/guards | Gating violations **2 -> 0**. Header echoes **8 -> 0** (removing the label worked where renaming failed), pawn units **2 turns -> 0**. Ungated score 5.7 -> 5.05 — truth up, repetition down | kept |
 | 42 | (v29, rubric v2) The gate fired on two classes **already on the backlog since v24/v26**, not a new one: mate called "a check" (ply 1003) and intent the coach cannot know (ply 38, "aimed to develop your king's bishop" with no bishop on the board) | **next** — terminal-move check and intent check, both SMALL | — | open |
 | 43 | (our finding) Repetition regressed while truth improved: concentration 50% -> 57%, recycled 15% -> 17%, Stream Behaviour 4 -> 3, plies 74/78 word-for-word identical and 64 a near-copy | **next** — the judge's SMALL stream fix, which it predicts takes concentration to ~30% | — | open |
-| 44 | (our finding) Every report card has replayed **one identical game** — verified byte-identical across v26-v29. The determinism is right for before/after work, but no change has ever been checked against a second game | **open decision** — see BACKLOG; nothing changed yet | — | open |
+| 44 | (owner observation) Every report card has replayed **one identical game** — verified byte-identical across v26-v29 — so no check had ever been tried on a second game, and the checks can now REPLACE what a student reads | `scripts/eval_check_breadth.py`: five FIXED games, no randomness, no judge | **Zero false positives and zero leaks across all five.** Four games at 0-6% fallback; one quiet Queen's Gambit at 21%, and all three of its flagged claims verified as **real coach errors** | kept |
 
 ## Measurement philosophy (what to trust)
 
@@ -1297,3 +1297,60 @@ ply 10 of theory. Overfitting to it is a live risk, and one that would be invisi
 from inside the loop.
 
 Raw review: `docs/audit/rejudge-v29-v2.md`.
+
+## Do the checks generalise? Five fixed games (2026-08-17)
+
+Prompted by the product owner noticing every report card replays the same game. The
+concern was precise: changes validated on one game may not hold on another. It matters
+more than it used to, because since v27 a failing check does not merely miscount a
+metric — it **replaces the coaching a student reads** with composed text. A check that
+was subtly too aggressive would be invisible on the fixed game and could quietly turn
+the coach into a template elsewhere.
+
+`scripts/eval_check_breadth.py` answers that and nothing else. Five **fixed** games —
+no randomness, since randomness would destroy the reproducibility that makes the
+harness trustworthy — and **no judge**, because violation and fallback counts are
+deterministic. Twelve minutes, zero frontier credits.
+
+| game | fallbacks / coached | rate | checks that fired |
+|---|---|---|---|
+| control (report-card game) | 1 / 16 | 6% | placement |
+| french-quiet | 0 / 17 | 0% | none |
+| **queens-gambit-quiet** | **3 / 14** | **21%** | piece_type, ownership |
+| student-as-black | 1 / 27 | 4% | illegal_move, pawn_structure |
+| stronger-student | 1 / 25 | 4% | placement |
+
+`leaked_after_gate` was **0 on every game**: no false claim reached the student
+anywhere.
+
+### The outlier was the coach, not the checks
+
+All three Queen's Gambit rejections were verified against the board:
+
+- **ply 9** — `r1bqk1nr/pp3ppp/n1p5/3Pp3/Q2P4/2b5/PP1BPPPP/R3KBNR w`: c3 holds a **black
+  bishop**, and the coach said the capture "captures a pawn".
+- **plies 33 and 37** — White to move and the f6 knight is **Black's**; the coach wrote
+  "your knight on f6" on both turns, five plies apart.
+
+So the 21% is that game being harder, not the checks over-firing. **Zero false
+positives across all five games.**
+
+Two things follow beyond the immediate question. The checks **generalise**: written from
+one game, they caught three unseen errors in an opening they were never tuned on — and
+the ownership check, added from a single ply-44 case, found two more instances on its
+own. That is the strongest evidence so far that the gate-first approach is converging
+rather than playing whack-a-mole. And **quiet positional play is harder for the coach**:
+the French game produced zero violations while the Queen's Gambit produced three in only
+14 coached turns, which is the phase gap the standard audit predicted and the fixed game
+cannot show.
+
+**Caveat on the instrument.** The sweep mirrors the SHIPPING skip rules, so it coaches
+only turns a user would actually see (good moves get no LLM call). The control game
+therefore shows 16 coached turns against the report card's 44. The rates are comparable
+— control 6%, v29 7% — but the denominators are not the same, so the control does not
+cross-validate the report card's numbers directly.
+
+**And a tooling lesson.** The first version counted violations without keeping the
+rejected text, which made the only question that mattered — coach wrong, or check
+wrong? — unanswerable without a re-run. It now stores the fragment, the reason and the
+FEN, and prints them.
