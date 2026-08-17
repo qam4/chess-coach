@@ -198,6 +198,7 @@ def main() -> None:
                     lambda: (
                         compose_safe_move_feedback(comparison) or generate_move_coaching(comparison, level=args.level)
                     ),
+                    played_uci=student_move,
                     on_violation=_on_violation,
                     on_fallback=lambda _bad: fallback_plies.append(ply),
                 )

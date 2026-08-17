@@ -113,6 +113,7 @@ def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multip
         lambda: model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0),
         fen,
         lambda: compose_safe_move_feedback(comparison) or generate_move_coaching(comparison, level=level),
+        played_uci=move,
         on_fallback=lambda bad: fallbacks.append("; ".join(f"{v.kind}: {v.detail}" for v in bad)),
     )
     latency = time.monotonic() - t0

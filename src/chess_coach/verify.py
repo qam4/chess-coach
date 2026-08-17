@@ -415,6 +415,14 @@ def _check_named_moves(
     return out
 
 
+# Wording that tells the student the game has ENDED. Searched in the prose with the
+# move tokens stripped out: at v29 ply 1003 the coach wrote "Ra8#" and then "it gives
+# check", so the notation carried the mate and the sentence contradicted it. A
+# beginner is explicitly instructed away from notation, so the `#` cannot be treated
+# as having informed them.
+_MATE_WORDING_RE = re.compile(r"\b(?:checkmate|checkmates|mate|mated|mating)\b", re.IGNORECASE)
+_DRAW_WORDING_RE = re.compile(r"\b(?:stalemate|stalemated|draw|drawn)\b", re.IGNORECASE)
+
 _DEFENCE_VERBS = r"protect\w*|defend\w*|support\w*|guard\w*"
 
 # "<defence verb> ... <piece> on <square>" — the CLAIM. The defender is resolved
@@ -449,6 +457,75 @@ def _can_ever_attack(piece_type: int, frm: int, to: int) -> bool:
     probe = chess.BaseBoard.empty()
     probe.set_piece_at(frm, chess.Piece(piece_type, chess.WHITE))
     return to in probe.attacks(frm)
+
+
+def _check_terminal_label(text: str, board: chess.Board, played_uci: str = "") -> list[Violation]:
+    """Flag a game-ending move the text does not say ends the game.
+
+    The reviewer's decisive item, and the last thing a student reads: at v29 ply 1003
+    the coach was shown `Ra8#`, called it "a check", and asked whether it "buys me
+    time to develop or improve another piece". The game was over. Nothing caught it —
+    the move is legal, the squares are real, and every other check passed.
+
+    Deterministic: play each legally named move and ask the board. A move that ends
+    the game and prose that never says so is a falsehood the student cannot detect,
+    so it gates the send path like the other board-contradiction kinds.
+
+    The move tokens are stripped before looking for mate wording, deliberately. The
+    `#` suffix is not treated as having told the student anything: the beginner
+    instructions tell the coach to avoid notation, so the sentence has to carry it.
+
+    ``played_uci`` is checked in ADDITION to any move named in the text. A first
+    version looked only at named moves and so missed the worst instance we had: v27
+    ply 1003 described the mate without ever writing it down — "you delivered a check
+    with your rook on the open a-file… does it buy me time to develop?" — and escaped
+    for want of a parseable token. Prose that avoids notation is exactly what the
+    beginner level asks for, so the check cannot depend on notation being present.
+    """
+    out: list[Violation] = []
+    prose = _SAN_RE.sub(" ", text)
+    mates: list[str] = []
+    draws: list[str] = []
+    seen: set[str] = set()
+    candidates = [m.group(1) for m in _SAN_RE.finditer(text)]
+    if played_uci:
+        try:
+            played = chess.Move.from_uci(played_uci)
+        except ValueError:
+            played = chess.Move.null()
+        if played in board.legal_moves:
+            candidates.append(board.san(played))
+    for token in candidates:
+        if token in seen:
+            continue
+        seen.add(token)
+        try:
+            move = board.parse_san(token)
+        except (chess.InvalidMoveError, chess.IllegalMoveError, chess.AmbiguousMoveError, ValueError):
+            continue
+        after = board.copy(stack=False)
+        after.push(move)
+        if after.is_checkmate():
+            mates.append(token)
+        elif after.is_stalemate():
+            draws.append(token)
+    if mates and not _MATE_WORDING_RE.search(prose):
+        out.append(
+            Violation(
+                "terminal_label",
+                mates[0],
+                f"{mates[0]} is checkmate and the game is over — the text never says so",
+            )
+        )
+    if draws and not _DRAW_WORDING_RE.search(prose):
+        out.append(
+            Violation(
+                "terminal_label",
+                draws[0],
+                f"{draws[0]} is stalemate and the game is drawn — the text never says so",
+            )
+        )
+    return out
 
 
 def _check_defence_relation(text: str, board: chess.Board) -> list[Violation]:
@@ -766,7 +843,12 @@ def _check_geometry(text: str, board: chess.Board) -> list[Violation]:
     return out
 
 
-def _run_fidelity_checks(text: str, board: chess.Board, menu: list[MenuMove]) -> list[Violation]:
+def _run_fidelity_checks(
+    text: str,
+    board: chess.Board,
+    menu: list[MenuMove],
+    played_uci: str = "",
+) -> list[Violation]:
     """Run every fidelity pass over a parsed board and dedupe the result.
 
     Shared by :func:`check_coaching_fidelity` (report-based) and
@@ -779,6 +861,7 @@ def _run_fidelity_checks(text: str, board: chess.Board, menu: list[MenuMove]) ->
     violations.extend(_check_placement(text, board))
     violations.extend(_check_ownership(text, board))
     violations.extend(_check_defence_relation(text, board))
+    violations.extend(_check_terminal_label(text, board, played_uci))
     violations.extend(_check_development(text, board))
     violations.extend(_check_empty_source(text, board))
     violations.extend(_check_capture_piece_type(text, board))
@@ -821,6 +904,7 @@ GATING_VIOLATION_KINDS = frozenset(
         "placement",
         "ownership",
         "relation",
+        "terminal_label",
         "piece_type",
         "empty_source",
         "illegal_move",
@@ -842,6 +926,7 @@ def generate_verified(
     fallback: Callable[[], str],
     *,
     retries: int = 1,
+    played_uci: str = "",
     on_violation: Callable[[int, int, list[Violation]], None] | None = None,
     on_fallback: Callable[[list[Violation]], None] | None = None,
 ) -> str:
@@ -870,7 +955,7 @@ def generate_verified(
         if not text.strip():
             raise ValueError("Empty LLM response")
         last = text
-        bad = gating_violations(check_text_fidelity(text, fen))
+        bad = gating_violations(check_text_fidelity(text, fen, played_uci=played_uci))
         if not bad:
             return text
         last_bad = bad
@@ -908,6 +993,7 @@ def check_text_fidelity(
     text: str,
     fen: str,
     menu: list[MenuMove] | None = None,
+    played_uci: str = "",
 ) -> list[Violation]:
     """FEN-based fidelity check, for callers without a full ``PositionReport``.
 
@@ -919,4 +1005,4 @@ def check_text_fidelity(
         board = chess.Board(fen)
     except ValueError:
         return []
-    return _run_fidelity_checks(text, board, menu or [])
+    return _run_fidelity_checks(text, board, menu or [], played_uci)

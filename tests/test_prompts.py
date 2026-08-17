@@ -630,6 +630,34 @@ def test_safe_fallback_teaches_without_numbers() -> None:
     assert "cp" not in out.lower().split()
 
 
+def test_safe_fallback_says_the_game_is_over_on_mate() -> None:
+    # With the game over there is no next move to teach, so the ordinary branches
+    # would close on a takeaway about future play — the exact defect that made this
+    # the reviewer's decisive item (v29 ply 1003 asked whether checkmate "buys me
+    # time to develop or improve another piece").
+    from chess_coach.prompts import compose_safe_move_feedback
+
+    # White to move; Ra8 is mate against a king on g8 boxed in by its own pawns.
+    report = _move_eval_report("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", "a1a8", "a1a8")
+    out = compose_safe_move_feedback(report)
+    assert "checkmate" in out.lower()
+    assert "ends the game" in out
+    # And nothing about what to do next, because there is no next.
+    assert "develop" not in out.lower()
+
+
+def test_safe_fallback_distinguishes_stalemate_from_a_win() -> None:
+    # Black Ka8, White Kb6 + Qc1. Qc7 takes b8 away while the king already covers a7
+    # and b7, and gives no check — stalemate, verified. Calling that a win would teach
+    # the opposite of the lesson the position holds.
+    from chess_coach.prompts import compose_safe_move_feedback
+
+    report = _move_eval_report("k7/8/1K6/8/8/8/8/2Q5 w - - 0 1", "c1c7", "c1c7")
+    out = compose_safe_move_feedback(report)
+    assert "stalemate" in out.lower()
+    assert "draw" in out.lower()
+
+
 def test_safe_fallback_names_no_alternative_on_the_equal_tier() -> None:
     # The tier that withholds the alternative must withhold it here too, or the
     # fallback would reintroduce exactly the comparison the tier exists to prevent.

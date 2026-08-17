@@ -578,6 +578,9 @@ class Coach:
             # template, which showed pawn-unit costs and dumped raw tactic data.
             lambda: compose_safe_move_feedback(report) or generate_move_coaching(report, level=self.level),
             retries=self.verify_retries,
+            # The move actually played, so a mate described without notation is still
+            # caught — the beginner level asks the coach to avoid notation.
+            played_uci=report.user_move,
             on_violation=_on_violation,
             on_fallback=_on_fallback,
         )

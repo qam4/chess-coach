@@ -535,3 +535,73 @@ def test_relation_gates_the_send_path() -> None:
     from chess_coach.verify import GATING_VIOLATION_KINDS
 
     assert "relation" in GATING_VIOLATION_KINDS
+
+
+# ---------------------------------------------------------------------------
+# Terminal moves: did the text say the game is over?
+# ---------------------------------------------------------------------------
+
+# v29 ply 1003. White to move; Ra8 is checkmate (black king on g8, pawns f7/g7/h7).
+MATE_FEN = "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"
+
+
+def test_mate_described_as_a_check_is_flagged() -> None:
+    # The real v29 text, verbatim. Every other check passed it: the move is legal, the
+    # squares are real, the file is genuinely open. It was the last thing the student
+    # read, and it told them the game continued.
+    text = (
+        "Great job with Ra8# — it gives check and takes full advantage of the open a-file. "
+        "Next time you see a check that forces a reply, ask yourself: does this move buy "
+        "me time to develop or improve another piece?"
+    )
+    v = check_coaching_fidelity(text, _report(MATE_FEN), [])
+    assert "terminal_label" in _kinds(v)
+    detail = next(x.detail for x in v if x.kind == "terminal_label")
+    assert "checkmate" in detail
+
+
+def test_mate_named_in_the_prose_is_not_flagged() -> None:
+    text = "Ra8 is checkmate — the rook cuts the king off on the back rank and the game is over."
+    v = check_coaching_fidelity(text, _report(MATE_FEN), [])
+    assert "terminal_label" not in _kinds(v)
+
+
+def test_notation_alone_does_not_count_as_saying_it() -> None:
+    # The `#` is stripped with the move token on purpose: beginners are instructed
+    # away from notation, so the sentence has to carry the meaning.
+    text = "Great job with Ra8# — it takes full advantage of the open a-file."
+    v = check_coaching_fidelity(text, _report(MATE_FEN), [])
+    assert "terminal_label" in _kinds(v)
+
+
+def test_mate_described_without_notation_is_still_flagged() -> None:
+    # The real v27 ply-1003 text, which the first version of this check MISSED: it
+    # never writes the move down, so there was no token to parse. Prose that avoids
+    # notation is exactly what the beginner level asks for, so the check is given the
+    # move actually played.
+    text = (
+        "Great move! You delivered a check with your rook on the open a-file, putting the "
+        "king in immediate danger. Next time you see a check that forces an answer, ask "
+        "yourself: does it buy me time to develop or improve another piece?"
+    )
+    from chess_coach.verify import check_text_fidelity
+
+    v = check_text_fidelity(text, MATE_FEN, played_uci="a1a8")
+    assert "terminal_label" in [x.kind for x in v]
+    # Without the played move there is nothing to resolve, and it stays silent.
+    assert "terminal_label" not in [x.kind for x in check_text_fidelity(text, MATE_FEN)]
+
+
+def test_ordinary_check_is_not_flagged_as_terminal() -> None:
+    # Ra8+ style claims on a NON-mating move must stay clean, or every check in the
+    # game would be reported as an unlabelled mate.
+    fen = "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"
+    text = "Ra8 gives check and forces the king to move."
+    v = check_coaching_fidelity(text, _report(fen), [])
+    assert "terminal_label" not in _kinds(v)
+
+
+def test_terminal_label_gates_the_send_path() -> None:
+    from chess_coach.verify import GATING_VIOLATION_KINDS
+
+    assert "terminal_label" in GATING_VIOLATION_KINDS

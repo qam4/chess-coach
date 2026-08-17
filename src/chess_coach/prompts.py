@@ -1490,6 +1490,34 @@ def _label_wrong_for_phase(label: str, board: chess.Board) -> bool:
     return _KING_SAFETY_IDEA in label.lower() and phase_of_board(board) == PHASE_ENDGAME
 
 
+def _terminal_feedback(board: chess.Board, uci: str) -> str:
+    """Feedback for a move that ends the game, or '' if it does not end it."""
+    try:
+        move = chess.Move.from_uci(uci)
+    except ValueError:
+        return ""
+    if move not in board.legal_moves:
+        return ""
+    san = board.san(move)
+    after = board.copy(stack=False)
+    after.push(move)
+    if after.is_checkmate():
+        return (
+            f"That's checkmate — {san} ends the game. "
+            "Worth remembering: to mate with a rook, cut the enemy king off from the "
+            "squares it could run to, then bring your own king up to take away the rest."
+        )
+    if after.is_stalemate():
+        return (
+            f"{san} is stalemate — the opponent has no legal move and is not in check, "
+            "so the game is a draw rather than a win. Worth remembering: when the enemy "
+            "king is nearly trapped, leave it one safe square until you can deliver mate."
+        )
+    if after.is_insufficient_material():
+        return f"{san} leaves too little material to mate, so the game is drawn."
+    return ""
+
+
 def compose_safe_move_feedback(report: ComparisonReport) -> str:
     """Composed move feedback for the fidelity gate's fallback, or '' if nothing verifies.
 
@@ -1509,6 +1537,15 @@ def compose_safe_move_feedback(report: ComparisonReport) -> str:
     board = _safe_board(report.fen)
     if board is None:
         return ""
+
+    # Mate first: with the game over there is no "next move" to teach, and the generic
+    # branches below would close on a takeaway about future play — which is exactly the
+    # defect that made this the reviewer's decisive item (v29 ply 1003 asked whether
+    # checkmate "buys me time to develop or improve another piece").
+    terminal = _terminal_feedback(board, report.user_move)
+    if terminal:
+        return terminal
+
     tier = _move_feedback_tier(report)
     opening = {
         "best": "Good move.",
