@@ -1971,3 +1971,51 @@ attribution with no such piece on the board — not a new class invented by the 
 Carried over: a cause field for Diagnosis (MEDIUM, judge says the engine data exists
 today); cross-turn memory's MEDIUM half; cue sharpening; endgame facts rather than
 endgame prose; fabricated refutations undetected; unify the two text parsers.
+
+### Discovery coverage — one at a time, behind the fixing queue — 2026-08-17
+
+Discussion recorded in `docs/coach-report-card.md` ("Discovery vs coverage"). The
+division of labour: the deterministic checks are **coverage** (every turn, every game,
+known classes); the judge is **discovery** (new classes). Discovery is currently limited
+to whatever the one fixed game contains.
+
+**Standing rule, agreed with the product owner: fixing comes first while the known list
+is non-empty.** Coverage items below are taken ONE at a time, and only when cheap and
+aimed at a specific doubt. A discovery finding is logged and joins the queue — it does
+not jump it.
+
+Ordered by expected value, not by ease:
+
+- **C1. Coach level has never been varied.** Verified: every report card v1-v29 and all
+  five breadth games ran `--level intermediate`. `beginner` and `advanced` have never
+  been exercised. Worse than an ordinary untested config, because `beginner` instructs
+  the coach to *avoid chess notation* while nearly every check anchors on notation
+  ("<piece> on <square>", SAN capture tokens) — so beginner output may be both more
+  error-prone and less checkable. Cost: **one flag**, no new code — rerun the five
+  breadth games with `--level beginner` and compare fired/leaked. If the checks fall
+  silent there, that is the most valuable thing on this list.
+
+- **C2. Judge the breadth games for fidelity only.** The five games exist and are never
+  judged, so any class of falsehood unique to them is undiscovered. Use a NARROW ask —
+  "list every claim here that is false about the board" — not the seven-category rubric.
+  Five judge calls. Needs the sweep to save the full coaching text first (it currently
+  saves counts and rejected drafts only). Takes discovery from ~44 turns to ~100.
+
+- **C3. Temperature as a discovery axis.** We run temperature 0 for reproducibility,
+  which samples one phrasing per prompt — and our falsehoods are phrasings. Raising it
+  explores that space with no new games. Cheap, and if the classes are phrasing-driven it
+  should surface them immediately; if it surfaces nothing, that is informative too
+  (classes would then be position-driven, pointing at C4).
+
+- **C4. Random positions, sampled not enumerated.** Random opening, side and student Elo
+  per run, coordinates logged so any hit replays exactly. This is the axis the Queen's
+  Gambit result argues for. Keep the report card's fixed game untouched for measurement.
+
+**Pinning discipline for all of the above:** a hit becomes a fixed test case with its FEN
+and text, exactly as the ply-44 ownership and ply-26 geometry cases already are.
+Randomness feeds the deterministic suite; it never becomes part of measurement.
+
+**The strategic read:** if the checks turn out to be coupled to a phrasing style (C1 is
+the test of this), that is evidence for inverting the default — allow only board claims
+we supplied — because that approach is indifferent to how the sentence is written. That
+option is already logged above.

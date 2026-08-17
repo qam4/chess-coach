@@ -1354,3 +1354,70 @@ cross-validate the report card's numbers directly.
 rejected text, which made the only question that mattered — coach wrong, or check
 wrong? — unanswerable without a re-run. It now stores the fragment, the reason and the
 FEN, and prints them.
+
+## Discovery vs coverage — and the rule for not drowning in it (2026-08-17)
+
+A design discussion, recorded because it produced more directions than we can run at
+once and the *restraint* is part of the conclusion.
+
+### Two mechanisms, two jobs
+
+- **The deterministic checks are COVERAGE.** They run on every turn of every game and
+  catch known kinds of falsehood exhaustively. One game or fifty: if the coach makes a
+  mistake of a kind we check, we catch it. The breadth sweep proved this — three real
+  errors found in a game no check had ever seen.
+- **The judge is DISCOVERY.** Its job is to spot kinds we do not check yet. Every one
+  of our seven checks exists because the judge found one instance and we generalised it.
+
+Judge finds the class; checks catch every instance.
+
+### The hole
+
+Discovery only sees what the fixed game contains. A kind of falsehood absent from those
+44 turns is never discovered — and we now know the Queen's Gambit game is harder for the
+coach than the fixed game, yet **nobody has ever judged it**. There could be several
+undiscovered classes sitting in games we already generate.
+
+### Randomness belongs here, and only here
+
+Randomness is wrong for measuring change and right for finding bugs — the fuzzing split.
+The discipline that makes it safe: **a random run that finds something gets PINNED** as a
+fixed case. We already do this by hand — the ply-44 ownership FEN and the ply-26 geometry
+FEN are hard-coded tests now. Reproducibility comes from *logging the coordinates* of a
+hit, not from the search being deterministic.
+
+Axes worth sampling, and none of them is a grid — sample points, do not enumerate:
+
+1. **Coach level** (`--level`). Verified untested: every report card v1-v29 and all five
+   breadth games ran `intermediate`, the default. **This is the largest blind spot**, and
+   worse than a normal untested config, because the `beginner` branch instructs the coach
+   to *avoid chess notation* — and nearly every check anchors on notation ("piece on
+   square", SAN capture tokens). Beginner coaching may be both more error-prone and less
+   checkable than the path we have spent thirty runs hardening.
+2. **Phrasing** (temperature). Our falsehoods are linguistic — "your knight on f6",
+   "helps protect your pawn on g2". At temperature 0 we sample ONE point from the space
+   where the bugs live, for a given prompt. Raising it explores that space with no new
+   games at all.
+3. **Positions** (openings, sides). The obvious axis, and what the Queen's Gambit result
+   argues for.
+4. **Student strength** (engine Elo). Partly varied: 1350 everywhere, 1650 once.
+
+Cost control: the checks are free, so fuzz wide with them; the judge is expensive and is
+the only thing that finds unknown classes, so it gets a bounded sample of turns the
+checks called clean.
+
+**And the number of axes is itself a finding.** If beginner-level coaching needs its own
+checks, the gate is coupled to a *phrasing style* rather than to truth — which is an
+argument for the "allow only what we supplied" approach, because that does not care how
+the sentence is written.
+
+### The rule, agreed with the product owner
+
+There are now two competing streams: **improving coverage** (finding new classes) and
+**fixing what the checker already told us** (mate detection, intent attribution,
+repetition). Running both at once produces a flood and finishes neither.
+
+So: **fixing comes first while the known list is non-empty.** Coverage work is taken one
+item at a time, and only when it is cheap and answers a specific doubt. Discovery
+findings are logged, not immediately acted on — they join the known list and wait their
+turn.
