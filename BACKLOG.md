@@ -1897,3 +1897,69 @@ approach; the candidates, in increasing order of change:
 Carried over: mate not noticed at ply 1003; intent attribution the coach cannot know;
 cue sharpening; endgame facts rather than endgame prose; fabricated refutations
 undetected; unify the two text parsers.
+
+### v29: the relation family closed; the harness has been one game all along — 2026-08-15
+
+Ledger rows 41-44 in `docs/coach-report-card.md`. Raw review:
+`docs/audit/rejudge-v29-v2.md`.
+
+The relation check worked (gating violations 2 -> 0), removing the achievement label
+beat renaming it (echoes 8 -> 0), and the composed fallback removed the last pawn-unit
+costs (2 turns -> 0). Ungated score 5.7 -> 5.05: truth improved and repetition
+regressed. Three turns now fall back to composed text.
+
+**The gate-first approach is NOT rejected.** The two surviving falsehoods are classes
+already on this backlog since v24 and v26 — mate called "a check", and intent
+attribution with no such piece on the board — not a new class invented by the model.
+
+**Next, in priority order.**
+
+1. **Terminal-move check.** SMALL, and the judge's decisive item: "describing mate as a
+   check and coaching development afterwards is a falsehood the student cannot detect,
+   and it is the last thing they read." Verify the check/mate/stalemate label after the
+   move: `Ra8#` is mate, `board.is_checkmate()` proves it, and the coach called it a
+   check and asked whether it bought time to develop. Gate on it, and the fallback
+   needs a mate branch (there is nothing to teach about development after mate).
+
+2. **Intent-attribution check.** SMALL, same shape as the relation check. "h4 aimed to
+   develop your king's bishop" when the side to move has no bishops. Any "aimed
+   to/attempted to develop your <piece>" claim resolves against the board. The judge's
+   standing observation is that fabrications cluster where the model fills a slot it
+   has no data for, and the student's *intent* is the one slot we can never supply —
+   so consider forbidding the construction outright rather than checking it.
+
+3. **The SMALL stream fix**, with the judge's own prediction attached so it can be
+   falsified: suppress commentary on quiet good moves and forbid reuse of a recent
+   closing cue, expected to take lesson concentration 57% -> ~30% and recycled phrasing
+   17% -> under 10%. Plies 74 and 78 are word-for-word identical, 64 is a near-copy,
+   and 43 of 44 moves get full-length commentary.
+
+4. **Breadth: the report card has always been ONE game.** Its own doc claimed `--seed`
+   fixed the game; in fact the seed never reaches the engine (no seed option exists)
+   and the game repeats because the engine is deterministic at fixed Elo and depth.
+   Verified byte-identical across v26-v29. The determinism is *correct* for
+   before/after work and should stay the default, but every conclusion so far comes
+   from one game the reviewer has repeatedly called unrepresentative: "a shooting
+   gallery", quiet positions "barely tested", the opening never past ply 10 of theory.
+
+   **Agreed shape: five FIXED games, no randomness.** An earlier draft of this item
+   proposed a seeded random opening; that was wrong. Randomness would make the sweep
+   inconsistent run to run, which is the property that makes the current harness
+   trustworthy. Instead: five specific starting positions and student profiles,
+   written down once and replayed identically every time. Each game is as
+   deterministic as today's, so a result reproduces exactly — if game 3 shows twenty
+   fallbacks today it shows twenty tomorrow.
+
+   The two jobs stay separate. **Measuring a change** keeps using game 1 alone; the
+   sweep answers a different question — do our checks misfire on positions this game
+   does not contain — and needs **no judge at all**, since violation and fallback
+   counts are deterministic. So it costs engine and local-model time only.
+
+   Chosen to cover what the current game does not: a quiet positional structure, the
+   student playing Black, and a stronger student (fewer blunders, so a different
+   move-quality mix). The reviewer has repeatedly said the current game is
+   unrepresentative — "a shooting gallery", quiet positions "barely tested".
+
+Carried over: a cause field for Diagnosis (MEDIUM, judge says the engine data exists
+today); cross-turn memory's MEDIUM half; cue sharpening; endgame facts rather than
+endgame prose; fabricated refutations undetected; unify the two text parsers.

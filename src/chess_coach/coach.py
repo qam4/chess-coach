@@ -561,11 +561,14 @@ class Coach:
                 violations=[{"kind": v.kind, "text": v.text, "detail": v.detail} for v in bad],
             )
 
-        def _on_fallback() -> None:
+        def _on_fallback(bad: list[Violation]) -> None:
+            why = "; ".join(f"{v.kind}: {v.detail}" for v in bad)
+            logger.warning("evaluate_move: sending composed text instead (%s)", why)
             trace(
                 "eval_verify_fallback",
-                "Falling back to composed template — every attempt contradicted the board",
+                f"Falling back to composed text — every attempt contradicted the board ({why})",
                 tool="engine",
+                violations=[{"kind": v.kind, "text": v.text, "detail": v.detail} for v in bad],
             )
 
         return generate_verified(

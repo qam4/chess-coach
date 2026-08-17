@@ -60,7 +60,10 @@ our own measurement rather than the coach. Detail for each is further down.
 | 38 | (v28, rubric v2) The gate fired on a **third** class: relationship geometry — "Ke2 helps protect your pawn on g2" (e2 covers f2), "Ke3 supports your passed pawn on d5" (e3 does not touch d5) | **next** — one general check for the family (X defends/protects/attacks Y), not a fourth patch | — | open |
 | 39 | (our finding, retraction) The eval fix was HALF a fix and the header rename FAILED | Raw evals 1 -> 0, but pawn-unit costs remain and the judge flagged them under Stance. Header echoes went **0 (v26) -> 6 (v27) -> 8 (v28)** — renaming a label does not stop it being copied | eval: partial; header: **reverted in effect, needs removing not renaming** |
 | 40 | (our finding) `off_menu` 1 -> 3, and one is our own fallback template naming `d5`; the judge called that same text unusable ("no owner or purpose") | **next** — the fallback is what a student sees when we distrust the model; it should be our best composed sentence, not our worst | — | open |
-| 41 | Misses checkmate at ply 1003; intent attribution the coach cannot know; plies 74/78 byte-identical | **next** | — | open |
+| 41 | (v29) The relation check closed the family | One geometric check over defends/protects/supports/guards | Gating violations **2 -> 0**. Header echoes **8 -> 0** (removing the label worked where renaming failed), pawn units **2 turns -> 0**. Ungated score 5.7 -> 5.05 — truth up, repetition down | kept |
+| 42 | (v29, rubric v2) The gate fired on two classes **already on the backlog since v24/v26**, not a new one: mate called "a check" (ply 1003) and intent the coach cannot know (ply 38, "aimed to develop your king's bishop" with no bishop on the board) | **next** — terminal-move check and intent check, both SMALL | — | open |
+| 43 | (our finding) Repetition regressed while truth improved: concentration 50% -> 57%, recycled 15% -> 17%, Stream Behaviour 4 -> 3, plies 74/78 word-for-word identical and 64 a near-copy | **next** — the judge's SMALL stream fix, which it predicts takes concentration to ~30% | — | open |
+| 44 | (our finding) Every report card has replayed **one identical game** — verified byte-identical across v26-v29. The determinism is right for before/after work, but no change has ever been checked against a second game | **open decision** — see BACKLOG; nothing changed yet | — | open |
 
 ## Measurement philosophy (what to trust)
 
@@ -1233,3 +1236,64 @@ precisely when the model is not trusted, so it should be the best composed sente
 available, not the worst.
 
 Raw review: `docs/audit/rejudge-v28-v2.md`.
+
+## v29 — the family closed, and what "one game" has been hiding (2026-08-15)
+
+| | v27 | v28 | v29 |
+|---|---|---|---|
+| gating violations in output | 0 | 0 (2 visible retroactively) | **0** |
+| turns echoing a prompt label | 6 | 8 | **0** |
+| pawn units shown to the student | 1 | 2 | **0** |
+| **ungated** rubric weighted | 5.2 | 5.7 | 5.05 |
+| gated (shipped) | 2 | 2 | 2 |
+| lesson concentration | 55% | 50% | 57% |
+| recycled phrasing | 18% | 15% | 17% |
+| turns falling back to composed text | 1 | 2 | 3 |
+| latency mean / max (s) | 5.3 / 21.7 | 5.7 / 48.9 | **4.8 / 9.1** |
+
+**The relation check closed the family.** It fired on ply 1002, the turn it was built
+for, and the two relation errors detectable in v28's text are gone from v29's.
+
+**Removing the label beat renaming it.** Echoes 6 -> 8 -> **0**. The rename landed
+between the first two, so the earlier claim that it was fixed was wrong twice over:
+wrong in effect, and only one of six instances had been checked.
+
+**The gate fired on classes we already knew about.** This is the important
+distinction, because the standing reject criterion was "a fourth *unrelated* class":
+
+- **Ply 1003, verified**: `Ra8#` — `board.is_checkmate()` is True. The coach called it
+  "a check" and asked whether it "buys me time to develop or improve another piece".
+  Logged since v24 as "the coach does not notice the game is over" and never fixed.
+- **Ply 38, verified**: FEN `r1b1k3/pppp1p1p/8/6r1/1bPP4/8/P1P1K2P/RN5R w` — White has
+  **no bishops at all**. The coach said "h4 aimed to develop your king's bishop".
+  Logged at v26 as "intent attribution the coach cannot know".
+
+So the model did not invent a new kind of falsehood; it repeated two we had chosen
+not to check. Adding checks is still converging, and the approach stands.
+
+**The honest cost: truth up, repetition down.** Ungated 5.7 -> 5.05, with Stream
+Behaviour 4 -> 3 and Transfer Handle 6 -> 5; concentration 50% -> 57%. Three turns now
+read as composed text, which is truer and flatter. The judge's own read: eliminating
+the ply-38/1003 class "stops the gate firing and takes the overall from 2 to roughly
+5", and after that the SMALL stream fix is "the better quality-per-hour buy", predicted
+to move concentration from 57% to roughly 30% and recycled phrasing under 10%.
+
+### The measurement has been one game the whole time
+
+Prompted by the product owner asking whether the engine had randomness. It does not,
+on this path.
+
+- The 44 student moves are **byte-identical across v26, v27, v28 and v29** (checked).
+- `--seed` is written into the trajectory metadata and **never reaches the engine**.
+  Blunder exposes no seed option; its randomness lives in the opening book and
+  self-play, neither of which this harness uses. So `--seed 8` would replay the same
+  game, and this document previously asserted the opposite.
+
+The determinism is *right* for before/after comparison and it is why single-run deltas
+have been trustworthy. But it means every conclusion here is drawn from one game, and
+the reviewer has said repeatedly that this particular game is not representative — "a
+shooting gallery", quiet and positional play "barely tested", the opening never past
+ply 10 of theory. Overfitting to it is a live risk, and one that would be invisible
+from inside the loop.
+
+Raw review: `docs/audit/rejudge-v29-v2.md`.

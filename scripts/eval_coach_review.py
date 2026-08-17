@@ -108,16 +108,16 @@ def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multip
     # the shipping Coach does — via the SAME helper, so the report card cannot
     # grade a configuration that does not ship. Without this the harness measured
     # a coach with no output verification while the product had it.
-    fallbacks: list[int] = []
+    fallbacks: list[str] = []
     text = generate_verified(
         lambda: model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0),
         fen,
         lambda: compose_safe_move_feedback(comparison) or generate_move_coaching(comparison, level=level),
-        on_fallback=lambda: fallbacks.append(ply),
+        on_fallback=lambda bad: fallbacks.append("; ".join(f"{v.kind}: {v.detail}" for v in bad)),
     )
     latency = time.monotonic() - t0
-    if fallbacks:
-        print(f"  ply {ply}: every attempt contradicted the board — sent composed text instead")
+    for why in fallbacks:
+        print(f"  ply {ply}: every attempt contradicted the board ({why}) — sent composed text instead")
     menu = build_move_menu(pos_report)
     fid = Counter(v.kind for v in check_coaching_fidelity(text, pos_report, menu))
     return ReviewTurn(

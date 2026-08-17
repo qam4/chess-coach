@@ -843,7 +843,7 @@ def generate_verified(
     *,
     retries: int = 1,
     on_violation: Callable[[int, int, list[Violation]], None] | None = None,
-    on_fallback: Callable[[], None] | None = None,
+    on_fallback: Callable[[list[Violation]], None] | None = None,
 ) -> str:
     """Generate text that does not contradict the board, else use ``fallback``.
 
@@ -864,6 +864,7 @@ def generate_verified(
     """
     attempts = max(0, retries) + 1
     last = ""
+    last_bad: list[Violation] = []
     for attempt in range(1, attempts + 1):
         text = generate()
         if not text.strip():
@@ -872,10 +873,14 @@ def generate_verified(
         bad = gating_violations(check_text_fidelity(text, fen))
         if not bad:
             return text
+        last_bad = bad
         if on_violation is not None:
             on_violation(attempt, attempts, bad)
+    # Hand the violations to the fallback hook: a caller that only learns WHICH ply
+    # fell back cannot say which check fired, and that question came up the first
+    # time two unexplained fallbacks appeared in a run.
     if on_fallback is not None:
-        on_fallback()
+        on_fallback(last_bad)
     return fallback() or last
 
 
