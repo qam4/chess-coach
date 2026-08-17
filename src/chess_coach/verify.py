@@ -423,6 +423,16 @@ def _check_named_moves(
 _MATE_WORDING_RE = re.compile(r"\b(?:checkmate|checkmates|mate|mated|mating)\b", re.IGNORECASE)
 _DRAW_WORDING_RE = re.compile(r"\b(?:stalemate|stalemated|draw|drawn)\b", re.IGNORECASE)
 
+# What an OPPONENT capture is said to win, read only from the text immediately after
+# the move token. "win" is allowed here although the general capture check excludes it:
+# adjacency to a specific capture is what separates "Nxc4, winning a pawn" from the
+# material idiom "you win a pawn in the long run".
+_OPPONENT_VICTIM_RE = re.compile(
+    r"\b(?:winning|wins|win|captur\w*|tak\w*|grab\w*)\s+(?:the\s+|a\s+|an\s+|your\s+)?"
+    r"(?:\w+\s+){0,2}?(pawn|knight|bishop|rook|queen)\b",
+    re.IGNORECASE,
+)
+
 # "aimed to develop your king's bishop" — a claim about the student's INTENTION that
 # names a piece. The piece noun must not be followed by an apostrophe, or "your king's
 # bishop" would match "king" and check the wrong piece.
@@ -538,6 +548,109 @@ def _check_terminal_label(text: str, board: chess.Board, played_uci: str = "") -
                 f"{draws[0]} is stalemate and the game is drawn — the text never says so",
             )
         )
+    return out
+
+
+def _check_opponent_reply(text: str, board: chess.Board, played_uci: str) -> list[Violation]:
+    """Validate moves the coach attributes to the OPPONENT, against the right board.
+
+    Closes an exemption we created on purpose and then forgot. Claims about the
+    opponent's reply were skipped everywhere: :func:`_attributed_to_opponent` waives
+    the illegal-move check for them (correctly — they are not legal STUDENT moves),
+    and the capture-victim check waives them too, because the victim type was inferred
+    from the move the coach named for our own side. Sound in isolation, and together
+    they left every claim about the opponent's reply unchecked.
+
+    They are checkable, and against a board we can build ourselves: push the student's
+    move and the opponent is to play. Two things then verify directly —
+
+    * **legality.** v30 ply 46: "After your move c6, the opponent plays Bb7+". Bb7+ is
+      a real move in the engine's line that begins 24.a3 — and the student's c6 is
+      exactly what blocks the b7-f3 diagonal it checks along, so after c6 it cannot be
+      played at all. The coach copied a move from a line starting with a different
+      first move and presented it as the punishment for the move that prevents it.
+    * **what it captures.** v30 ply 14: "the opponent plays Nxc4, winning a pawn" —
+      c4 holds a bishop, and the same message says so two sentences later.
+
+    Requires ``played_uci``: without the student's move there is no position to judge
+    against, and guessing one is how the exemption came about in the first place.
+    """
+    if not played_uci:
+        return []
+    try:
+        played = chess.Move.from_uci(played_uci)
+    except ValueError:
+        return []
+    if played not in board.legal_moves:
+        return []
+    after = board.copy(stack=False)
+    after.push(played)
+
+    out: list[Violation] = []
+    seen: set[str] = set()
+    for m in _SAN_RE.finditer(text):
+        token = m.group(1)
+        if token in seen or not _attributed_to_opponent(text, m.start(), board):
+            continue
+        if _is_piece_reference(token, after):
+            continue  # "Be6" naming a piece that stands there, not a move
+        clearly_a_move = token[0] in "KQRBNO" or "x" in token
+        if not clearly_a_move:
+            continue
+        seen.add(token)
+        # _SAN_RE drops a trailing +/# — the closing \b cannot sit between two
+        # non-word characters, so "Bb7+," matches as "Bb7". The check marker has to be
+        # read from the raw text, and it is the whole falsehood in the ply-46 case:
+        # Bb7 IS legal after c6, it simply is not check.
+        suffix = text[m.end() : m.end() + 1]
+        claims_check = suffix in ("+", "#")
+        try:
+            reply = after.parse_san(token)
+        except chess.IllegalMoveError:
+            out.append(
+                Violation(
+                    "opponent_reply",
+                    token + suffix if claims_check else token,
+                    f"the opponent cannot play {token} after your move",
+                )
+            )
+            continue
+        except (chess.InvalidMoveError, chess.AmbiguousMoveError, ValueError):
+            continue
+        if claims_check and not after.gives_check(reply):
+            out.append(
+                Violation(
+                    "opponent_reply",
+                    token + suffix,
+                    f"{token} does not give check after your move",
+                )
+            )
+            continue
+        # The move is real; is what it takes described correctly?
+        if "x" not in token:
+            continue
+        victim = "pawn" if after.is_en_passant(reply) else None
+        if victim is None:
+            piece = after.piece_at(reply.to_square)
+            victim = chess.piece_name(piece.piece_type) if piece else None
+        if victim is None:
+            continue
+        # "winning a <piece>" is accepted here as a claim about THIS capture, unlike in
+        # the general capture check where "win" is excluded as a material idiom ("wins a
+        # pawn" can mean a net edge). The narrowing that makes it safe is adjacency: the
+        # phrase has to sit right after this move token, not anywhere in the message.
+        window = text[m.end() : m.end() + 40]
+        for claim in _OPPONENT_VICTIM_RE.finditer(window):
+            claimed = claim.group(1).lower()
+            if claimed != victim:
+                out.append(
+                    Violation(
+                        "opponent_reply",
+                        f"{token} … {claim.group(0)}",
+                        f"{token} captures a {victim}, not a {claimed}",
+                    )
+                )
+                break
     return out
 
 
@@ -922,6 +1035,7 @@ def _run_fidelity_checks(
     violations.extend(_check_defence_relation(text, board))
     violations.extend(_check_terminal_label(text, board, played_uci))
     violations.extend(_check_intent_attribution(text, board, played_uci))
+    violations.extend(_check_opponent_reply(text, board, played_uci))
     violations.extend(_check_development(text, board))
     violations.extend(_check_empty_source(text, board))
     violations.extend(_check_capture_piece_type(text, board))
@@ -966,6 +1080,7 @@ GATING_VIOLATION_KINDS = frozenset(
         "relation",
         "terminal_label",
         "intent",
+        "opponent_reply",
         "piece_type",
         "empty_source",
         "illegal_move",

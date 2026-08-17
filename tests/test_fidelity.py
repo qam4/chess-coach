@@ -685,3 +685,99 @@ def test_intent_gates_the_send_path() -> None:
     from chess_coach.verify import GATING_VIOLATION_KINDS
 
     assert "intent" in GATING_VIOLATION_KINDS
+
+
+# ---------------------------------------------------------------------------
+# Opponent replies: an exemption we created on purpose, then forgot.
+# ---------------------------------------------------------------------------
+#
+# Claims about the opponent's reply were skipped by every check: the illegal-move
+# check waives them (they are not legal STUDENT moves) and the capture check waived
+# them too. Together that left them entirely unchecked, and the v30 gate fired on two.
+
+# v30 ply 46. White to move; the student plays c6. The engine's line 1 begins 24.a3
+# and only THEN Bb7+, which checks along b7-f3 — and c6 is exactly what blocks that
+# diagonal. So Bb7+ is a real move in a line that starts differently, and impossible
+# after the move actually played.
+OPP_ILLEGAL_FEN = "r1b5/p1ppkp1p/1p6/2P5/1b1P3P/5K2/P1r5/RN4R1 w - - 0 24"
+# v30 ply 14. White to move; after Ke2 the opponent's Nxc4 takes a BISHOP.
+OPP_VICTIM_FEN = "r1bqk2r/pppp1ppp/4p3/4n1N1/1bB2P2/1P2P3/P1P3PP/RNBQK2R w KQkq - 1 8"
+
+
+def test_opponent_reply_claiming_a_check_that_is_not_one_is_flagged() -> None:
+    # The real v30 ply-46 message. Bb7 IS legal after c6 — the falsehood is the "+".
+    # The engine's line reaches Bb7+ only after 24.a3; the student's c6 is exactly what
+    # blocks the b7-f3 diagonal it would check along.
+    #
+    # This also pins a regex finding: _SAN_RE drops a trailing +/#, because its closing
+    # \b cannot sit between two non-word characters, so "Bb7+," matches as "Bb7". The
+    # check marker has to be read from the raw text.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "This was a serious mistake. After your move c6, the opponent plays Bb7+, attacking your king."
+    v = check_text_fidelity(text, OPP_ILLEGAL_FEN, played_uci="c5c6")
+    assert "opponent_reply" in [x.kind for x in v]
+    detail = next(x.detail for x in v if x.kind == "opponent_reply")
+    assert "does not give check" in detail
+
+
+def test_genuinely_illegal_opponent_reply_is_flagged() -> None:
+    # The other half: a move the opponent cannot make at all.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "After your move c6, the opponent plays Qh4, hitting your king."
+    v = check_text_fidelity(text, OPP_ILLEGAL_FEN, played_uci="c5c6")
+    assert "opponent_reply" in [x.kind for x in v]
+    detail = next(x.detail for x in v if x.kind == "opponent_reply")
+    assert "cannot play Qh4" in detail
+
+
+def test_opponent_capture_victim_is_checked() -> None:
+    # The real v30 ply-14 message, which contradicts itself: Nxc4 "winning a pawn",
+    # and two sentences later "your bishop on c4".
+    from chess_coach.verify import check_text_fidelity
+
+    text = (
+        "This was a serious mistake. After your move Ke2, the opponent plays Nxc4, winning a pawn "
+        "and gaining a strong central presence. The better move is Nd2, which adds a defender to "
+        "your bishop on c4."
+    )
+    v = check_text_fidelity(text, OPP_VICTIM_FEN, played_uci="e1e2")
+    assert "opponent_reply" in [x.kind for x in v]
+    detail = next(x.detail for x in v if x.kind == "opponent_reply")
+    assert "captures a bishop, not a pawn" in detail
+
+
+def test_correct_opponent_reply_is_not_flagged() -> None:
+    # Nxc4 IS available after Ke2 and it does take a bishop; said correctly, clean.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "After your move Ke2, the opponent plays Nxc4, capturing your bishop."
+    v = check_text_fidelity(text, OPP_VICTIM_FEN, played_uci="e1e2")
+    assert "opponent_reply" not in [x.kind for x in v]
+
+
+def test_opponent_reply_needs_the_played_move() -> None:
+    # Without the student's move there is no position to judge against, and guessing
+    # one is how the original exemption came about.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "After your move c6, the opponent plays Bb7+, attacking your king."
+    v = check_text_fidelity(text, OPP_ILLEGAL_FEN)
+    assert "opponent_reply" not in [x.kind for x in v]
+
+
+def test_student_move_is_not_judged_as_an_opponent_reply() -> None:
+    # A move the coach recommends to the STUDENT must not be validated against the
+    # post-move board, where it is the wrong side's turn.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "The better move is Nd2, which adds a defender to your bishop on c4."
+    v = check_text_fidelity(text, OPP_VICTIM_FEN, played_uci="e1e2")
+    assert "opponent_reply" not in [x.kind for x in v]
+
+
+def test_opponent_reply_gates_the_send_path() -> None:
+    from chess_coach.verify import GATING_VIOLATION_KINDS
+
+    assert "opponent_reply" in GATING_VIOLATION_KINDS
