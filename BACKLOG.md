@@ -2070,3 +2070,52 @@ same lesson back to back.
    judge's SMALL stream fix (block reuse of a recent closing cue) still applies, but
    the evidence for it is now one instance rather than a pattern — re-measure on a
    shipping-behaviour run before building it.
+
+### v31 — the first honest measurement, and what it exposed — 2026-08-18
+
+Ledger rows 50-52. Raw review: `docs/audit/rejudge-v31-v2.md`.
+
+The gate did not fire for the first time in five runs: **2/10 -> 5.7/10**, every
+category up, with **no change to the coach** — only to what was measured. Concentration
+57% -> 18%, recycled phrasing 16% -> 4%, violations 3 -> 1. The repetition problem that
+took three rounds of discussion was mostly the harness.
+
+**Next, in priority order.**
+
+1. **Decide speech on whether there is something to teach, not on the eval drop.**
+   MEDIUM, and it is the reviewer's top item as well as the cause of two bugs we have
+   now hit from opposite directions:
+   - checkmate was silent, because mate scores 0cp (fixed by a special case);
+   - ply 6 `Ng5` (91cp) and ply 8 `b3` (138cp) are silent, because the opening rule
+     suppresses anything under 150cp in the first six moves — and `Ng5` is the move the
+     reviewer has blamed across runs for losing a knight later.
+
+   Both are the same root cause: the decision to speak is made on a number rather than
+   on whether a teachable, engine-checkable feature exists. The reviewer's suggested
+   shape is a small detector set over what the composer already computes — king not
+   castled by move ~10, a loose piece, a hanging piece. The terminal-move special case
+   then folds into it as one detector rather than an exception.
+
+   **Do not lose the silence.** It is now a credited strength ("silence discipline is
+   real and valuable"), and the win in this run came from restraint. The goal is to
+   speak on the right turns, not on more turns.
+
+2. **The fidelity margin is one claim wide.** The reviewer: *"Fidelity is one flagged
+   claim from capping the whole score at 2 — the margin is thin, not comfortable."* 5.7
+   is 2/10 plus one lucky turn. The remaining flagged claim is a single `unsound_move`
+   in the middlegame — worth reading, since `unsound_move` is deliberately NOT gated
+   (its warn-context guard is imprecise), so it reaches the student.
+
+3. **Re-run the breadth sweep.** Five gating checks have been added since it last ran,
+   and the standing rule is to re-run it after adding any new gating check. It also now
+   matches the report card's behaviour exactly, so the control game should agree.
+
+4. **Five of eighteen coached turns are composed fallbacks (28%).** Truthful, and
+   flatter than model prose — composed-fact rate fell 57% -> 34%. Worth watching: if the
+   fallback rate keeps climbing, the product drifts toward being a template engine with
+   an LLM garnish. The fallback text is decent now, but it is not teaching in the way
+   the rubric means.
+
+Carried over: the remaining real repetition (two near-verbatim pairs the reviewer still
+sees at Stream Behaviour 5/10); a cause field for Diagnosis, still stuck at 5 and worth
+25% of the weight; cue sharpening; endgame facts rather than endgame prose.

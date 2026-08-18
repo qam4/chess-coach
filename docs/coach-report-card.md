@@ -67,6 +67,9 @@ our own measurement rather than the coach. Detail for each is further down.
 | 47 | (owner question) **The harness never called the coach.** It rebuilt the pipeline, so the shipping rule that keeps the coach SILENT on good moves was never on its path — it coached all 44 turns where the product coaches 17 | Harness now calls `Coach.evaluate_move`, taking prompt/latency from the debug callback and the engine reports from the result. ~40 lines and 6 imports deleted | **Retracts three reports.** The "byte-identical plies 74/78" defect is on 0cp turns no student sees; "43 of 44 turns get commentary" describes the harness; concentration is computed over turns that never ship. Third drift of the same root cause | kept |
 | 48 | (fell out of 47) **The coach is silent on checkmate.** `Ra8#` has a 0cp drop, so the skip rule suppresses it entirely | A game-ending move now always speaks — mate, stalemate or draw — on both the coaching and the fallback path so they cannot disagree | Ra8# went from 0.0s (silent) to 7.5s (coached). The model then described mate wrongly, the terminal check caught it, and the student read "That's checkmate — Ra8# ends the game" plus the rook-mate lesson. **The two fixes only work together**: the skip rule makes it speak, the check makes it true | kept |
 | 49 | (fell out of 47) The judge credited the silence unprompted — "restraint on near-best moves is a real virtue and it has it" — a shipped behaviour never once credited before, because the harness hid it | — | — | noted |
+| 50 | **v31 — first run measuring what actually ships.** The gate did NOT fire for the first time in five runs | Nothing new: this is v30's coach, measured honestly | **2/10 -> 5.7/10.** Every category up. Concentration **57% -> 18%**, recycled phrasing **16% -> 4%**, fidelity violations 3 -> 1, all with no change to the coach — the repetition problem was mostly the harness | kept |
+| 51 | (v31, our finding) **Two real mistakes get no comment at all**: ply 6 `Ng5` (91cp) and ply 8 `b3` (138cp) are silent, because the opening rule suppresses anything under 150cp in the first six moves — and `Ng5` is the move the reviewer has repeatedly blamed for losing a knight later | **next** | — | open |
+| 52 | (v31, rubric v2) "Fidelity is one flagged claim from capping the whole score at 2 — the margin is thin, not comfortable." Its top recommendation: stop gating speech on eval drop, gate it on whether a teachable engine-checkable feature exists (MEDIUM) | **next** | — | open |
 | 46 | (v30, rubric v2) Both survivors were claims about the **opponent's** move — an exemption we created deliberately and forgot. Ply 46 "the opponent plays Bb7+": a real move from a line starting 24.a3, and the student's own c6 blocks the diagonal it checks along. Ply 14 "Nxc4, winning a pawn" when c4 holds a bishop — contradicted two sentences later in the same message | `opponent_reply` check: push the student's move, then verify the reply's legality, its claimed check, and what it captures | Catches both plies in **all five** stored runs — the coach makes these same two errors every time — and fires nowhere else across ~220 turns | kept |
 | 44 | (owner observation) Every report card has replayed **one identical game** — verified byte-identical across v26-v29 — so no check had ever been tried on a second game, and the checks can now REPLACE what a student reads | `scripts/eval_check_breadth.py`: five FIXED games, no randomness, no judge | **Zero false positives and zero leaks across all five.** Four games at 0-6% fallback; one quiet Queen's Gambit at 21%, and all three of its flagged claims verified as **real coach errors** | kept |
 
@@ -1509,3 +1512,59 @@ speak — but the real fix is the skip rule.
 
 The score series changes basis: per-turn metrics measured over 44 forced turns are not
 comparable with ~17 real ones. v31 onward is a new series, and the ledger says so.
+
+## v31 — the first honest measurement (2026-08-18)
+
+The first run where the reviewer judged what a student actually receives. **A new
+series**: per-turn metrics over 18 coached turns are not comparable with the 44 forced
+turns of v1-v30.
+
+**The gate did not fire, for the first time in five runs. 2/10 -> 5.7/10.**
+
+| | v30 (forced, 44) | v31 (shipping) |
+|---|---|---|
+| turns coached / silent | 44 / 0 | **18 / 26** |
+| gated score | 2 | **5.7** |
+| fidelity | 4 (gate fired) | 5 |
+| diagnosis | 5 | 5 |
+| transfer handle | 6 | 6 |
+| executability | 7 | 6 |
+| load discipline | 6 | 6 |
+| stance | 6 | 7 |
+| stream behaviour | 3 | 5 |
+| lesson concentration | 57% | **18%** |
+| recycled phrasing | 16% | **4%** |
+| deterministic violations | 3 | 1 |
+| composed-fact rate | 57% | 34% |
+| latency mean | 6.7s | 2.5s |
+
+**Nothing about the coach changed between these two runs.** The repetition problem we
+spent three rounds on was mostly the harness: concentration fell from 57% to 18% and
+recycled phrasing from 16% to 4% purely by measuring the turns that ship.
+
+The composed-fact drop (57% -> 34%) is real and expected: 5 of the 18 coached turns are
+composed fallbacks, which voice no model prose by definition.
+
+**The reviewer credited the silence:** *"Silence discipline is real and valuable — 26 of
+44 turns empty, and the engine-top moves at plies 24, 32, 48, 50, 64-78 correctly get
+nothing."*
+
+### Two warnings, one from the reviewer and one from us
+
+**The margin is thin.** Its own words: *"Fidelity is one flagged claim from capping the
+whole score at 2 — the margin is thin, not comfortable."* 5.7 is not a stable 5.7; it is
+2/10 plus one lucky turn.
+
+**And silence has a cost we had not measured: two real mistakes get NO comment.** Ply 6
+`Ng5` (91cp) and ply 8 `b3` (138cp) are both silent, because the opening rule suppresses
+anything under 150cp in the first six moves. `Ng5` is the move the reviewer has blamed
+across several runs for losing a knight later. So the student makes a genuine error and
+hears nothing at all — the mirror image of the checkmate bug, from the same cause: **the
+decision to speak is made on a number, not on whether there is something to teach.**
+
+The reviewer arrived at the same place independently, and it is now the top item:
+*"Stop gating speech on eval drop; gate it on whether a teachable, engine-checkable
+feature exists."* Cost MEDIUM — a small detector set over what the composer already
+computes (king not castled by move ~10, a loose piece, a hanging piece).
+
+Raw review: `docs/audit/rejudge-v31-v2.md`.
