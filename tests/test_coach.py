@@ -314,3 +314,50 @@ class TestVerifiedMoveFeedback:
         coach = Coach(engine=_mock_engine(), llm=llm)
         with pytest.raises(ValueError, match="Empty LLM response"):
             coach._verified_move_feedback("prompt", _verify_report(), max_tokens=100, trace=_noop_trace)
+
+
+# --------------------------------------------------------------------------
+# A move that ends the game always gets a word.
+# --------------------------------------------------------------------------
+#
+# The skip rules look only at the eval drop, and checkmate has a drop of zero — so
+# the student delivered mate and the coach said NOTHING. Found the moment the report
+# card started calling evaluate_move instead of rebuilding it: the curated Ra8#
+# position went silent. It also reframes the mate-labelling defect a reviewer called
+# its decisive item; that only appeared because the harness forced commentary on a
+# good move, so in production the coach was not wrong about mate, it was absent.
+
+# White to move; Ra8 is checkmate against a king on g8 boxed in by its own pawns.
+_MATE_FEN = "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"
+# Same shape but the g7 pawn is gone, so after Ra8 the king escapes to g7: check,
+# not mate. (A first version of this test used a position with an extra white rook,
+# which is still mate — the king is boxed in by its OWN pawns, so no amount of extra
+# white material changes it.)
+_QUIET_FEN = "6k1/5p1p/8/8/8/8/5PPP/R5K1 w - - 0 1"
+
+
+def test_move_ends_game_detects_mate() -> None:
+    from chess_coach.coach import _move_ends_game
+
+    assert _move_ends_game(_MATE_FEN, "a1a8") is True
+    assert _move_ends_game(_QUIET_FEN, "a1a8") is False
+
+
+def test_move_ends_game_is_total() -> None:
+    # A bad position or move must fall back to the ordinary skip rules, never raise
+    # inside coaching.
+    from chess_coach.coach import _move_ends_game
+
+    assert _move_ends_game("not a fen", "a1a8") is False
+    assert _move_ends_game(_MATE_FEN, "zz99") is False
+    assert _move_ends_game(_MATE_FEN, "a1a2a3") is False
+    # Legal square syntax, illegal move in this position.
+    assert _move_ends_game(_MATE_FEN, "h2h8") is False
+
+
+def test_stalemate_also_ends_the_game() -> None:
+    # Black Ka8, White Kb6 + Qc1: Qc7 is stalemate, not a win — and a student who
+    # accidentally stalemates most needs to hear about it.
+    from chess_coach.coach import _move_ends_game
+
+    assert _move_ends_game("k7/8/1K6/8/8/8/8/2Q5 w - - 0 1", "c1c7") is True

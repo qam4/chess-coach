@@ -31,6 +31,23 @@ from chess_coach.verify import Violation, generate_verified
 logger = logging.getLogger(__name__)
 
 
+def _move_ends_game(fen: str, uci: str) -> bool:
+    """True if playing ``uci`` in ``fen`` ends the game (mate, stalemate, or a draw).
+
+    Total: any unparseable position or move answers False, so a bad input can only
+    fall back to the ordinary skip rules rather than raise inside coaching.
+    """
+    try:
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(uci)
+    except ValueError:
+        return False
+    if move not in board.legal_moves:
+        return False
+    board.push(move)
+    return board.is_game_over(claim_draw=True)
+
+
 # ---------------------------------------------------------------------------
 # Debug trace — shared between web UI and CLI
 # ---------------------------------------------------------------------------
@@ -528,6 +545,10 @@ class Coach:
         else:
             return "blunder"
 
+    def _ends_game(self, fen: str, uci: str) -> bool:
+        """Does playing ``uci`` in ``fen`` end the game? Total: never raises."""
+        return _move_ends_game(fen, uci)
+
     def _verified_move_feedback(
         self,
         prompt: str,
@@ -643,7 +664,22 @@ class Coach:
             # In the opening (first ~6 moves), engine eval at shallow depth
             # is unreliable — only critique moves with a large eval drop.
             move_number = int(fen_before.split()[-1]) if fen_before.split() else 1
-            if move_number <= 6 and report.eval_drop_cp <= 150:
+            # A move that ends the game always gets a word. The skip rules look only
+            # at the eval drop, and checkmate has a drop of zero — so the student
+            # delivered mate and the coach said NOTHING. Found when the report card
+            # finally started calling this method: the curated Ra8# position went
+            # silent. It also reframes the mate-labelling defect a reviewer called its
+            # decisive item; that only ever appeared because the harness forced
+            # commentary on a good move. In production the coach was not wrong about
+            # mate, it was absent.
+            ends_game = _move_ends_game(fen_before, user_move)
+            if ends_game:
+                _trace(
+                    "eval_terminal",
+                    "Move ends the game — coaching it regardless of eval drop",
+                    tool="engine",
+                )
+            if not ends_game and move_number <= 6 and report.eval_drop_cp <= 150:
                 _trace(
                     "eval_skip_llm",
                     f"Opening move (move {move_number}, drop {report.eval_drop_cp}cp) — skipping LLM",
@@ -657,7 +693,7 @@ class Coach:
                     feedback="",
                     _comparison=report,
                 )
-            if report.eval_drop_cp <= 50:
+            if not ends_game and report.eval_drop_cp <= 50:
                 _trace(
                     "eval_skip_llm",
                     f"Good move (drop {report.eval_drop_cp}cp) — skipping LLM",
@@ -821,8 +857,11 @@ class Coach:
 
         # Skip LLM for good moves — no need to explain what's not wrong.
         # In the opening, engine eval at shallow depth is unreliable.
+        # Same terminal-move exception as the coaching path above, applied here too so
+        # the two paths cannot disagree about whether a won game gets a word.
         move_number = int(fen_before.split()[-1]) if fen_before.split() else 1
-        if move_number <= 6 and eval_drop <= 150:
+        ends_game = _move_ends_game(fen_before, user_move)
+        if not ends_game and move_number <= 6 and eval_drop <= 150:
             _trace(
                 "eval_skip_llm",
                 f"Opening move (move {move_number}, drop {eval_drop}cp) — skipping LLM feedback",
@@ -836,7 +875,7 @@ class Coach:
                 feedback="",
                 _result_after=result_after,
             )
-        if eval_drop <= 50:
+        if not ends_game and eval_drop <= 50:
             _trace(
                 "eval_skip_llm",
                 f"Good move (drop {eval_drop}cp) — skipping LLM feedback",
