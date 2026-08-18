@@ -2019,3 +2019,54 @@ Randomness feeds the deterministic suite; it never becomes part of measurement.
 the test of this), that is evidence for inverting the default — allow only board claims
 we supplied — because that approach is indifferent to how the sentence is written. That
 option is already logged above.
+
+### The harness was not testing the coach — 2026-08-18
+
+Full write-up: `docs/coach-report-card.md`, "The harness was not testing the coach".
+Ledger rows 47-49.
+
+The report-card harness never called `Coach`. It rebuilt the middle of the pipeline, so
+the shipping rule that keeps the coach silent on good moves was never on its path: it
+coached all 44 student moves where the product coaches 17. Third drift of the same root
+cause, after guidance selection (patched by hand-mirroring) and output verification
+(absent until 2026-08-14).
+
+**Fixed.** The harness calls `Coach.evaluate_move` and takes the prompt and generation
+time from the debug callback the coach already emitted; the engine reports come back on
+the result. ~40 lines and 6 imports deleted.
+
+**Standing rule adopted: everything runs shipping behaviour, always.** The only
+variable is how many games — report card is one fixed game, judged; harvesting is more
+games, deterministic checks only. A "force commentary" harvesting mode was considered
+and **rejected**: a defect on a turn that never ships is not worth fixing.
+
+**Retractions.** Three reports quoted defects that were harness artifacts: the
+byte-identical plies 74/78 (both 0cp, never shipped), "43 of 44 turns get full-length
+commentary", and `lesson_concentration_rate` measured over turns most of which never
+ship. What survives as real: plies 56 and 58 both ship (58cp, 60cp) and deliver the
+same lesson back to back.
+
+**Next, in priority order.**
+
+1. **A game-ending move must always speak.** SMALL. `Ra8#` is checkmate with a 0cp
+   drop, so the skip rule suppresses it and the student who just won hears nothing.
+   This also reframes ledger row 42: the mate-labelling defect only existed because the
+   harness forced commentary on a good move. The composed fallback already has the mate
+   branch to support it. Consider whether stalemate and draws deserve the same.
+
+2. **Re-baseline the score series.** Per-turn metrics over 44 forced turns are not
+   comparable with ~17 real ones, so v31 starts a new series. Decide whether
+   `lesson_concentration_rate` and `recycled_phrase_rate` should be recomputed over
+   shipping turns only (they now are, by construction) and note the discontinuity in
+   the progression table.
+
+3. **Phase coverage gets thinner.** With ~17 coached turns, and the curated positions
+   now mostly silent (they are good moves by construction), a run gives the reviewer
+   much less endgame to look at. Options: choose curated positions where the student's
+   move is a genuine MISTAKE so they exercise the coach, or add a second game. Do not
+   solve it by faking commentary.
+
+4. **The remaining real repetition**: plies 56 and 58 ship and repeat one lesson. The
+   judge's SMALL stream fix (block reuse of a recent closing cue) still applies, but
+   the evidence for it is now one instance rather than a pattern — re-measure on a
+   shipping-behaviour run before building it.

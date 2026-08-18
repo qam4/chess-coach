@@ -41,25 +41,15 @@ import chess
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from chess_coach.cli import _resolve_engine_path, load_config  # noqa: E402
+from chess_coach.coach import Coach  # noqa: E402
 from chess_coach.coaching_phrases import build_move_menu, uci_to_san  # noqa: E402
-from chess_coach.coaching_templates import generate_move_coaching  # noqa: E402
 from chess_coach.engine import CoachingEngine  # noqa: E402
 from chess_coach.eval.coach_review import ReviewTurn, aggregate_review, build_coach_review_prompt  # noqa: E402
 from chess_coach.eval.game_coaching import TurnRecord, play_game, student_moves  # noqa: E402
 from chess_coach.llm import create_provider  # noqa: E402
 from chess_coach.llm.ollama import OllamaProvider  # noqa: E402
 from chess_coach.pedagogy.features import phase_of_board  # noqa: E402
-from chess_coach.pedagogy.guard import guard_entries  # noqa: E402
-from chess_coach.pedagogy.instantiate import feature_facts  # noqa: E402
-from chess_coach.pedagogy.resource import KnowledgeResource, default_resource_path, load_resource  # noqa: E402
-from chess_coach.pedagogy.selector import guidance_for_position  # noqa: E402
-from chess_coach.pedagogy.theme_map import theme_features  # noqa: E402
-from chess_coach.prompts import (  # noqa: E402
-    build_rich_move_evaluation_prompt,
-    compose_safe_move_feedback,
-    move_feedback_max_tokens,
-)
-from chess_coach.verify import check_coaching_fidelity, generate_verified  # noqa: E402
+from chess_coach.verify import check_coaching_fidelity  # noqa: E402
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -82,57 +72,57 @@ def _build_engine(engine_cfg: dict, coaching_timeout: float) -> CoachingEngine: 
     return CoachingEngine(path=path, args=args, coaching_timeout=coaching_timeout, ping_timeout=5.0)
 
 
-def _coach_turn(oracle, model, resource, ply, fen, move, *, level, depth, multipv, guidance_max):  # type: ignore[no-untyped-def]
-    """Coach one student move with the shipping config; return a ReviewTurn."""
-    comparison = oracle.get_comparison_report(fen, move, depth=depth)
-    pos_report = oracle.get_position_report(fen, multipv=multipv, depth=depth)
-    # Mirror Coach._select_guidance exactly, or the report card grades a
-    # configuration that does not ship. Both biases matter: the recommended
-    # move's theme, and preferring entries we can instantiate with a board fact
-    # (without the latter, only a third of selected entries carried a fact).
-    facts = feature_facts(pos_report)
-    preferred: frozenset[str] = frozenset()
-    if pos_report.top_lines and pos_report.top_lines[0].theme:
-        preferred = theme_features(pos_report.top_lines[0].theme)
-    guidance = guidance_for_position(
-        resource,
-        pos_report,
-        level,
-        guidance_max,
-        preferred_features=preferred,
-        fact_features=frozenset(facts),
-    )
-    prompt = build_rich_move_evaluation_prompt(comparison, level=level, guidance=guidance, guidance_facts=facts)
+def _coach_turn(coach, ply, fen, move):  # type: ignore[no-untyped-def]
+    """Coach one student move by calling the SHIPPING coach; return a ReviewTurn.
+
+    This used to rebuild the middle of the coaching pipeline — fetch the reports,
+    select guidance, build the prompt, call the model — and it drifted from the
+    product three times: guidance selection was mirrored by hand, output
+    verification was missing entirely, and the rule that keeps the coach SILENT on
+    good moves was absent, which manufactured a repetition defect no student could
+    ever see and cost three rounds of chasing it.
+
+    So it calls ``Coach.evaluate_move``. The prompt and the generation time come
+    from the debug callback the coach already emits; the engine reports come back
+    attached to the result, so nothing is re-run and nothing is reconstructed.
+    Whatever the product does — including saying nothing at all — is what gets
+    reviewed.
+    """
+    captured: dict[str, object] = {}
+
+    def on_debug(step) -> None:  # type: ignore[no-untyped-def]
+        if step.step == "eval_llm_start":
+            captured["prompt"] = step.detail.get("llm_prompt", "")
+        elif step.step == "eval_llm_done":
+            captured["latency"] = step.elapsed_s
+        elif step.step == "eval_verify_fallback":
+            print(f"  ply {ply}: {step.message}")
+
     t0 = time.monotonic()
-    # Verify the finished text against the board before accepting it, exactly as
-    # the shipping Coach does — via the SAME helper, so the report card cannot
-    # grade a configuration that does not ship. Without this the harness measured
-    # a coach with no output verification while the product had it.
-    fallbacks: list[str] = []
-    text = generate_verified(
-        lambda: model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0),
-        fen,
-        lambda: compose_safe_move_feedback(comparison) or generate_move_coaching(comparison, level=level),
-        played_uci=move,
-        on_fallback=lambda bad: fallbacks.append("; ".join(f"{v.kind}: {v.detail}" for v in bad)),
-    )
-    latency = time.monotonic() - t0
-    for why in fallbacks:
-        print(f"  ply {ply}: every attempt contradicted the board ({why}) — sent composed text instead")
-    menu = build_move_menu(pos_report)
-    fid = Counter(v.kind for v in check_coaching_fidelity(text, pos_report, menu))
+    evaluation = coach.evaluate_move(fen, move, on_debug=on_debug)
+    wall = time.monotonic() - t0
+
+    comparison = evaluation._comparison
+    pos_report = evaluation._position_report
+    text = evaluation.feedback
+    fid: Counter[str] = Counter()
+    if text.strip() and pos_report is not None:
+        menu = build_move_menu(pos_report)
+        fid = Counter(v.kind for v in check_coaching_fidelity(text, pos_report, menu))
     return ReviewTurn(
         ply=ply,
         phase=phase_of_board(chess.Board(fen)),
         fen_before=fen,
         student_move_san=uci_to_san(fen, move),
-        best_move_san=uci_to_san(fen, comparison.best_move),
-        classification=comparison.classification,
-        eval_drop_cp=comparison.eval_drop_cp,
+        best_move_san=uci_to_san(fen, comparison.best_move) if comparison else "",
+        classification=evaluation.classification,
+        eval_drop_cp=evaluation.eval_drop_cp,
         coach_feedback=text,
-        latency_s=latency,
+        # The LLM generation time when there was one; otherwise the wall time of a
+        # turn the coach answered without a model call (which is ~0 and honest).
+        latency_s=float(captured.get("latency", wall)),  # type: ignore[arg-type]
         fidelity_kinds=dict(fid),
-        prompt=prompt,
+        prompt=str(captured.get("prompt", "")),
     )
 
 
@@ -208,13 +198,24 @@ def main() -> None:
         print(f"FATAL: {args.model} not reachable/loaded at {args.base_url} (reachable={reachable}, found={found})")
         sys.exit(1)
 
-    resource = load_resource(default_resource_path())
-    admitted, _ = guard_entries(resource.entries, engine=None)
-    resource = KnowledgeResource(
-        entries=tuple(admitted),
-        feature_vocab=resource.feature_vocab,
-        eco_vocab=resource.eco_vocab,
-        levels=resource.levels,
+    # The coach under review: the real one, on the full-strength oracle engine, with
+    # the shipping knobs from config. It loads and guards the pedagogy resource and
+    # selects guidance itself — the harness no longer mirrors any of that.
+    coaching_cfg = config.get("coaching", {})
+    coach = Coach(
+        engine=oracle,
+        llm=model,
+        depth=depth,
+        coaching_depth=depth,
+        top_moves=args.multipv,
+        level=args.level,
+        max_tokens=config.get("llm", {}).get("max_tokens", 512),
+        temperature=0.0,  # deterministic, so a run is a clean before/after
+        template_only=coaching_cfg.get("template_only", False),
+        guidance=coaching_cfg.get("guidance", True),
+        guidance_max=args.guidance_max,
+        constrain_moves=coaching_cfg.get("constrain_moves", True),
+        verify_output=coaching_cfg.get("verify_output", True),
     )
 
     def move_fn(fen: str, elo: int) -> str:
@@ -248,22 +249,10 @@ def main() -> None:
         print(f"  game: {traj.result}, {len(moves)} student moves; coaching each...")
         for ply, fen, move in moves:
             try:
-                turns.append(
-                    _coach_turn(
-                        oracle,
-                        model,
-                        resource,
-                        ply,
-                        fen,
-                        move,
-                        level=args.level,
-                        depth=depth,
-                        multipv=args.multipv,
-                        guidance_max=args.guidance_max,
-                    )
-                )
+                turns.append(_coach_turn(coach, ply, fen, move))
                 last = turns[-1]
-                print(f"  ply {ply}: {last.student_move_san} ({last.classification}, {last.latency_s:.1f}s)")
+                said = "silent" if not last.coach_feedback.strip() else f"{last.latency_s:.1f}s"
+                print(f"  ply {ply}: {last.student_move_san} ({last.classification}, {said})")
             except Exception as e:  # noqa: BLE001
                 print(f"  ply {ply}: SKIP ({e})")
             # An explicit, labelled progress line for kiro-monitor. Without one it
@@ -278,20 +267,7 @@ def main() -> None:
             print("Coaching curated endgame/tactic positions for phase coverage...")
             for i, (fen, move) in enumerate(CURATED):
                 try:
-                    turns.append(
-                        _coach_turn(
-                            oracle,
-                            model,
-                            resource,
-                            1000 + i,
-                            fen,
-                            move,
-                            level=args.level,
-                            depth=depth,
-                            multipv=args.multipv,
-                            guidance_max=args.guidance_max,
-                        )
-                    )
+                    turns.append(_coach_turn(coach, 1000 + i, fen, move))
                     print(
                         f"  curated {i}: {turns[-1].student_move_san} ({turns[-1].phase}, {turns[-1].latency_s:.1f}s)"
                     )

@@ -79,6 +79,18 @@ class MoveEvaluation:
     """Best next move for the user (UCI notation), extracted from engine PV."""
     _result_after: typing.Any = field(default=None, repr=False)
     """Engine AnalysisResult for the position after the user's move (internal)."""
+    _comparison: typing.Any = field(default=None, repr=False)
+    """The ``ComparisonReport`` this evaluation was built from (internal).
+
+    Exposed so the eval harness can report the engine's best move, phase and
+    eval-drop WITHOUT re-running the comparison or rebuilding the coaching path.
+    It reconstructed that path instead, and drifted from it three times: it
+    mirrored guidance selection by hand, it missed output verification entirely,
+    and it missed the rule that keeps the coach silent on good moves — which
+    produced a repetition defect that no student could ever see.
+    """
+    _position_report: typing.Any = field(default=None, repr=False)
+    """The ``PositionReport`` used for guidance/menu, when one was fetched (internal)."""
 
 
 @dataclass
@@ -643,6 +655,7 @@ class Coach:
                     eval_after_cp=report.user_eval_cp,
                     eval_drop_cp=report.eval_drop_cp,
                     feedback="",
+                    _comparison=report,
                 )
             if report.eval_drop_cp <= 50:
                 _trace(
@@ -656,10 +669,12 @@ class Coach:
                     eval_after_cp=report.user_eval_cp,
                     eval_drop_cp=report.eval_drop_cp,
                     feedback="",
+                    _comparison=report,
                 )
 
             guidance = None
             guidance_facts: dict[str, str] | None = None
+            pos_report = None
             if self.guidance and self._resource is not None:
                 from chess_coach.pedagogy.instantiate import feature_facts
 
@@ -723,6 +738,8 @@ class Coach:
                 eval_after_cp=report.user_eval_cp,
                 eval_drop_cp=report.eval_drop_cp,
                 feedback=feedback,
+                _comparison=report,
+                _position_report=pos_report,
             )
 
         # ----- UCI fallback path (existing two-analysis flow) -----

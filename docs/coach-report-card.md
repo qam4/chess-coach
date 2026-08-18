@@ -64,6 +64,9 @@ our own measurement rather than the coach. Detail for each is further down.
 | 42 | (v29, rubric v2) The gate fired on two classes **already on the backlog since v24/v26**, not a new one: mate called "a check" (ply 1003) and intent the coach cannot know (ply 38, "aimed to develop your king's bishop" with no bishop on the board) | Terminal-move check added, gating the send path, plus a mate branch in the composed fallback | Both landed. Terminal check catches ply 1003 in **all four** stored runs; intent check catches ply 38 in all four. Zero false positives over ~176 turns after one was found and fixed | kept |
 | 43 | (our finding) Repetition regressed while truth improved: concentration 50% -> 57%, recycled 15% -> 17%, Stream Behaviour 4 -> 3, plies 74/78 word-for-word identical and 64 a near-copy | **next** — the judge's SMALL stream fix, which it predicts takes concentration to ~30% | — | open |
 | 45 | (v30) Both new checks held: zero gating violations left in the shipped text, ply 1003 now reads "That's checkmate — Ra8# ends the game" and ply 38 no longer invents a bishop | Terminal + intent checks | Fallbacks 3 -> 5, as predicted before the run. Ungated 5.05 -> 5.6; concentration flat at 57% | kept |
+| 47 | (owner question) **The harness never called the coach.** It rebuilt the pipeline, so the shipping rule that keeps the coach SILENT on good moves was never on its path — it coached all 44 turns where the product coaches 17 | Harness now calls `Coach.evaluate_move`, taking prompt/latency from the debug callback and the engine reports from the result. ~40 lines and 6 imports deleted | **Retracts three reports.** The "byte-identical plies 74/78" defect is on 0cp turns no student sees; "43 of 44 turns get commentary" describes the harness; concentration is computed over turns that never ship. Third drift of the same root cause | kept |
+| 48 | (fell out of 47) **The coach is silent on checkmate.** `Ra8#` has a 0cp drop, so the skip rule suppresses it entirely | **next** — a game-ending move must always speak | — | open |
+| 49 | (fell out of 47) The judge credited the silence unprompted — "restraint on near-best moves is a real virtue and it has it" — a shipped behaviour never once credited before, because the harness hid it | — | — | noted |
 | 46 | (v30, rubric v2) Both survivors were claims about the **opponent's** move — an exemption we created deliberately and forgot. Ply 46 "the opponent plays Bb7+": a real move from a line starting 24.a3, and the student's own c6 blocks the diagonal it checks along. Ply 14 "Nxc4, winning a pawn" when c4 holds a bishop — contradicted two sentences later in the same message | `opponent_reply` check: push the student's move, then verify the reply's legality, its claimed check, and what it captures | Catches both plies in **all five** stored runs — the coach makes these same two errors every time — and fires nowhere else across ~220 turns | kept |
 | 44 | (owner observation) Every report card has replayed **one identical game** — verified byte-identical across v26-v29 — so no check had ever been tried on a second game, and the checks can now REPLACE what a student reads | `scripts/eval_check_breadth.py`: five FIXED games, no randomness, no judge | **Zero false positives and zero leaks across all five.** Four games at 0-6% fallback; one quiet Queen's Gambit at 21%, and all three of its flagged claims verified as **real coach errors** | kept |
 
@@ -1423,3 +1426,86 @@ So: **fixing comes first while the known list is non-empty.** Coverage work is t
 item at a time, and only when it is cheap and answers a specific doubt. Discovery
 findings are logged, not immediately acted on — they join the known list and wait their
 turn.
+
+## The harness was not testing the coach (2026-08-18)
+
+The most expensive finding of the project so far, and it came from the product owner
+asking a plain question: why does the harness make the coach talk on every move when
+the product does not?
+
+### What was wrong
+
+`Coach.evaluate_move` skips the model entirely on good moves — under 50cp drop, and
+under 150cp in the first six moves. **Silence is a shipped feature.** The report-card
+harness never called `Coach` at all: it rebuilt the middle of the pipeline itself
+(fetch reports, select guidance, build prompt, call model, time it), so the skip rules
+were never on its path. It coached all 44 student moves.
+
+That is a *reconstruction* of the coach, not the coach. It drifted three times, each
+found by accident:
+
+1. **Guidance selection** — mirrored by hand, with a comment warning that otherwise
+   "the report card grades a configuration that does not ship".
+2. **Output verification** — absent entirely until 2026-08-14. v27 came close to
+   measuring a coach with no fidelity gate while the product had one.
+3. **The silence rule** — absent, and this one manufactured evidence.
+
+### What it cost
+
+Under shipping rules only **17 of 44** turns get commentary; 27 are silent. So:
+
+- The "plies 74 and 78 are word-for-word identical" defect — quoted in three separate
+  reports to the product owner as a real problem — is on turns with a **0cp drop**.
+  No student would see either. Neither would ply 64, the near-copy.
+- "43 of 44 moves get full-length commentary", a Stream Behaviour complaint worth 10%
+  of the rubric weight, describes the harness, not the product.
+- `lesson_concentration_rate` is computed over all 44 turns, most of which never ship.
+  Recomputed on cues over shipping turns only, the top three cover **21%** of turns
+  against 27% over all 44 — and both are far from the 57% the metric reports, because
+  it counts shared content words rather than cues.
+
+This is ledger row 17 repeating: the reviewer criticising an artifact of our own
+harness, and us acting on it without checking. Three rounds were spent discussing a
+duplicate no student can see.
+
+### The fix, and why it is the right shape
+
+The harness now calls `Coach.evaluate_move`. The prompt and generation time come from
+the debug callback the coach **already emitted**; the `ComparisonReport` and
+`PositionReport` come back attached to the result (`_comparison`, `_position_report`,
+alongside the existing `_result_after` precedent), so nothing is re-run and nothing is
+reconstructed. Roughly forty lines and six imports deleted.
+
+The rule adopted with the product owner: **everything runs shipping behaviour,
+always.** The only variable is how many games.
+
+- **Report card** — one fixed game, shipping behaviour, judged. Measures change.
+- **Defect harvesting** — more games, shipping behaviour, deterministic checks only,
+  no judge. Finds defects.
+
+An earlier proposal of a "force commentary" mode for harvesting was **rejected**, and
+correctly: a defect on a turn that never ships is not worth fixing, and forcing
+commentary manufactures exactly the fake material that produced the phantom duplicate.
+
+### Two findings that fell straight out of it
+
+**The judge credited the silence, unprompted:** *"Silence is correctly calibrated on
+the genuinely fine moves. Plies 0 and 2 (0cp) and ply 1001 (Ra5+, 6cp) are not worth
+interrupting a student for. Restraint on near-best moves is a real virtue and it has
+it."* That behaviour has shipped for the entire project and had never once been
+credited, because the harness hid it.
+
+**And a real product bug: the coach is SILENT on checkmate.** The curated `Ra8#`
+position produces no comment at all, because mate has a 0cp drop and the skip rule
+sees only the number. Which reframes the previous round entirely — the mate-labelling
+defect (the reviewer's "decisive item", ledger row 42) **only ever existed because the
+harness forced commentary on a good move.** In production the coach never said
+anything false about mate; it said nothing. Both are wrong, and silence is arguably
+worse: a student who has just won gets no acknowledgement the game is over. The
+terminal-label check still earns its place — it stops a falsehood when the coach *does*
+speak — but the real fix is the skip rule.
+
+### Consequence for the numbers
+
+The score series changes basis: per-turn metrics measured over 44 forced turns are not
+comparable with ~17 real ones. v31 onward is a new series, and the ledger says so.
