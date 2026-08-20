@@ -69,7 +69,12 @@ our own measurement rather than the coach. Detail for each is further down.
 | 49 | (fell out of 47) The judge credited the silence unprompted — "restraint on near-best moves is a real virtue and it has it" — a shipped behaviour never once credited before, because the harness hid it | — | — | noted |
 | 50 | **v31 — first run measuring what actually ships.** The gate did NOT fire for the first time in five runs | Nothing new: this is v30's coach, measured honestly | **2/10 -> 5.7/10.** Every category up. Concentration **57% -> 18%**, recycled phrasing **16% -> 4%**, fidelity violations 3 -> 1, all with no change to the coach — the repetition problem was mostly the harness | kept |
 | 51 | (v31, our finding) **Two real mistakes get no comment at all**: ply 6 `Ng5` (91cp) and ply 8 `b3` (138cp) are silent, because the opening rule suppresses anything under 150cp in the first six moves — and `Ng5` is the move the reviewer has repeatedly blamed for losing a knight later | **next** | — | open |
-| 52 | (v31, rubric v2) "Fidelity is one flagged claim from capping the whole score at 2 — the margin is thin, not comfortable." Its top recommendation: stop gating speech on eval drop, gate it on whether a teachable engine-checkable feature exists (MEDIUM) | **next** | — | open |
+| 52 | (v31, rubric v2) "Fidelity is one flagged claim from capping the whole score at 2 — the margin is thin, not comfortable." Its top recommendation: stop gating speech on eval drop, gate it on whether a teachable engine-checkable feature exists (MEDIUM) | Measured the candidate detectors before building them | **Rejected.** No free board signal recovers the silenced turns: `critical_moment` catches 1 wanted turn at the cost of 12 unwanted; loose-piece and material-winning-capture fire 0/6 and 0/5 wanted; ply 6 is invisible to all of them | closed — measured and rejected |
+| 53 | (our finding, retraction of row 51) The 150cp opening leniency is **not** arbitrary or obsolete. `0d0d664` added it for BUG-008: at depth 8 the engine scores book moves as mistakes. Still true, and worse than recorded — Ruy Lopez Morphy `...a6` = 110cp, Sicilian `1...c5` = 109cp, both "mistake", while the genuinely bad `1.f3` = 52cp | Nothing — the proposed change (150 -> 50) would have the coach criticise the Sicilian | **Proposal withdrawn.** Book exemption also fails: ECO names bad openings (Damiano, Grob, Barnes, Borg all `is_book_move=True`), and an eval cap cannot separate them — sound and bad populations overlap 52..110 at depth 8 and 65..114 at depth 12 | closed — keep the rule |
+| 54 | (our finding) Depth sweep, all 44 v31 turns at depths 8/10/12/14: speak/silence decision **never** changed; label changed 5/44; recommended best move changed 10/44 (ply 4 gives four different moves at four depths). Instability tracks **concreteness**, not phase — quiet 22.9cp mean swing vs concrete 3.6cp | Nothing yet | Reassuring at the time, and **void** — see row 56. Self-consistency is not correctness | superseded |
+| 55 | (our finding, retraction of the row-54 reading) I retracted `Ng5` as "not a mistake" because Blunder's own deeper search kept lowering it (91 -> 24). Stockfish 18 depth 22 says **115cp**. Blunder moved *away* from the truth with depth | Nothing — this was a reasoning error on our side | **Retraction retracted.** `Ng5` is a real mistake and the reviewer was right about it all along. Conversely `b3` (138cp) is only 54cp by Stockfish, so it is *not* a mistake. Both halves of row 51 are dead, for opposite reasons | closed |
+| 56 | (our finding) **Blunder vs Stockfish 18 on all 44 turns.** Our label disagrees with the reference on **20 of 44**. Disagreement concentrates where we talk: on the 18 turns the coach spoke, mean absolute error 139cp, signed **+122cp**, best-move agreement **4/18**. At least 7 of those 18 criticised a move Stockfish scores good or near-good | Nothing yet — diagnosis first | **The `equal`-tier work (row ~44) fixed the coach, not the cause.** We stopped the model inventing faults on good moves; the *input* still said they were bad moves | open — top item |
+| 57 | (our finding) Ruled out our own plumbing and depth as causes. Coach protocol vs plain UCI at the same depth: signed **−2.6cp** (no systematic misread; 22cp of multipv nondeterminism). Depth 8 -> 16 buys **one** extra matching label (24/43 -> 25/43) and moves Blunder *closer* to the reference on 18 positions, *further* on 20 | Nothing — hands off to Blunder | Residual is a genuine **static-evaluation** disagreement: quiet +92cp signed at depth 16, concrete +18cp. No depth convergence = leaf eval, not horizon. King-move sub-hypothesis tested and **rejected** (endgame king moves are the best case, +18 vs +69) | open — Blunder-side |
 | 46 | (v30, rubric v2) Both survivors were claims about the **opponent's** move — an exemption we created deliberately and forgot. Ply 46 "the opponent plays Bb7+": a real move from a line starting 24.a3, and the student's own c6 blocks the diagonal it checks along. Ply 14 "Nxc4, winning a pawn" when c4 holds a bishop — contradicted two sentences later in the same message | `opponent_reply` check: push the student's move, then verify the reply's legality, its claimed check, and what it captures | Catches both plies in **all five** stored runs — the coach makes these same two errors every time — and fires nowhere else across ~220 turns | kept |
 | 44 | (owner observation) Every report card has replayed **one identical game** — verified byte-identical across v26-v29 — so no check had ever been tried on a second game, and the checks can now REPLACE what a student reads | `scripts/eval_check_breadth.py`: five FIXED games, no randomness, no judge | **Zero false positives and zero leaks across all five.** Four games at 0-6% fallback; one quiet Queen's Gambit at 21%, and all three of its flagged claims verified as **real coach errors** | kept |
 
@@ -1568,3 +1573,143 @@ feature exists."* Cost MEDIUM — a small detector set over what the composer al
 computes (king not castled by move ~10, a loose piece, a hanging piece).
 
 Raw review: `docs/audit/rejudge-v31-v2.md`.
+
+## The engine's numbers are not the truth (2026-08-20)
+
+This started as "why do two real mistakes get no comment" and ended somewhere else
+entirely. The short version: the eval drop we build coaching on disagrees with a strong
+reference on **20 of 44 turns**, and the disagreement is worst on exactly the turns we
+choose to speak.
+
+### What we set out to do, and why it dead-ended
+
+v31's top item was to stop gating speech on the eval drop and gate it on whether there is
+something teachable. Before building the detectors, we measured them against the two
+turns they were supposed to catch (ply 6 `Ng5` 91cp, ply 8 `b3` 138cp, both silenced by
+the opening rule):
+
+| signal | fires on silent turns | wanted | unwanted |
+|---|---|---|---|
+| `critical_moment` | 13 | 1 | 12 |
+| our piece loose | 6 | 0 | 6 |
+| opponent wins material | 5 | 0 | 5 |
+| uncastled, king central | 4 | 0 | 4 |
+| gives check | 2 | 0 | 2 |
+| `missed_tactics` | 1 | 0 | 1 |
+| `refutation_line` | 0 | 0 | 0 |
+
+Ply 6 is invisible to every one of them. Wiring `critical_moment` in would have taken us
+from 18 coached turns to 30 and thrown away the silence that earned v31 its score. The
+whole idea is rejected on measurement — see ledger row 52.
+
+### The opening threshold is justified, not obsolete
+
+`0d0d664` added the 150cp opening leniency for BUG-008. That reason still holds, and is
+worse than the commit recorded. At depth 8:
+
+| sound book move | drop | | bad but named | drop |
+|---|---|---|---|---|
+| Ruy Lopez Morphy `...a6` | 110 "mistake" | | Barnes `1.f3` | 52 |
+| Sicilian `1...c5` | 109 "mistake" | | Grob `1.g4` | 64 |
+| Budapest `...e5` | 87 | | Damiano `...f6` | 136 |
+| English `1.c4` | 67 | | Borg `1...g5` | 129 |
+
+Our engine rates the Sicilian as worse than `1.f3`. Lowering the threshold to 50 would
+have the coach criticise a student for playing the Sicilian. Proposal withdrawn.
+
+`is_book_move()` — added by the same commit "for future use" — cannot rescue it either.
+The ECO set names bad openings: Damiano, Grob, Barnes, Borg, Ware and the Irish Gambit
+all return `True`. And no eval cap separates the two populations, which overlap 52..110
+at depth 8 and 65..114 at depth 12.
+
+### Concreteness, not phase, predicts whether we can trust a number
+
+Two independent experiments now agree. Depth stability across depths 8/10/12/14:
+
+| group | n | mean swing | max |
+|---|---|---|---|
+| concrete (capture, check either way, or a detected tactic) | 24 | **3.6 cp** | 42 |
+| quiet | 20 | **22.9 cp** | 96 |
+
+And against Stockfish 18 at depth 22, signed error: concrete **+2.8cp**, quiet
+**+76.4cp**. The opening looked special only because opening moves are quiet. This game's
+endgame was a forcing king-and-pawn race, which is why it was the *most* stable phase.
+
+### The measurement that matters
+
+Stockfish 18 (winget, official release), depth 22, all 44 turns, drop computed as two
+White-relative analyses so there is no sign guesswork.
+
+| group | n | mean abs error | median | best-move agreement |
+|---|---|---|---|---|
+| turns the coach **spoke** on | 18 | **139 cp** | 100 | **4 / 18** |
+| turns it stayed silent on | 26 | 35 cp | 11 | 13 / 26 |
+
+Signed error on the spoken turns is **+122cp**: Blunder overstates the cost by more than
+a pawn on average, on precisely the turns we act on. This is a selection effect and it is
+vicious — we speak *because* the drop is large, and large drops are disproportionately
+the engine's own errors. The speak rule is a filter that finds false alarms.
+
+Seven of the eighteen spoken turns criticised a move the reference scores good or nearly
+good:
+
+| ply | move | we said | Stockfish |
+|---|---|---|---|
+| 1000 | `e5` | 323 — blunder | **5 — good** |
+| 52 | `Nc3` | 184 — blunder | **2 — good** |
+| 42 | `Rg1` | 166 — blunder | **8 — good** |
+| 60 | `Kf3` | 180 — blunder | **20 — good** |
+| 40 | `Kf3` | 143 — blunder | **22 — good** |
+| 34 | `Ke2` | 413 — blunder | 72 — inaccuracy |
+| 22 | `Bb2` | 66 — inaccuracy | **0 — good** |
+
+And plies 62, 72, 74, 78 cost 154, 132, 93 and 181cp by the reference; we scored them 17,
+38, 0, 0 and said nothing.
+
+**This reframes the `equal`-tier work.** We added a tier that withholds the alternative on
+near-equal moves precisely to stop the model manufacturing fault, because an external
+audit called that harmful rather than sloppy. That fixed the coach's behaviour. It did not
+fix the cause: the engine was telling us these were bad moves.
+
+### It is not our plumbing, and it is not depth
+
+| configuration | labels matching Stockfish |
+|---|---|
+| coach protocol, depth 8 (shipping) | 23 / 43 |
+| plain UCI, depth 8 | 24 / 43 |
+| plain UCI, depth 16 | 25 / 43 |
+
+- **Plumbing:** coach protocol vs plain UCI at the same depth differs by signed −2.6cp.
+  No systematic misread. (22cp of absolute scatter, and a different best move 17/43 times,
+  from running multipv — nondeterminism, not a bug.)
+- **Depth:** doubling it buys one label. Depth 16 moved Blunder *closer* to the reference
+  on 18 positions and *further* on 20. A coin flip. No convergence with depth points at
+  the **leaf evaluation**, not the horizon.
+- **Rejected sub-hypothesis:** king moves. Elevated overall (+76 vs +43) but endgame king
+  moves are the *best* case (+18 vs +69) and the largest single error is a bishop move.
+
+### What this does and does not touch
+
+**Unaffected:** the fidelity gate. Every gating check reads the board — placement,
+ownership, legality, mate, reachability — and none consults the eval. The coach's factual
+claims are still checked against truth.
+
+**Compromised:** judgement. Which move to criticise, how much it cost, and which move to
+recommend instead. Best-move agreement on spoken turns is 4/18.
+
+**Retracted:** the eval-drop columns in this document are Blunder-depth-8 numbers, across
+thirty-one runs. Roughly half the labels would read differently against a strong
+reference. Any conclusion resting on drop magnitude needs re-reading — including our own
+`Ng5`/`b3` claims, twice over (rows 51, 55).
+
+### The fairness caveat, stated plainly
+
+Blunder at depth 8 versus Stockfish at depth 22 is **not** a fair engine comparison, and
+nothing here should be read as one. It is a measurement of *our shipping configuration
+against the best available proxy for truth*, which is the question chess-coach needs
+answered. Whether Blunder is a good engine at equal resources is a different question,
+needs equal-node or equal-time controls, and belongs in Blunder's repo. Brief:
+`docs/blunder-eval-brief.md`.
+
+Raw data: `output/bias_v31_stockfish.json`, `output/depth_sweep_v31.json`,
+`output/fair_v31_abcd.json`.

@@ -10,6 +10,82 @@ context to pick up later. Distinct from:
 
 This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
+## TOP — the engine's numbers are not the truth (2026-08-20)
+
+Measured, not suspected. Blunder at depth 8 (our shipping config) disagrees with
+Stockfish 18 at depth 22 on **20 of 44** turns, and the disagreement is worst
+exactly where the coach speaks: mean absolute error **139cp** on those 18 turns,
+signed **+122cp**, best-move agreement **4/18**. Seven of the eighteen criticised
+a move the reference scores good or nearly good.
+
+Ruled out: our plumbing (coach protocol vs plain UCI differs by −2.6cp signed) and
+depth (8 -> 16 buys one label out of 43, and moves *away* from the reference as
+often as toward it). The residual is a static-evaluation disagreement confined to
+**quiet** positions — signed +92cp quiet vs +18cp concrete at depth 16.
+
+Full write-up: `docs/coach-report-card.md`, "The engine's numbers are not the
+truth". Ledger rows 52–57. Data in `output/bias_v31_stockfish.json`,
+`output/fair_v31_abcd.json`, `output/depth_sweep_v31.json`.
+
+### 1. Stop asserting magnitude — NEXT, small, do this first
+
+Any coach sentence that grades a move (`blunder` vs `inaccuracy`) or quotes a cost
+claims precision we have now measured and do not have. Softening this is cheap,
+reduces harm immediately, and is correct regardless of how the Blunder question
+resolves. Needs its own commit and its own re-judge, so it is not bundled with the
+documentation of the finding.
+
+Note the interaction: `EQUAL_MAX_DROP_CP = 25` and the `equal` tier were added to
+stop the model manufacturing fault on good moves. That fixed the coach's behaviour
+while the *input* still said the moves were bad. Widening that band is the obvious
+lever, but picking a number by hand is what got us here — decide it from the
+Blunder answer, not by guessing.
+
+### 2. Hand the evaluation question to Blunder — brief written
+
+`docs/blunder-eval-brief.md`. Leading hypothesis, unverified: our binary is
+hand-crafted-eval only (no `EvalType` option, no `.nnue` weights in the tree) while
+the 2500 figure may have been measured with NNUE. Cheap to check and would reduce
+this to a configuration fix.
+
+The brief is explicit that depth 8 vs depth 22 is **not** a fair engine comparison
+and specifies the controls a real evaluation needs: equal nodes, equal time, and a
+static-eval-only comparison, which is the most diagnostic since the error does not
+shrink with depth.
+
+### 3. Blocked on 2 — structural options
+
+- **Stockfish as a confirming second opinion** on the ~18 turns per game where we
+  are about to speak, with Blunder keeping the structured features it is good at
+  (tactics, themes, phase, position report) that Stockfish does not provide.
+  Depth 22 costs 15s per position, far too slow; a 1s movetime still puts Stockfish
+  far above Blunder at depth 8. Makes Stockfish a runtime dependency — product
+  decision.
+- **Point at an NNUE-enabled Blunder build** if one exists. Cheapest possible fix
+  if the hypothesis holds.
+
+### 4. Re-run the breadth sweep with the reference
+
+Check the 45% disagreement is not a property of this one game. The five fixed games
+already exist in `scripts/eval_check_breadth.py`; the reference harness now exists
+too. Moderate cost.
+
+### Closed by measurement, do not reopen
+
+- **Gate speech on a teachable feature instead of the eval drop** (v31's top item,
+  ledger row 52). Every candidate free detector was measured. `critical_moment`
+  catches 1 wanted turn at the cost of 12 unwanted; loose-piece and
+  material-winning-capture fire 0/6 and 0/5 wanted; ply 6 `Ng5` is invisible to all
+  of them. Wiring any of them in would have gone from 18 coached turns to 30 and
+  destroyed the silence that earned v31 its score.
+- **Lower the 150cp opening leniency** (ledger row 53). It exists for BUG-008 and
+  the reason still holds: at depth 8 the Ruy Lopez Morphy Defence scores 110cp and
+  the Sicilian 109cp as "mistakes", while the genuinely bad `1.f3` scores 52cp.
+  Lowering it to 50 would criticise a student for playing the Sicilian. A book
+  exemption fails too — the ECO set names bad openings (Damiano, Grob, Barnes,
+  Borg), and no eval cap separates sound from bad because the populations overlap
+  52..110 at depth 8.
+
 ## Recently shipped
 
 - **Grounded move advice — SHIPPED (2026-07-28).** Spec
