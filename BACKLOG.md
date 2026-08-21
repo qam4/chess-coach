@@ -41,7 +41,42 @@ while the *input* still said the moves were bad. Widening that band is the obvio
 lever, but picking a number by hand is what got us here — decide it from the
 Blunder answer, not by guessing.
 
-### 2. Hand the evaluation question to Blunder — brief written
+### 2. ANSWERED — three problems, two of them Blunder-side wins
+
+A Kiro session in the Blunder repo answered `docs/blunder-eval-brief.md`. Verdict:
+**no Blunder defect.** Follow-up analysis of the paired data then split the
+finding into three separable problems. Full write-up in the report card, "Three
+problems, not one".
+
+- **(a) Units are non-standard and unnormalized — a fact to know, not the
+  explanation.** Source-verified: `PIECE_VALUE_BONUS` pawn = **124 (MG) / 206
+  (EG)**, phase-blended, printed verbatim with no `/100` and no
+  `UCI_NormalizeToPawnValue`. So every cp figure we have recorded is in Blunder
+  units, 1.2–2x conventional, and our 50/100/150 thresholds are tighter than they
+  look. **I initially claimed this explained half the error; it does not** — the
+  per-phase empirical slopes (endgame 0.79, middlegame 1.88, opening 0.76)
+  contradict the source-predicted 2.06/1.24/1.24, and phase-aware conversion is
+  *worse* (60.8) than a flat /2.06 (50.0). A flat divisor helps only by shrinking a
+  positively-biased distribution.
+- **(b) A 50–60cp residual under EVERY conversion — ours to design around.**
+  Expected of a tapered HCE, and as wide as our 50/100 label bands. Label
+  agreement never leaves the 23–25 of 43 band whether raw, flat-calibrated or
+  phase-calibrated. This is why item 1 survives every twist.
+- **(c) No endgame draw knowledge.** No KPK rule, no key squares, no draw-scaling;
+  only repetition and fifty-move. Scaling cannot fix it (+407/2.06 = +198 on a
+  dead draw). **Blunder-side: NNUE**, currently unoptimized, is the natural fix —
+  a learned eval picks up draw structure no hand-written term encodes. Needs a
+  build exposing `EvalType`; our dev binary does not.
+
+Also settled: **latency is not the constraint.** The dev build does ~3M nps and
+reaches depth 15 on that KPK endgame in under 20ms. The bias is a leaf property,
+so more time buys a stabler number, not a truer one. Raising `coaching_depth` is
+permanently dead.
+
+**We are not replacing Blunder.** Stockfish's role is a calibration reference,
+which is what a reference engine is for.
+
+### 3. Old handoff notes — brief written
 
 `docs/blunder-eval-brief.md`. Leading hypothesis, unverified: our binary is
 hand-crafted-eval only (no `EvalType` option, no `.nnue` weights in the tree) while

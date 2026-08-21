@@ -74,6 +74,11 @@ our own measurement rather than the coach. Detail for each is further down.
 | 54 | (our finding) Depth sweep, all 44 v31 turns at depths 8/10/12/14: speak/silence decision **never** changed; label changed 5/44; recommended best move changed 10/44 (ply 4 gives four different moves at four depths). Instability tracks **concreteness**, not phase — quiet 22.9cp mean swing vs concrete 3.6cp | Nothing yet | Reassuring at the time, and **void** — see row 56. Self-consistency is not correctness | superseded |
 | 55 | (our finding, retraction of the row-54 reading) I retracted `Ng5` as "not a mistake" because Blunder's own deeper search kept lowering it (91 -> 24). Stockfish 18 depth 22 says **115cp**. Blunder moved *away* from the truth with depth | Nothing — this was a reasoning error on our side | **Retraction retracted.** `Ng5` is a real mistake and the reviewer was right about it all along. Conversely `b3` (138cp) is only 54cp by Stockfish, so it is *not* a mistake. Both halves of row 51 are dead, for opposite reasons | closed |
 | 56 | (our finding) **Blunder vs Stockfish 18 on all 44 turns.** Our label disagrees with the reference on **20 of 44**. Disagreement concentrates where we talk: on the 18 turns the coach spoke, mean absolute error 139cp, signed **+122cp**, best-move agreement **4/18**. At least 7 of those 18 criticised a move Stockfish scores good or near-good | Nothing yet — diagnosis first | **The `equal`-tier work (row ~44) fixed the coach, not the cause.** We stopped the model inventing faults on good moves; the *input* still said they were bad moves | open — top item |
+| 58 | (Blunder session, answering row 57) **No Blunder defect.** Its HCE has no KPK rule, no key squares, no endgame draw-scaling; only repetition and the fifty-move rule. Static leaf on the drawn KPK position recomputed from source at ≈+230..258. Search makes it *worse* because the passed-pawn rank bonus `{15,36,57,78,99,120}` and the king endgame PSQT (peak ~+199) both grow as the PV walks the pawn up, so every leaf looks more winning | Nothing — diagnosis only, Blunder's tree untouched | Confirmed at **equal nodes** (1M each): Blunder +351 and climbing, Stockfish 0..2. Latency is *not* the constraint — the dev build does ~3M nps and reaches depth 15 on that endgame in under 20ms. "Giving it a second per position produces a stable number, not a truer one." **Kills raising `coaching_depth` permanently** | closed |
+| 59 | (our finding, retraction of a retraction) I told the owner the KPK draw is invisible to static eval in **both** engines, so the fault lay in Blunder's search rather than its leaf eval. Wrong: attempt 1's +2.85 was Stockfish's **classical** eval; its default **NNUE** static eval prints +0.01, final **+0.00** | Nothing | **The original leaf-evaluation framing was right and my walk-back was wrong.** Both the claim and its retraction rested on one unreplicated measurement each — the recurring error on this thread | closed |
+| 60 | (Blunder session, source-verified) **Blunder's reported cp are NOT conventional centipawns and are not normalized at all.** `PIECE_VALUE_BONUS` pawn = **124 (MG) / 206 (EG)** — Stockfish-classical-derived piece values. The taper is `(mg*p + eg*(PHASE_MAX-p))/PHASE_MAX`, so one pawn slides continuously 124 -> 206 by phase. No division, no `/100`, no WDL mapping anywhere on the UCI path (`Search.cpp:441` prints `pvline.score` verbatim); the `tanh(score/400)` in `MCTS.cpp:236` is the MCTS value head and unrelated. No `UCI_NormalizeToPawnValue` equivalent | Nothing — this is a fact to know, not a defect | **All our historical cp figures are in Blunder units, ~1.2–2x conventional.** So our 50/100/150 thresholds are tighter in real terms than they look | closed |
+| 61 | (our finding, **retracting my own row-60 claim from an hour earlier**) I claimed roughly half the quiet-position error was a unit-scale problem, from a single-constant best fit of k=1.91 against the 2.06 implied by the endgame pawn. **The phase-aware test refutes it.** Per-phase empirical slopes are endgame **0.79**, middlegame **1.88**, opening **0.76** against source-predicted 2.06/1.24/1.24 — contradictory and inverted. Phase-aware conversion scores **worse** (60.8 mean error) than a flat /2.06 (50.0) | Nothing | A flat divisor helps only because Blunder's errors are positively biased and dividing any inflated distribution shrinks it toward truth. That is curve-fitting, not calibration, and it will not transfer. **The disagreement is mostly not scale.** Labels barely move under any conversion: 23/43 raw, 24/43 at /2.06, 24/43 phase-aware, 25/43 at flat /1.42 | closed |
+| 62 | (our finding) So "stop grading moves and quoting costs" survives every twist: raw, calibrated, and phase-calibrated all leave a 50–60cp residual against a strong reference, wider than our 50/100 label bands | **next** — backlog item 1 | — | open |
 | 57 | (our finding) Ruled out our own plumbing and depth as causes. Coach protocol vs plain UCI at the same depth: signed **−2.6cp** (no systematic misread; 22cp of multipv nondeterminism). Depth 8 -> 16 buys **one** extra matching label (24/43 -> 25/43) and moves Blunder *closer* to the reference on 18 positions, *further* on 20 | Nothing — hands off to Blunder | Residual is a genuine **static-evaluation** disagreement: quiet +92cp signed at depth 16, concrete +18cp. No depth convergence = leaf eval, not horizon. King-move sub-hypothesis tested and **rejected** (endgame king moves are the best case, +18 vs +69) | open — Blunder-side |
 | 46 | (v30, rubric v2) Both survivors were claims about the **opponent's** move — an exemption we created deliberately and forgot. Ply 46 "the opponent plays Bb7+": a real move from a line starting 24.a3, and the student's own c6 blocks the diagonal it checks along. Ply 14 "Nxc4, winning a pawn" when c4 holds a bishop — contradicted two sentences later in the same message | `opponent_reply` check: push the student's move, then verify the reply's legality, its claimed check, and what it captures | Catches both plies in **all five** stored runs — the coach makes these same two errors every time — and fires nowhere else across ~220 turns | kept |
 | 44 | (owner observation) Every report card has replayed **one identical game** — verified byte-identical across v26-v29 — so no check had ever been tried on a second game, and the checks can now REPLACE what a student reads | `scripts/eval_check_breadth.py`: five FIXED games, no randomness, no judge | **Zero false positives and zero leaks across all five.** Four games at 0-6% fallback; one quiet Queen's Gambit at 21%, and all three of its flagged claims verified as **real coach errors** | kept |
@@ -1727,3 +1732,134 @@ needs equal-node or equal-time controls, and belongs in Blunder's repo. Brief:
 
 Raw data: `output/bias_v31_stockfish.json`, `output/depth_sweep_v31.json`,
 `output/fair_v31_abcd.json`.
+
+## Three problems, not one — and two of them are Blunder-side wins (2026-08-20)
+
+A Kiro session run inside the Blunder repo (`kiro-cli chat` with Blunder as its
+workspace) answered the brief, and a follow-up analysis of the paired data changed the
+diagnosis substantially. The headline from yesterday — "Blunder's evaluation is off" — was
+too coarse. There are three separable problems and only one of them is a limitation we
+have to live with.
+
+### 1. The units really are non-standard — but that is NOT the explanation
+
+Source-verified in a second Blunder session. `PIECE_VALUE_BONUS` pawn values are **124
+(MG) and 206 (EG)**, the Stockfish-classical family. The final score is a phase blend,
+`(mg*p + eg*(PHASE_MAX-p))/PHASE_MAX`, so one pawn slides continuously from 124 to 206.
+Nothing rescales it: `Search.cpp:441` prints `pvline.score` verbatim, there is no `/100`,
+no win-probability mapping, and no `UCI_NormalizeToPawnValue` equivalent. (A
+`tanh(score/400)` exists in `MCTS.cpp:236` but that is the MCTS value head, unrelated.)
+
+So a real consequence: **every centipawn figure we have ever recorded is in Blunder units,
+1.2 to 2x conventional.** Our 50/100/150 thresholds are tighter in real terms than they
+appear.
+
+**But this does not explain the disagreement, and I claimed it did.** I fitted a single
+constant, got k=1.91 against the 2.06 implied by the endgame pawn, and concluded half the
+error was arithmetic. The phase-aware test kills that:
+
+| phase | empirical best-fit k | source-predicted |
+|---|---|---|
+| endgame | **0.79** | 2.06 |
+| middlegame | **1.88** | 1.24 |
+| opening | **0.76** | 1.24 |
+
+The slopes contradict the pawn values and run in the opposite direction. And the
+correction the source actually implies performs *worse* than a flat one:
+
+| conversion | mean abs error | labels matching |
+|---|---|---|
+| raw | 79.3 | 23 / 43 |
+| flat ÷2.06 | **50.0** | 24 / 43 |
+| flat ÷1.42 (best fit) | 59.4 | 25 / 43 |
+| **phase-aware ÷1.24 or ÷2.06** | **60.8** | 24 / 43 |
+
+If this were a unit problem, the source-derived phase conversion would be the best
+available correction. It is the worst. A flat divisor helps only because Blunder's errors
+are positively biased, and dividing any inflated distribution shrinks it toward truth —
+curve-fitting, not calibration, and it will not transfer to new positions.
+
+What survives is the Pearson +0.83 on quiet positions, which is a genuine correlation and
+does say Blunder's judgement broadly tracks the reference there. What does not survive is
+the claim that the residual is a scale artefact.
+
+Note also the inversion on concrete positions: Pearson +0.22 but Spearman **+0.75**. The
+*ordering* is good; a few large magnitude outliers wreck the linear fit.
+
+### 2. A 50–60cp residual — the real limitation, under every conversion
+
+Raw, flat-calibrated and phase-calibrated all leave 50 to 60cp of mean absolute error
+against the reference, and label agreement never moves out of the 23–25 of 43 band. Our
+label bands are 50 and 100cp wide, so no conversion makes the grading trustworthy.
+
+**The action survives every twist in the diagnosis:** stop grading moves and stop quoting
+centipawn costs. Not because the engine is wrong, but because the instrument is coarser
+than the distinctions we were drawing with it.
+
+### 3. Missing endgame draw knowledge — no divisor fixes this
+
+Blunder's HCE has no KPK rule, no key squares or opposition, and no endgame draw-scaling.
+The only draws it knows are repetition and the fifty-move rule. From the source, on
+`8/8/4k3/8/4P3/4K3/8/8 w - - 0 1`:
+
+| term | eg value |
+|---|---|
+| pawn e4: material 206 + PSQT −13 | +193 |
+| kings e3 vs e6, mirror images | 0, cancel |
+| passed +57, isolated −20 | +37 |
+| tempo | +28 |
+| **static leaf** | **≈ +230 to +258** |
+
+And search makes it *worse*, which explains our measured "no convergence with depth". The
+passed-pawn endgame bonus by rank is `{15, 36, 57, 78, 99, 120}` and the king endgame PSQT
+rewards central, advanced kings (peak ~+199). As the PV walks the pawn up and centralises
+the king, both terms grow monotonically, so every leaf looks more winning and minimax
+returns a rising score. Search can only overturn a static verdict by reaching a leaf with a
+different *recognised* value — a capture, a promotion, a repetition. Against correct
+defence no such leaf exists inside the horizon.
+
+Confirmed at **equal nodes** (1M each), which is the fair control: Blunder +351 and
+climbing, Stockfish 0 to 2. And `+407 ÷ 2.06 = +198` — scaling cannot turn a draw into
+zero, so this is a genuine knowledge gap and independent of problem 1.
+
+### Latency is not the constraint, which kills one option permanently
+
+The dev build runs ~3M nps and reaches depth 15 on that endgame in under 20ms. The bias
+lives in the leaf evaluation, so more time buys a *stabler* number, not a truer one.
+Raising `coaching_depth` is dead as an idea — cheaper to know than to discover.
+
+### Correction: my retraction was wrong, the original claim was right
+
+I reported that the KPK draw is invisible to static evaluation in both engines, and
+therefore that the fault lay in Blunder's search rather than its leaf evaluation.
+
+Wrong. Attempt 1's +2.85 was Stockfish's **classical** evaluation. Its default **NNUE**
+static eval prints +0.01, final **+0.00**. So the draw is invisible to Blunder's HCE static
+eval and visible to Stockfish's NNUE static eval, and the original leaf-evaluation framing
+was correct.
+
+Both the claim and its retraction were made on a single unreplicated measurement. That is
+the recurring failure on this thread and it has now produced four reversals
+(`Ng5` twice, `b3`, and this one).
+
+### Where this leaves the engine question
+
+**We are not replacing Blunder.** Stockfish's role here is as a *calibration reference*,
+which is what a reference engine is for. Two of the three problems are tractable on the
+Blunder side and both are already known to its author:
+
+- **normalize the scores** — addresses problem 1, and the ~1.9x we measured is an estimate
+  of the factor
+- **NNUE, currently unoptimized** — the natural fix for problem 3, since a learned
+  evaluation picks up endgame draw structure that no hand-written term encodes. Worth
+  measuring as soon as a build exposes `EvalType`; our dev binary does not.
+
+Problem 2 is ours to design around, and does not need a different engine — it needs us to
+stop asking for a precision the instrument does not have.
+
+Caveats: 20 quiet positions from one game. The k≈1.91 estimate is rough, and its closeness
+to 206/100 is suggestive rather than proof. Correlations on the "spoke" subset are
+depressed by range restriction, since that subset is selected on Blunder's own large drops.
+
+Session logs: `output/blunder_session_attempt1.log` (killed on budget) and
+`~/.kiro-monitor/runs/blunder_eval/output.log` (the answer).
