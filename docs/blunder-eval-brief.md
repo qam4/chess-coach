@@ -3,6 +3,39 @@
 For a Kiro session in the Blunder repo. Written from chess-coach's measurements; the
 question it raises belongs to Blunder.
 
+## Start here: one position, three pieces, off by four pawns
+
+```
+FEN: 8/8/4k3/8/4P3/4K3/8/8 w - - 0 1
+White: Ke3, pawn e4      Black: Ke6      White to move
+```
+
+This is the textbook drawn king-and-pawn endgame. Black's king is directly in front of the
+pawn and holds the key squares; White to move cannot win.
+
+| engine | Kf4 / Kd4 / Kf2 | after `e5` |
+|---|---|---|
+| Stockfish 18, depth 30 | **0.00** | 0.00 |
+| Blunder dev, depth 16 | **+4.07** | 0.00 |
+
+Blunder evaluates a dead draw as winning by four pawns, and it does so at depth 16, so
+search is not the issue. No reference engine is needed to adjudicate this one — it is in
+every endgame primer.
+
+Note the shape of the error: Blunder scores the *pre-move* position at +407 and the
+position after `e5` at 0. That is why chess-coach saw an "eval drop" of 355cp for `e5` and
+told the student they had thrown away a win. The move is fine; the starting evaluation was
+wrong.
+
+If one thing gets looked at, this is it. A plausible mechanism, offered as a guess and
+nothing more: a passed-pawn or king-proximity term with no notion of key squares or the
+KPK drawing structure. Many hand-crafted evaluations carry a special-case KPK rule for
+exactly this reason.
+
+This also matters disproportionately to chess-coach, because plies 62–78 of the game we
+measured, plus the curated position above, are all king-and-pawn endgame — a phase we
+deliberately test coaching on.
+
 ## The claim, scoped honestly
 
 **What we measured:** chess-coach's shipping configuration — Blunder via the `coach
@@ -131,3 +164,33 @@ Blunder depth 16 minus Stockfish depth 22, worst first. These are the positions 
 
 Note ply 1000: an eval drop of 355cp at depth 16 on a move the reference scores at 5cp.
 That one position, if explained, probably explains the class.
+
+## Questions we would like answered
+
+In priority order. Answers of the form "expected behaviour, not a defect" are entirely
+acceptable and in some cases are what we expect.
+
+1. **The KPK position at the top of this brief.** Why +4.07 on a dead draw at depth 16? Is
+   this a known gap, a missing special case, or a mis-scaled term? This is the one with a
+   minimal reproduction and no dependency on any of our other data.
+2. **Is a systematic overestimate on quiet positions expected** for a tapered HCE at
+   Blunder's rating? We now understand that the 2500 figure is HCE at release, so there is
+   no wrong-evaluator explanation. Our working theory is that playing strength and
+   per-position evaluation accuracy are simply different quantities, and that we wrongly
+   assumed the first implied the second. Confirming or rejecting that is the single most
+   useful thing for us.
+3. **The decision-relevant one for chess-coach:** can Blunder supply trustworthy eval
+   *magnitude* on quiet positions at a latency a live coach can afford — roughly under a
+   second per position? If the answer is no, we stop asking for it and stop grading moves
+   or quoting costs, which is a change we can make on our side this week.
+4. **Do the other large disagreements share the KPK cause** or are they independent? See
+   the table of worst cases below. Ply 42 is interesting because it is the one position
+   where depth 16 moved sharply *toward* the reference (166 -> 75 versus 8).
+
+What we are not asking for: a fix, a tuning change, or a commitment. We need to know what
+to expect from the engine, not to have it changed for us.
+
+## Please do not modify anything
+
+This brief is a request for diagnosis. Nothing in the Blunder repo needs to change to
+answer it, and we would rather have the analysis than a patch.
