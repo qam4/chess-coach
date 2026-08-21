@@ -10,6 +10,44 @@ context to pick up later. Distinct from:
 
 This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
+## Division of labour: the engine supplies chess knowledge, not us (2026-08-21)
+
+Agreed with the product owner, and it settles a question that kept resurfacing.
+
+**chess-coach does not add chess logic.** If the information we need is missing or
+untrustworthy, the fix is in the engine. We do not build detectors, we do not
+reimplement SEE, we do not derive board facts to substitute for engine data.
+
+What we do instead, when a field cannot be trusted: **drop it**, record the drop in
+`chess_coach.engine_trust` with a measurable reinstatement criterion, and accept
+that the coach is quieter and less capable until the engine improves.
+
+Explicitly rejected along the way:
+
+- **Gate speech on board-derived detectors** — measured and rejected (ledger 52).
+- **Derive board facts to replace the eval** — tried, and it fails on its own
+  terms: on 13 turns where we criticised a move Stockfish scores good, crude board
+  facts fire on 10, and on the 4 real mistakes we missed they fire on none. Also
+  the wrong shape: it is chess logic in the wrong repo.
+- **Expose SEE from the engine** — more surface area on the same broken
+  foundation. Normalizing the scale fixes the foundation instead.
+
+**Boundary worth keeping clear:** `verify.py` is not chess logic, it is
+verification of the model's output against the board. It checks whether a sentence
+the LLM produced is true. That stays.
+
+### Engine roadmap that unblocks us (Blunder-side, owner's call)
+
+1. **Normalize the score to real centipawns.** Today a pawn is 124 (MG) to 206
+   (EG), phase-tapered, printed raw. This alone makes the magnitude interpretable
+   and fixes the "Evaluation drop: N centipawns" lie in our prompt.
+2. **Train NNUE to ~2500 with normalized output.** The natural fix for the
+   knowledge gaps a hand-crafted eval cannot cover — KPK and endgame draws being
+   the clearest case.
+
+When those land, `engine_trust.capability_gaps()` is the list to re-measure, and
+each entry already names what would make us believe it again.
+
 ## TOP — the engine's numbers are not the truth (2026-08-20)
 
 Measured, not suspected. Blunder at depth 8 (our shipping config) disagrees with
