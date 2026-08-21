@@ -1697,6 +1697,20 @@ claims are still checked against truth.
 **Compromised:** judgement. Which move to criticise, how much it cost, and which move to
 recommend instead. Best-move agreement on spoken turns is 4/18.
 
+**Hypothesis killed (2026-08-20, by Blunder's author):** we guessed we were running an HCE
+build while the 2500 rating came from NNUE, which would have made this a configuration
+mistake on our side. Wrong — the 2500 figure *is* HCE, release build, and dev vs release
+is latency only at fixed depth. There is no wrong-evaluator explanation.
+
+What follows from that is probably the real conclusion: **playing strength and
+per-position evaluation accuracy are different quantities, and we conflated them.** An
+engine earns a rating over whole games, where depth compounds and eval errors partly
+cancel. Nothing about that requires the static evaluation of an arbitrary quiet position
+at depth 8 to be within a pawn of the truth. If HCE at release is a genuine 2500, then
+Blunder is doing what hand-crafted evaluations do, no Blunder-side fix exists, and the
+mistake is architectural and ours: we assumed "2500 Elo" implied "trustworthy per-position
+verdicts". It does not.
+
 **Retracted:** the eval-drop columns in this document are Blunder-depth-8 numbers, across
 thirty-one runs. Roughly half the labels would read differently against a strong
 reference. Any conclusion resting on drop magnitude needs re-reading — including our own

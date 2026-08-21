@@ -45,58 +45,58 @@ Four properties, all measured:
 4. **Not a reporting bug.** The `coach compare` protocol and plain UCI, on the same binary
    at the same depth, differ by signed −2.6cp. The protocol reports faithfully.
 
-Property 3 is the important one. A horizon problem shrinks with depth. This does not. That
-points at the **leaf evaluation**, not the search.
+Property 3 is the important one. A horizon problem shrinks with depth. This does not,
+which locates the disagreement in the **leaf evaluation** rather than the search — and
+that is consistent with a hand-crafted evaluation being a coarse instrument on quiet
+positions, without anything being broken. See the reframe below.
 
-## Leading hypothesis (unverified)
+## A hypothesis we already killed
 
-**The binary we use is hand-crafted-eval only, and Blunder's rating may come from NNUE.**
+Our first guess was that chess-coach runs an HCE build while Blunder's 2500 figure came
+from NNUE, which would have reduced all of this to a configuration mistake on our side.
 
-Evidence, all circumstantial:
+**Wrong.** Per Blunder's author: the 2500 rating is HCE, release build. HCE *is* the rated
+evaluator, and dev vs release is a latency difference at fixed depth, not a strength one.
+So there is no wrong-evaluator explanation available. Recorded here so nobody spends time
+re-deriving it.
 
-- `C:/src/blunder/build/dev/blunder.exe` exposes no `EvalType` UCI option. Full option
-  list: `Hash`, `Book`, `BookFile`, `Mobility`, `Tempo`, `MultiPV`, `Skill`,
-  `UCI_LimitStrength`, `UCI_Elo`.
-- `scripts/bench-config.json` distinguishes `blunder-hce` from `blunder-nnue` via
-  `options: {"EvalType": "nnue"}`, so the distinction is real and expected to be settable.
-- No `.nnue` weights file anywhere under `C:/src/blunder` (only polyglot opening books).
-- A tapered HCE — material, PSQT, mobility, tempo — predicts exactly this pattern: sound
-  tactics because the search finds them, crude positional judgement because the static
-  terms are thin, and no improvement with depth because the error is at the leaves.
+## The reframe that follows, and it may be the whole answer
 
-**Check this first, it is cheap.** Which evaluator does the `dev` preset build? Is there an
-NNUE-enabled build or weights file we should be pointing at? If chess-coach has been
-running HCE while the 2500 figure was measured with NNUE, that reconciles everything and
-this reduces to a configuration fix.
+If HCE at release is a genuine 2500, then **playing strength and per-position evaluation
+accuracy are not the same quantity**, and chess-coach conflated them.
 
-Two secondary things worth a look if the evaluator question comes back "HCE is expected":
-the `Mobility` and `Tempo` terms are the only tunable eval knobs exposed, and a
-mis-scaled mobility term is a classic source of over-pessimism in quiet positions.
+An engine earns a rating over whole games, where search depth compounds, tactical
+opportunities are found, and evaluation errors partly cancel across many moves. None of
+that requires the static evaluation of an arbitrary quiet position at depth 8 to be within
+a pawn of the truth. A tapered hand-crafted evaluation — material, PSQT, mobility, tempo —
+is a coarse instrument for exactly the judgement chess-coach leans on hardest, and
+Stockfish's NNUE is enormously better at it essentially by construction.
 
-## Doing it properly
+Under that reading the measurement is not a defect report at all. It is chess-coach
+discovering that "2500 Elo" never implied "trustworthy per-position verdicts", which is an
+architectural mistake on our side, not a bug on Blunder's.
 
-The comparison above answers chess-coach's question, not Blunder's. To evaluate Blunder
-fairly, equalise resources rather than depth, because depth is not comparable across
-engines with different pruning:
+**This is the first thing to decide, because if it holds, most of the rest is moot.** If
+an HCE engine is doing what HCE engines do, then no Blunder-side work fixes chess-coach,
+and chess-coach has to stop asking the engine for judgements it cannot supply.
 
-1. **Equal nodes.** Both engines at a fixed node count (e.g. 200k, 1M). Removes hardware
-   and search-speed differences and is the cleanest control for "is the evaluation
-   better".
-2. **Equal time.** Both at a fixed movetime (e.g. 1s, 5s). Matches how ratings are
-   actually established.
-3. **Static eval only.** Compare the leaf evaluation directly, with search removed or
-   minimised — Stockfish has an `eval` command; if Blunder has an equivalent, this
-   isolates the evaluation function, which is where properties 1–3 above point. This is
-   the most diagnostic of the three.
+## What we are NOT prescribing
 
-Suggested acceptance question: at equal nodes, does Blunder's signed error on quiet
-positions stay near +90cp, or collapse toward zero? If it stays, the evaluation function
-is the problem. If it collapses, chess-coach simply under-resourced the engine and should
-change its own configuration.
+How to investigate this is Blunder's call, in Blunder's repo, with Blunder's tooling.
+We deliberately do not recommend an instrument, a suite, or a method — an earlier draft of
+this brief did, and that was overreach from a caller that does not know the codebase.
 
-Also worth widening: 44 positions from one game, 20 of them quiet, is enough to see an
-effect this size but not to characterise it. A standard quiet-position suite would be
-better.
+Two constraints on interpreting our numbers, which are the only things we do insist on:
+
+1. **Our comparison used unequal search depth** (Blunder 8 and 16 versus Stockfish 22) and
+   is therefore not a fair engine comparison. Whatever controls make it fair — equal
+   nodes, equal time, static eval only — are for Blunder to choose.
+2. **Do not go looking for a bug to match our numbers.** We already lost time on a stale
+   binary theory that way. The finding may well have no defect behind it, per the reframe
+   above.
+
+Sample size caveat: 44 positions from one game, 20 of them quiet. Enough to see an effect
+of this magnitude, not enough to characterise it.
 
 ## Data
 
