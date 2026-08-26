@@ -191,12 +191,49 @@ wanted; a protocol version bump would not have caught it, because bumping relies
 person who changed the units noticing that they changed the contract, which is exactly
 what did not happen. See `docs/coaching-protocol.md` §5.7.
 
-### NEXT — Re-run the report card on the corrected thresholds
+### TOP — The coach teaches one lesson five times (v33, ledger row 70)
 
-v32 is not usable as a before/after: it measured a coach whose bands were accidentally
-2x too lenient, so it spoke on 12 turns where the design intends 18. A v33 on the same
-seed-7 game gives the first clean read of the magnitude change. Cheap — one tunnelled
-run, and `graded_or_priced` / `prompt_magnitude_leaks` should both stay at 0.
+The regression v33 exposed, and now the highest-leverage open item. Lesson concentration
+over *spoken* turns went **44% (v31) -> 83% (v33)**: 9 of 18 closings are about "attack".
+Verified against the transcript, not just asserted by the judge — plies 20, 30, 38, 44 and
+46 all say "attacking their undefended bishop on b4", with `a3` recommended on four.
+
+**Every one of those sentences is true.** This is not a fidelity problem and no check will
+catch it. The chain is: the engine legitimately recommends `a3` five times (that bishop
+really is undefended on b4 all middlegame) -> our composer renders the same verified clause
+each time -> the takeaway is keyed to that clause -> the student is taught the same thing
+five times with no escalation.
+
+The fix is coaching memory, which we have never had: the coach treats every turn as if it
+were the first. Candidates, cheapest first:
+
+- **Recency suppression on the takeaway.** If the composed lesson matches one from the last
+  N coached turns, either say nothing (the position may not need a lesson) or fall through
+  to the next-best composed effect. Cheap, and it is the judge's own recommendation from
+  both v32 and v33.
+- **Escalation instead of repetition.** Second time the same lesson applies, name it as a
+  pattern the student is repeating ("this is the third time this bishop has been the
+  answer") rather than re-teaching it from scratch. Needs per-game state on the Coach.
+- Note what this is NOT: a workaround for the engine. The engine repeating a recommendation
+  is legitimate. Teaching it identically five times is our failure.
+
+Not in scope for a threshold or prompt tweak — it needs the coach to know what it has
+already said, so it is a real feature. Worth a spec.
+
+### DONE — Re-run the report card on the corrected thresholds (v33, 2026-08-26)
+
+Done. Ledger rows 69-70. The magnitude change holds on the full turn set — spoken turns
+back to 18, `graded_or_priced` **11 -> 0**, `prompt_magnitude_leaks` **18 -> 0** — and v32's
+two apparent regressions were confirmed as the engine confound rather than our change:
+fidelity violations and composed-fact rate both returned to their v31 values exactly.
+
+It also exposed a genuine regression in lesson repetition; see the item above, which is now
+the top of this list.
+
+One measurement note worth keeping: `lesson_concentration_rate` divides by ALL turns,
+including silent ones, so it reads 18% / 34% where the spoken-turn figures are 44% / 83%.
+For a coach that is deliberately silent on most turns, the aggregate understates repetition
+by roughly the silence rate. Either report it over spoken turns or rename it.
 
 ### OPEN — Two band questions that need judgement, not arithmetic
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 import typing
+from collections import Counter
 from dataclasses import dataclass, field
 
 import chess
@@ -17,6 +18,7 @@ from chess_coach.llm.base import LLMProvider
 from chess_coach.models import ComparisonReport, PositionReport
 from chess_coach.openings import lookup_fen
 from chess_coach.prompts import (
+    LESSON_RETIRE_AFTER,
     build_coaching_prompt,
     build_engine_move_explanation_prompt,
     build_move_evaluation_prompt,
@@ -24,6 +26,7 @@ from chess_coach.prompts import (
     build_rich_move_evaluation_prompt,
     build_socratic_prompt,
     compose_safe_move_feedback,
+    composed_lesson,
     move_feedback_max_tokens,
 )
 from chess_coach.verify import Violation, generate_verified
@@ -167,6 +170,14 @@ class Coach:
         self.verify_retries = max(0, verify_retries)
         self._coaching_available = isinstance(engine, CoachingEngine) and engine.coaching_available
         self._last_position_report: PositionReport | None = None  # for breakdown diffs
+        # Per-game memory of what has already been taught, keyed by composed lesson.
+        # Without it the coach treats every turn as its first: in v33 it closed on
+        # "going after a piece that has too few defenders" five times in one game
+        # (plies 20, 30, 38, 44, 46), each instance individually true, because the
+        # engine kept recommending the same move and the composer kept describing it
+        # identically. A frontier reviewer called that "one lesson, five times, with no
+        # escalation and no memory". Reset by :meth:`new_game`.
+        self._lessons_taught: Counter[str] = Counter()
 
         # Pedagogy guidance resource (loaded once, guarded) when the knob is on.
         # The profiler recommends turning this on per model; default off = no
@@ -197,6 +208,22 @@ class Coach:
         if book_path and hasattr(engine, "set_option"):
             engine.set_option("BookFile", book_path)
             engine.set_option("Book", True)
+
+    def new_game(self) -> None:
+        """Forget everything that is per-game, so a fresh game starts clean.
+
+        Two pieces of state: the lesson history behind the teach / escalate / retire
+        ladder, and the previous position report used for breakdown diffs. Without
+        this, a long-lived ``Coach`` (the web server holds one for its whole life)
+        would carry lessons from a finished game into the next one and go quiet on a
+        student who has never been told them.
+
+        ``_last_position_report`` was already per-game state with no reset, which is a
+        latent defect on the same footing — the first move of game two would be
+        diffed against the last position of game one.
+        """
+        self._lessons_taught.clear()
+        self._last_position_report = None
 
     def _select_guidance(self, pos_report: PositionReport, level: str) -> list | None:  # type: ignore[type-arg]
         """Select pedagogy guidance for a position when the guidance knob is on.
@@ -729,8 +756,24 @@ class Coach:
                     guidance_facts = feature_facts(pos_report)
                 except Exception as e:
                     logger.warning("evaluate_move: guidance position report failed: %s", e)
+            # How often this turn's lesson has already closed a turn in this game.
+            # Read before generating, recorded after — a turn the coach stays silent on
+            # teaches nothing and must not count against the ladder.
+            lesson_key, _lesson = composed_lesson(report)
+            times_taught = self._lessons_taught[lesson_key] if lesson_key else 0
+            if times_taught:
+                _trace(
+                    "eval_lesson_repeat",
+                    f"Lesson {lesson_key!r} already taught {times_taught}x this game — "
+                    + ("naming the recurrence" if times_taught < LESSON_RETIRE_AFTER else "retiring it"),
+                    tool="engine",
+                )
             prompt = build_rich_move_evaluation_prompt(
-                report, level=self.level, guidance=guidance, guidance_facts=guidance_facts
+                report,
+                level=self.level,
+                guidance=guidance,
+                guidance_facts=guidance_facts,
+                lesson_times_taught=times_taught,
             )
 
             if self.template_only:
@@ -774,6 +817,20 @@ class Coach:
                     elapsed=t3 - t2,
                     llm_response=feedback,
                 )
+
+            # Record only when the coach actually said something. Counting a silent turn
+            # would retire a lesson the student was never told, which is worse than
+            # repeating it.
+            #
+            # Deliberately approximate in one direction: if generation raised and we fell
+            # back to `generate_move_coaching`, the student got text that carries no
+            # takeaway, yet this still counts. That over-counts on a rare path and can
+            # retire a lesson one turn early. Erring toward less repetition is the safe
+            # side of this trade, and the alternative — threading "did the delivered text
+            # actually close on the lesson" back out of three fallback layers — buys
+            # precision that the ladder (teach, name, stop) is too coarse to use.
+            if lesson_key and feedback.strip():
+                self._lessons_taught[lesson_key] += 1
 
             return MoveEvaluation(
                 classification=report.classification,

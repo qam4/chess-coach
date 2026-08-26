@@ -1404,20 +1404,21 @@ _TAKEAWAY_FALLBACK = (
 )
 
 
-def _build_takeaway_instruction(report: ComparisonReport, tier: str = "serious") -> str:
-    """The closing-takeaway instruction, with the lesson composed where possible.
+def composed_lesson(report: ComparisonReport, tier: str | None = None) -> tuple[str, str]:
+    """``(key, lesson)`` for the takeaway this turn would close on; ``("", "")`` if none.
 
-    The subject of the takeaway is derived from what the relevant move verifiably DOES
-    (:func:`_move_effect`), not chosen by the model. Left to choose, the coach
-    closed on one of the same three ideas on 68% of turns and sometimes on an idea
-    that did not apply at all — "next time you see a fork opportunity" about a move
-    that forks nothing. The model still writes the sentence; it no longer picks the
-    topic.
+    Exposed so the caller can remember what it has already taught. The key is the
+    ``category:phase`` pair :func:`effect_takeaway` looks up, which is the right
+    granularity for "same lesson": two turns whose best move attacks an
+    under-defended piece close on the identical sentence, and keying on the rendered
+    text instead would treat a phase-specific variant as a different lesson.
 
-    Falls back to the original open-ended instruction when nothing about the move
-    can be verified, on the same principle as the clause composer: no fact, no
-    claim.
+    ``tier`` defaults to this report's own severity tier, so a caller tracking lesson
+    history does not need the tier machinery — which is private to this module — just
+    to ask what a turn would teach.
     """
+    if tier is None:
+        tier = _move_feedback_tier(report)
     board = _safe_board(report.fen)
     # On the tiers that make no comparison, the lesson must come from the move the
     # student actually played — keying it to an alternative we are not naming would
@@ -1428,7 +1429,63 @@ def _build_takeaway_instruction(report: ComparisonReport, tier: str = "serious")
     phase = phase_of_board(board) if board is not None else ""
     lesson = effect_takeaway(category, phase)
     if not lesson:
+        return "", ""
+    return f"{category}:{phase}", lesson
+
+
+#: Second time a lesson comes up, name the recurrence instead of teaching it again.
+_TAKEAWAY_ESCALATE = (
+    "CLOSE by pointing out that this is the SAME idea as earlier in the game, not by "
+    "teaching it again: the student has now met this lesson more than once — {lesson}. "
+    "Say so in one short sentence, as an observation about the pattern they keep running "
+    "into, and do not restate the lesson as if it were new. Do not assert new pieces or "
+    "squares in it."
+)
+
+#: How many times one lesson may be taught in a game before it is retired.
+#:
+#: Two: teach it once, name the recurrence once, then stop. Measured need — in v33 the
+#: coach closed on "going after a piece that has too few defenders" on five of eighteen
+#: turns (plies 20, 30, 38, 44, 46), because the engine kept recommending the same move
+#: and the composer kept describing it identically. Every sentence was true; a frontier
+#: reviewer still called it "one lesson, five times, with no escalation and no memory".
+#:
+#: Retiring is deliberately silence rather than a substitute lesson. There is only one
+#: verified effect per move, so a replacement would have to be invented, and inventing
+#: a lesson is what composing the subject was introduced to stop.
+LESSON_RETIRE_AFTER = 2
+
+
+def _build_takeaway_instruction(report: ComparisonReport, tier: str = "serious", times_taught: int = 0) -> str:
+    """The closing-takeaway instruction, with the lesson composed where possible.
+
+    The subject of the takeaway is derived from what the relevant move verifiably DOES
+    (:func:`_move_effect`), not chosen by the model. Left to choose, the coach
+    closed on one of the same three ideas on 68% of turns and sometimes on an idea
+    that did not apply at all — "next time you see a fork opportunity" about a move
+    that forks nothing. The model still writes the sentence; it no longer picks the
+    topic.
+
+    ``times_taught`` is how many times this same lesson has already closed a turn in
+    this game, which the caller tracks. It drives a three-step ladder: teach it, then
+    name the recurrence, then say nothing. Composing the subject fixed the coach
+    choosing an idea that did not apply; it could not fix the coach teaching an idea
+    that applied five times, because each instance was individually correct.
+
+    Falls back to the original open-ended instruction when nothing about the move
+    can be verified, on the same principle as the clause composer: no fact, no
+    claim.
+    """
+    _key, lesson = composed_lesson(report, tier)
+    if not lesson:
         return _TAKEAWAY_FALLBACK
+    if times_taught >= LESSON_RETIRE_AFTER:
+        # Taught, then flagged as recurring. A third telling adds nothing, and the
+        # response is still a complete piece of coaching without it: the move, what
+        # the stronger one does, and why. Silence beats a maxim on its fourth outing.
+        return ""
+    if times_taught > 0:
+        return _TAKEAWAY_ESCALATE.format(lesson=lesson)
     return (
         "CLOSE with one transferable takeaway on THIS lesson and no other: "
         f"{lesson}. Put it in your own words as a short "
@@ -1740,6 +1797,7 @@ def build_rich_move_evaluation_prompt(
     level: str = "intermediate",
     guidance: list[GuidanceEntry] | None = None,
     guidance_facts: dict[str, str] | None = None,
+    lesson_times_taught: int = 0,
 ) -> str:
     """Build a rich move evaluation prompt from a ComparisonReport.
 
@@ -1759,6 +1817,12 @@ def build_rich_move_evaluation_prompt(
         report: The structured comparison report from the engine.
         level: Student level (``"beginner"``, ``"intermediate"``, or
             ``"advanced"``).
+        guidance: Optional selector-chosen guidance entries.
+        guidance_facts: Board facts instantiating each guidance theme.
+        lesson_times_taught: How many times this turn's composed lesson has already
+            closed a turn in this game. Drives the teach / name-the-recurrence /
+            say-nothing ladder in :func:`_build_takeaway_instruction`. Zero (the
+            default) reproduces the memoryless behaviour.
 
     Returns:
         The complete prompt string ready to send to the LLM.
@@ -1852,7 +1916,9 @@ def build_rich_move_evaluation_prompt(
         for reference in _ACHIEVEMENT_REFERENCES:
             move_instructions = move_instructions.replace(reference, "the position facts above")
     word_limit = _TIER_WORD_LIMIT[tier]
-    takeaway_instruction = _build_takeaway_instruction(report, tier)
+    # ``lesson_times_taught`` comes from the caller's per-game memory: the coach used to
+    # treat every turn as if it were the first, and taught one lesson five times.
+    takeaway_instruction = _build_takeaway_instruction(report, tier, lesson_times_taught)
 
     # The engine's move, named only on the tiers that actually compare against it.
     # It used to be rendered unconditionally, so on the `equal` tier the prompt said

@@ -228,6 +228,12 @@ def create_app(coach: Coach) -> FastAPI:
         if req.color not in ("white", "black"):
             raise HTTPException(status_code=400, detail="color must be 'white' or 'black'")
 
+        # Forget the previous game. The server holds one Coach for its whole life, so
+        # without this the lesson history carries over and the coach goes quiet on a
+        # lesson this student has never been told — and the breakdown diff on move one
+        # would be taken against the last position of the finished game.
+        app.state.coach.new_game()
+
         starting_fen = chess.STARTING_FEN
 
         if req.color == "black":

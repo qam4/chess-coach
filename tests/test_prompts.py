@@ -1116,3 +1116,104 @@ def test_king_walk_clause_needs_to_beat_the_students_move() -> None:
     # not what separates the moves.
     report = dataclasses.replace(_move_eval_report(fen, "f2e3", "f2f3"), best_move="f2f3")
     assert "fighting piece" not in _build_takeaway_instruction(report)
+
+
+# ---------------------------------------------------------------------------
+# Lesson memory: teach it, name the recurrence, then stop
+# ---------------------------------------------------------------------------
+#
+# v33 closed on "going after a piece that has too few defenders" on five of eighteen
+# spoken turns (plies 20, 30, 38, 44, 46). Every instance was true: the engine kept
+# recommending a3, the bishop really was undefended on b4, and the composer described
+# it identically each time. Composing the subject fixed the coach closing on an idea
+# that did not apply; it could not fix an idea that applied five times.
+
+
+def _repeatable_report() -> ComparisonReport:
+    """A comparison whose best move attacks an under-defended piece.
+
+    The shape of the v33 case: Black's bishop sits on b4 defended by nothing, so the
+    composed effect category is the same one that recurred five times.
+    """
+    fen = "r1b1k1r1/pppp1p1p/8/4p1P1/1b1B4/1P2P3/P1P1B1nP/RN1K3R w q - 0 16"
+    return ComparisonReport(
+        fen=fen,
+        user_move="e2c4",
+        user_eval_cp=0,
+        best_move="d4c3",
+        best_eval_cp=0,
+        eval_drop_cp=200,
+        classification="mistake",
+        nag="?",
+        best_move_idea="piece activity — improving piece placement",
+        refutation_line=None,
+        missed_tactics=[],
+        top_lines=[PVLine(depth=8, eval_cp=0, moves=["d4c3"], theme="king attack")],
+        critical_moment=False,
+        critical_reason=None,
+    )
+
+
+def test_composed_lesson_is_stable_for_the_same_effect() -> None:
+    # The memory key has to be the same across two turns that teach the same thing,
+    # or the ladder never fires. Keyed on category:phase, not on rendered text.
+    from chess_coach.prompts import composed_lesson
+
+    report = _repeatable_report()
+    key, lesson = composed_lesson(report)
+    assert key, "a verified effect must yield a key"
+    assert "defenders" in lesson
+    # Same position, same key — and the caller need not know about tiers.
+    assert composed_lesson(report) == (key, lesson)
+
+
+def test_first_telling_teaches_the_lesson() -> None:
+    prompt = build_rich_move_evaluation_prompt(_repeatable_report(), lesson_times_taught=0)
+    assert "CLOSE with one transferable takeaway on THIS lesson" in prompt
+    assert "next time you see" in prompt
+    assert "SAME idea as earlier" not in prompt
+
+
+def test_second_telling_names_the_recurrence_instead_of_repeating() -> None:
+    prompt = build_rich_move_evaluation_prompt(_repeatable_report(), lesson_times_taught=1)
+    assert "SAME idea as earlier in the game" in prompt
+    assert "do not restate the lesson as if it were new" in prompt
+    # The lesson is still named, so the model knows WHICH idea recurred...
+    assert "defenders" in prompt
+    # ...but it is no longer asked for a fresh "next time you see" hook.
+    assert "CLOSE with one transferable takeaway on THIS lesson" not in prompt
+
+
+def test_third_telling_says_nothing() -> None:
+    from chess_coach.prompts import LESSON_RETIRE_AFTER
+
+    prompt = build_rich_move_evaluation_prompt(_repeatable_report(), lesson_times_taught=LESSON_RETIRE_AFTER)
+    assert "CLOSE" not in prompt
+    assert "SAME idea as earlier" not in prompt
+    # Retiring the takeaway must not gut the rest: the move, the stronger option and
+    # what it achieves all still have to be there, or "no repetition" is bought with
+    # no coaching at all.
+    assert "Bc3" in prompt
+    assert "does this:" in prompt
+    assert "COACHING INSTRUCTIONS" in prompt
+    assert len(prompt) > 800
+
+
+def test_retirement_persists_beyond_the_threshold() -> None:
+    # Off-by-one guard: the ladder must not wrap around and start teaching again.
+    for n in (2, 3, 5, 40):
+        prompt = build_rich_move_evaluation_prompt(_repeatable_report(), lesson_times_taught=n)
+        assert "CLOSE" not in prompt, f"lesson came back at times_taught={n}"
+
+
+def test_unverifiable_lesson_is_unaffected_by_memory() -> None:
+    # No composed lesson means no key and nothing to remember, so the open-ended
+    # fallback instruction stands however many turns have passed. Suppressing it would
+    # silence turns that never contributed to the repetition in the first place.
+    from chess_coach.prompts import composed_lesson
+
+    report = dataclasses.replace(_repeatable_report(), fen="8/8/8/8/8/8/8/8 w - - 0 1")
+    assert composed_lesson(report) == ("", "")
+    for n in (0, 1, 5):
+        prompt = build_rich_move_evaluation_prompt(report, lesson_times_taught=n)
+        assert "CLOSE with one transferable takeaway" in prompt

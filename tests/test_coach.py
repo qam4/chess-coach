@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
 from unittest.mock import MagicMock
+
+import pytest
 
 from chess_coach.coach import Coach, CoachingResponse
 from chess_coach.engine import AnalysisLine, AnalysisResult, EngineProtocol
@@ -307,7 +310,6 @@ class TestVerifiedMoveFeedback:
     def test_empty_response_still_raises_for_the_existing_fallback(self):
         # evaluate_move catches this and uses the template path; the verification
         # wrapper must not swallow it.
-        import pytest
 
         llm = _mock_llm()
         llm.generate.return_value = "   "
@@ -361,3 +363,137 @@ def test_stalemate_also_ends_the_game() -> None:
     from chess_coach.coach import _move_ends_game
 
     assert _move_ends_game("k7/8/1K6/8/8/8/8/2Q5 w - - 0 1", "c1c7") is True
+
+
+# --------------------------------------------------------------------------
+# Lesson memory across turns (the half the prompt tests cannot prove)
+# --------------------------------------------------------------------------
+#
+# The prompt builder does the right thing when TOLD a lesson has recurred. These
+# tests cover the part that actually failed in v33: nobody was counting. The coach
+# taught "going after a piece that has too few defenders" five times in one game
+# because it had no memory at all.
+
+
+_REPEAT_FEN = "r1b1k1r1/pppp1p1p/8/4p1P1/1b1B4/1P2P3/P1P1B1nP/RN1K3R w q - 0 16"
+
+
+def _comparison_with_repeatable_lesson(drop: int = 200):
+    """A comparison whose best move attacks an under-defended piece (the v33 shape)."""
+    from chess_coach.models import ComparisonReport, PVLine
+
+    return ComparisonReport(
+        fen=_REPEAT_FEN,
+        user_move="e2c4",
+        user_eval_cp=0,
+        best_move="d4c3",
+        best_eval_cp=0,
+        eval_drop_cp=drop,
+        classification="mistake",
+        nag="?",
+        best_move_idea="piece activity — improving piece placement",
+        refutation_line=None,
+        missed_tactics=[],
+        top_lines=[PVLine(depth=8, eval_cp=0, moves=["d4c3"], theme="king attack")],
+        critical_moment=False,
+        critical_reason=None,
+    )
+
+
+def _coach_with_repeating_engine(feedback: str = "Bc3 was stronger. Worth remembering: count defenders."):
+    engine = _mock_coaching_engine()
+    engine.get_comparison_report.return_value = _comparison_with_repeatable_lesson()
+    llm = _mock_llm()
+    llm.generate.return_value = feedback
+    # verify_output off: the gate is orthogonal here and a mocked response would trip it.
+    return Coach(engine=engine, llm=llm, verify_output=False)
+
+
+def _prompts_from(coach, turns: int) -> list[str]:
+    seen: list[str] = []
+
+    def on_debug(step):
+        if step.step == "eval_llm_start":
+            seen.append(step.detail.get("llm_prompt", ""))
+
+    for _ in range(turns):
+        coach.evaluate_move(_REPEAT_FEN, "e2c4", on_debug=on_debug)
+    return seen
+
+
+class TestLessonMemory:
+    def test_same_lesson_escalates_then_retires_across_turns(self):
+        coach = _coach_with_repeating_engine()
+        prompts = _prompts_from(coach, 4)
+        assert len(prompts) == 4
+
+        # 1st: teach it.
+        assert "CLOSE with one transferable takeaway on THIS lesson" in prompts[0]
+        # 2nd: name the recurrence rather than teaching it again.
+        assert "SAME idea as earlier in the game" in prompts[1]
+        assert "CLOSE with one transferable takeaway on THIS lesson" not in prompts[1]
+        # 3rd and 4th: nothing. This is the v33 defect — by the third telling the
+        # student has been given the same maxim twice and it is not landing.
+        for p in prompts[2:]:
+            assert "CLOSE" not in p
+            assert "SAME idea as earlier" not in p
+
+    def test_silent_turns_do_not_consume_the_ladder(self):
+        # A turn the coach says nothing on teaches nothing. Counting it would retire a
+        # lesson the student has never been told — which is worse than repeating it.
+        coach = _coach_with_repeating_engine()
+        engine = coach.engine
+        # A drop inside the "good move, stay silent" band.
+        engine.get_comparison_report.return_value = _comparison_with_repeatable_lesson(drop=0)
+        coach.evaluate_move(_REPEAT_FEN, "e2c4")
+        coach.evaluate_move(_REPEAT_FEN, "e2c4")
+        assert sum(coach._lessons_taught.values()) == 0
+
+        # Now a turn worth coaching: it must still be the FIRST telling.
+        engine.get_comparison_report.return_value = _comparison_with_repeatable_lesson(drop=200)
+        prompts = _prompts_from(coach, 1)
+        assert "CLOSE with one transferable takeaway on THIS lesson" in prompts[0]
+
+    def test_template_fallback_still_consumes_the_ladder(self):
+        # An empty LLM response falls back to the template, which produces text but no
+        # takeaway — so strictly the lesson was not delivered, and this still counts it.
+        # Pinned because it is a deliberate imprecision, not an oversight: over-counting
+        # retires a lesson one turn early, which errs toward less repetition. The
+        # opposite error would let a lesson repeat indefinitely whenever generation was
+        # flaky. If this assertion ever needs to change, change it knowingly.
+        coach = _coach_with_repeating_engine(feedback="   ")
+        _prompts_from(coach, 2)
+        assert sum(coach._lessons_taught.values()) == 2
+
+    def test_new_game_forgets_the_history(self):
+        coach = _coach_with_repeating_engine()
+        _prompts_from(coach, 3)
+        assert coach._lessons_taught
+
+        coach.new_game()
+        assert not coach._lessons_taught
+        assert coach._last_position_report is None
+        # A fresh student gets taught from scratch.
+        prompts = _prompts_from(coach, 1)
+        assert "CLOSE with one transferable takeaway on THIS lesson" in prompts[0]
+
+    def test_different_lessons_are_tracked_independently(self):
+        # Retiring one lesson must not silence an unrelated one.
+        from chess_coach.prompts import composed_lesson
+
+        coach = _coach_with_repeating_engine()
+        _prompts_from(coach, 3)  # retire the attack lesson
+
+        # Bxe5 is a capture from this position, so it composes a different effect
+        # category (and therefore a different lesson) from the attack on b4.
+        other = dataclasses.replace(_comparison_with_repeatable_lesson(), best_move="d4e5")
+        key_other, lesson_other = composed_lesson(other)
+        key_attack, _ = composed_lesson(_comparison_with_repeatable_lesson())
+        assert key_other and key_other != key_attack, (
+            f"test needs two distinct effects; got {key_other!r} vs {key_attack!r}"
+        )
+
+        coach.engine.get_comparison_report.return_value = other
+        prompts = _prompts_from(coach, 1)
+        assert "CLOSE with one transferable takeaway on THIS lesson" in prompts[0]
+        assert lesson_other in prompts[0]
