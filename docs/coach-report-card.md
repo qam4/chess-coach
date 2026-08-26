@@ -78,10 +78,15 @@ our own measurement rather than the coach. Detail for each is further down.
 | 59 | (our finding, retraction of a retraction) I told the owner the KPK draw is invisible to static eval in **both** engines, so the fault lay in Blunder's search rather than its leaf eval. Wrong: attempt 1's +2.85 was Stockfish's **classical** eval; its default **NNUE** static eval prints +0.01, final **+0.00** | Nothing | **The original leaf-evaluation framing was right and my walk-back was wrong.** Both the claim and its retraction rested on one unreplicated measurement each — the recurring error on this thread | closed |
 | 60 | (Blunder session, source-verified) **Blunder's reported cp are NOT conventional centipawns and are not normalized at all.** `PIECE_VALUE_BONUS` pawn = **124 (MG) / 206 (EG)** — Stockfish-classical-derived piece values. The taper is `(mg*p + eg*(PHASE_MAX-p))/PHASE_MAX`, so one pawn slides continuously 124 -> 206 by phase. No division, no `/100`, no WDL mapping anywhere on the UCI path (`Search.cpp:441` prints `pvline.score` verbatim); the `tanh(score/400)` in `MCTS.cpp:236` is the MCTS value head and unrelated. No `UCI_NormalizeToPawnValue` equivalent | Nothing — this is a fact to know, not a defect | **All our historical cp figures are in Blunder units, ~1.2–2x conventional.** So our 50/100/150 thresholds are tighter in real terms than they look | closed |
 | 61 | (our finding, **retracting my own row-60 claim from an hour earlier**) I claimed roughly half the quiet-position error was a unit-scale problem, from a single-constant best fit of k=1.91 against the 2.06 implied by the endgame pawn. **The phase-aware test refutes it.** Per-phase empirical slopes are endgame **0.79**, middlegame **1.88**, opening **0.76** against source-predicted 2.06/1.24/1.24 — contradictory and inverted. Phase-aware conversion scores **worse** (60.8 mean error) than a flat /2.06 (50.0) | Nothing | A flat divisor helps only because Blunder's errors are positively biased and dividing any inflated distribution shrinks it toward truth. That is curve-fitting, not calibration, and it will not transfer. **The disagreement is mostly not scale.** Labels barely move under any conversion: 23/43 raw, 24/43 at /2.06, 24/43 phase-aware, 25/43 at flat /1.42 | closed |
-| 62 | (our finding) So "stop grading moves and quoting costs" survives every twist: raw, calibrated, and phase-calibrated all leave a 50–60cp residual against a strong reference, wider than our 50/100 label bands | **next** — backlog item 1 | — | open |
+| 62 | (our finding) So "stop grading moves and quoting costs" survives every twist: raw, calibrated, and phase-calibrated all leave a 50–60cp residual against a strong reference, wider than our 50/100 label bands | **next** — stop asserting magnitude | — | closed by row 63 |
 | 57 | (our finding) Ruled out our own plumbing and depth as causes. Coach protocol vs plain UCI at the same depth: signed **−2.6cp** (no systematic misread; 22cp of multipv nondeterminism). Depth 8 -> 16 buys **one** extra matching label (24/43 -> 25/43) and moves Blunder *closer* to the reference on 18 positions, *further* on 20 | Nothing — hands off to Blunder | Residual is a genuine **static-evaluation** disagreement: quiet +92cp signed at depth 16, concrete +18cp. No depth convergence = leaf eval, not horizon. King-move sub-hypothesis tested and **rejected** (endgame king moves are the best case, +18 vs +69) | open — Blunder-side |
 | 46 | (v30, rubric v2) Both survivors were claims about the **opponent's** move — an exemption we created deliberately and forgot. Ply 46 "the opponent plays Bb7+": a real move from a line starting 24.a3, and the student's own c6 blocks the diagonal it checks along. Ply 14 "Nxc4, winning a pawn" when c4 holds a bishop — contradicted two sentences later in the same message | `opponent_reply` check: push the student's move, then verify the reply's legality, its claimed check, and what it captures | Catches both plies in **all five** stored runs — the coach makes these same two errors every time — and fires nowhere else across ~220 turns | kept |
 | 44 | (owner observation) Every report card has replayed **one identical game** — verified byte-identical across v26-v29 — so no check had ever been tried on a second game, and the checks can now REPLACE what a student reads | `scripts/eval_check_breadth.py`: five FIXED games, no randomness, no judge | **Zero false positives and zero leaks across all five.** Four games at 0-6% fallback; one quiet Queen's Gambit at 21%, and all three of its flagged claims verified as **real coach errors** | kept |
+| 63 | (closing rows 56/62) The coach asserted a precision it does not have: eval figures, an eval drop labelled "centipawns" when the unit is not centipawns, the engine's `classification`, its `nag`, per-candidate `cp`, per-line `depth`/`cp`, pawn-unit costs in the templates, and a "?? Blunder" badge in the web UI | Withheld all of it, rather than instructing against it (rows 2/39/41 say only withholding works on this model). Severity now reaches the student as the board-verified consequence — what the opponent's reply wins — and reaches the model only as tier tone plus word limit. Material is counted from the board in points; the standing is one of four coarse words | **Prompt-side: 18/18 spoken turns carried a magnitude -> 0/18**, re-rendered through the engine on the v31 positions. 79 occurrences of "centipawns" and 18 each of `Evaluation drop` / `Classification:` / `Annotation:` -> zero. **Output side, v32: 11/18 spoken turns graded or priced the move -> 0/12.** Withholding was sufficient; no gating check needed | kept |
+| 66 | (v32, and a **correction to my own first reading of it**) `graded_or_priced` came back 3 and I nearly reported the change as having failed. All three were false positives: the regex matched `5 pawn` in "the e5 pawn", `2 pawn` in "your a2 pawn", `7 pawn` in "the h7 pawn" — a square's rank digit reading as a quantity. The mirror image of the `_SQUARE_RE` bug at row 17, in a metric written specifically to be able to fail | Guarded every digit with `(?<![a-h])`, and narrowed the pawn form to fractional figures or figures attached to cost language, so "wins 2 pawns" (a material count, checkable) is not a price. The four missed cases are now in the must-not-flag list | Corrected: **v31 11/18, v32 0/12**. The v31 hits are all genuine and all the same sentence — "That was a serious mistake" x7, "This was a serious blunder", "This was a critical mistake" x3 — i.e. the model faithfully echoing v31's own tier text, which said "This was a serious mistake — say so directly and plainly" | kept |
+| 67 | (v32, **the run is confounded and it is worth more than the run was**) The Blunder binary we ran against reports **normalized** centipawns — roughly half the old values — and it changed between v31 and v32. Provenance unknown: the change is uncommitted in the Blunder tree (`NORMALIZE_TO_PAWN = 200` in `Constants.h`, sources touched 09:46-09:57 on 2026-08-24, `build/dev/blunder.exe` built 09:58 the same day), and the product owner did not make it. That repo also has a modified spec tasks file and stray `build_err.txt` / `make2.out`, so probably an agent session in the Blunder repo. **Do not record it as anyone's decision until someone confirms it** | Nothing on our side. Found from the data first: six plies that spoke in v31 went silent in v32, each with its drop almost exactly halved — 66->33, 67->34, 72->36, 53->27, 58->29, 60->30 — crossing below `SOUND_MAX_DROP_CP` and flipping "inaccuracy" to "good". Then confirmed against the engine directly rather than from the source diff: the brief's KPK position at depth 16 gave `score cp 355 nodes 122039` in the pre-change session log and `score cp 178 nodes 122039` from this binary. **Identical nodes, identical PV, half the score** — the search is untouched and only the output scale moved, which is exactly what the code comment claims | **The coach went from 18 spoken turns to 12 with no coaching change.** The threshold shift predicted when normalization was discussed, now observed: our 50/100/150 bands were calibrated on inflated units and are ~2x more lenient against normalized ones. v32 is therefore NOT a clean before/after for anything eval-derived (speak/silence, tier mix, `composed_fact_rate`, fidelity counts). The output-side grade result IS attributable, since the prompt carries no number at any scale | open — thresholds need re-deriving |
+| 64 | (our finding, **retraction of row 28**) The `equal` tier never withheld the alternative. Row 28 recorded it as withheld "from the prompt entirely"; only the achievement line and the engine's idea label ever were. `Best move: d4` was rendered unconditionally, and the top-lines section named the engine's move again — both sitting three lines above the instruction "Do NOT offer an alternative… there isn't one", i.e. a negative constraint over data we supplied ourselves | Made both conditional on the tier. The second leak was found by the new cross-surface test, not by reading the code | Prompt-side verified: on the no-comparison tiers the engine's move now appears nowhere. **Row 28's "prompt-side verified" claim was wrong** and its output result was never measured either | kept |
+| 65 | (our finding) Both `DROPPED_PARTIAL` entries in `engine_trust` closed, and one of its own entries corrected | `critical_reason` came off the position prompt (already off the move prompt); the dead v1 rich templates that still rendered `best_move_idea` were deleted. `test_engine_trust` now asserts **no** partial drops remain, inverted from asserting these two did | Zero partial drops. Separately: my first pass recorded `best_move_idea` as fully dropped — **wrong**, reading a real rendered prompt showed it still trails the composed clause as a theme label by design (rows 9/13). Re-recorded as `USED_UNVERIFIED` with what compensates | kept |
 
 ## Measurement philosophy (what to trust)
 
@@ -1863,3 +1868,178 @@ depressed by range restriction, since that subset is selected on Blunder's own l
 
 Session logs: `output/blunder_session_attempt1.log` (killed on budget) and
 `~/.kiro-monitor/runs/blunder_eval/output.log` (the answer).
+
+## Stop asserting magnitude (2026-08-24)
+
+The first change made in response to the Blunder measurement, and the one that was
+correct regardless of how the engine question resolves. Rows 63-65.
+
+### What the argument actually licenses
+
+The measurement says the eval **magnitude** is untrustworthy, not that the engine is
+useless. Two things survive it and one does not, and the change follows that split
+rather than deleting everything eval-shaped:
+
+- **Ordering survives.** Blunder is a genuine ~2500 at choosing between moves, and the
+  Blunder session's own advice was to lean on relative ordering. So the candidate menu
+  keeps its order and its tags, the "Best move" line stays on the tiers that compare,
+  and the top-lines section keeps the moves.
+- **Board facts survive**, because they never came from the eval. Material is now
+  *counted* from the board in points. The opponent's reply and what it captures is
+  computed by pushing the move. These are checkable by the student, which is the
+  property the numbers never had.
+- **Magnitude does not survive, in any unit.** Not "centipawns" (Blunder's pawn is 124
+  MG to 206 EG, so the label was false), not pawns (dividing an unknown unit by 100
+  produces another unknown unit — this was the half-fix at row 39), and not the
+  engine's `classification`, whose cut points sit on those same units with unknown
+  provenance.
+
+### What replaced the severity claim
+
+The interesting part is not the deletion, it is what carries severity instead. The old
+`serious` tier opened by naming the size of the error ("this was a serious mistake").
+It now opens with the consequence: *"After your move, the opponent's strongest reply is
+exd4, capturing your bishop on d4."* That sentence is derived by pushing the student's
+move and reading the board, so it is true by construction — and it tells a 1200 more
+than "you lost 878 centipawns" ever did.
+
+The `inaccuracy` and `serious` tiers therefore now share an opener. That reads like a
+loss of resolution and is in fact the honest consequence of the measurement: the
+boundary between them is 100cp on a quantity whose residual against Stockfish 18 is
+50-60cp under every conversion tried. The distinction was inside the noise. The tiers
+still differ in what they lead with and in word limit (80 vs 120), which is the part
+that was never a claim about the board.
+
+### The two findings that fell out
+
+**Row 28 was overstated.** It recorded the `equal` tier as withholding the alternative
+"from the prompt entirely". It did not: `Best move: d4` was rendered unconditionally,
+and the top-lines section named the engine's move a second time — both above an
+instruction reading "Do NOT offer an alternative… there isn't one". So the tier that
+was supposed to stop the coach manufacturing fault on good moves was relying on
+precisely the negative-constraint pattern rows 2 and 39 measured as ineffective. The
+second of the two leaks was caught by the new cross-surface test rather than by
+reading the code, which is the argument for having the test.
+
+**A partial drop is a real category, including for me.** `engine_trust` existed because
+two earlier drops turned out to be live on a second path. Writing this change I
+recorded `best_move_idea` as fully dropped, then rendered a real prompt and found it
+still there, trailing the composed clause as a theme label — which is deliberate
+(rows 9 and 13), not a leak. Corrected to `USED_UNVERIFIED` with the compensation
+named. The register works, provided someone reads the output instead of the diff.
+
+### Measured, and not measured
+
+**Measured, prompt-side.** `scripts/measure_prompt_magnitude.py` re-renders the 18
+spoken turns of the v31 game through today's code, using the engine and no LLM, and
+compares against the prompts stored in that run's transcript:
+
+| | turns carrying a magnitude | occurrences |
+|---|---|---|
+| before (as sent on v31) | **18/18** | `centipawns` x79, `Evaluation drop` x18, `Classification:` x18, `Annotation:` x18, bare `N cp` x6 |
+| after (same positions, today) | **0/18** | none |
+
+**Not measured: whether the model still does it anyway.** A 14B model can produce "that
+was a blunder" from its own pretraining with nothing in the prompt suggesting it, and
+this project has three recorded cases of an instruction alone changing nothing. So the
+change ships with a falsifier rather than an assumption: `ReviewStats.graded_or_priced`
+counts turns where the coach pronounced a grade or put a number on the cost, and
+`prompt_magnitude_leaks` guards the prompt side from regressing. Both should be 0. The
+regex behind the first is pinned in `tests/test_coach_review.py` against ten sentences
+it must catch and nine ordinary coaching sentences it must not — because two metrics in
+this module were previously deleted for being unable to fail.
+
+This needs a report card on **qwen3:14b** to settle, and that model is reachable only
+over the EC2 tunnel, which is down. Until then: prompt-side landed, output-side open.
+If `graded_or_priced` comes back non-zero, the next lever is a check in `verify.py`, not
+more prompt text.
+
+### What this deliberately did NOT touch
+
+- **The move-menu tags** (`best`/`sound`/`dubious`/`blunder`) still come from eval-drop
+  against the 50/100 thresholds, so a tag inherits the magnitude problem even with the
+  number hidden. Re-deriving them means choosing new bands, and choosing bands by hand
+  is what produced the current ones.
+- **The `describe_eval` standing bands** (30/100/300) have the same defect, more mildly.
+  A position at -102 units reads "clear advantage" where deflated it is a slight edge.
+  Kept as a judgement that one of four coarse words beats silence, explicitly not as a
+  claim that the bands are right — how often they land the wrong side of a boundary is
+  not measured.
+- **The 150cp opening leniency and `EQUAL_MAX_DROP_CP`**, both of which are band
+  questions the backlog says to settle from the Blunder answer rather than by guessing.
+- **`eval/judge.py`**, which hands the frontier judge a section headed "Evaluation
+  (ground truth)" containing the same untrustworthy numbers. That is a measurement
+  surface, not a coach surface, but the label is now known to be wrong — new backlog
+  item.
+
+## Re-deriving the thresholds for a normalized engine (2026-08-25) — row 68
+
+Row 67 found the engine's output scale had halved under us and left the coach 2x more
+lenient than anyone chose. This is the correction, and the rule it was done under matters
+as much as the numbers: **chess-coach does not work around Blunder's shortcomings.**
+
+### What that rule ruled out, and what it ruled in
+
+Ruled in: converting our own constants by the engine's own factor, so behaviour is
+preserved. `EQUAL 25->12`, `SOUND 50->25`, `DUBIOUS 100->50`, opening leniency `150->75`,
+`objective.EQUAL_THRESHOLD_CP 50->25`, `describe_eval` bands `30/100/300 -> 15/50/150`.
+The engine reports `round(raw/2)`, so `<= 12` admits `raw <= 25` — the old band exactly.
+
+Ruled out: widening any band to compensate for the engine being *wrong* rather than
+differently *scaled*. The temptation is real and specific — `EQUAL_MAX_DROP_CP` exists
+because the coach was manufacturing fault on good moves, and the eval's +122cp bias is
+still there, so widening it would visibly help. It would also be chess-coach absorbing an
+engine defect into its own constants, where it becomes invisible and permanent. The bias
+stays recorded in `engine_trust` with a reinstatement criterion instead.
+
+Also ruled out, and this one was already shipped before the rule was applied: a
+board-derived **material count** written to replace the engine's untrustworthy `material`
+term. Removed. Piece values are contested knowledge, `pedagogy.features` already confines
+its own copy of them to keying guidance "never to evaluate a position", and the backlog's
+rejected-directions list names "derive board facts to replace the eval" explicitly.
+`PositionReport.eval_breakdown` is now recorded as a real capability gap with nothing
+compensating — the coach cannot state the material balance. That is the intended
+consequence of the division of labour: a quieter coach until the engine improves. Nothing
+is hidden from the model, which still gets every piece in the placement block.
+
+### Verified against the engine, not by arithmetic
+
+Row 53's book positions, re-measured on the normalized binary:
+
+| position | old units | normalized | ratio |
+|---|---|---|---|
+| Ruy Lopez Morphy `...a6` (sound) | 110 | 55 | 2.00x |
+| Sicilian `1...c5` (sound) | 109 | 55 | 1.98x |
+| `1.f3` (genuinely bad) | 52 | 26 | 2.00x |
+
+Row 53's finding survives intact: the bad move still scores *lower* than the sound book
+moves, so no threshold separates them and the leniency has to sit above 55. 75 does.
+
+And the six plies row 67 found silenced (22, 26, 38, 44, 56, 58) all speak again, at
+drops of 33/34/36/27/29/30 against the new `sound` band of 25. **6 of 6 restored.**
+
+### Three latent copies of the thresholds, found by doing this
+
+- The `<= 50` "say nothing about a good move" rule was **hardcoded twice** in `coach.py`
+  rather than reading `SOUND_MAX_DROP_CP`, so the coach's central silence rule would have
+  kept using pre-normalization numbers while everything else moved.
+- `web/server.py`'s SSE play path had a **third copy of the whole ladder** (150/50/100).
+- The 150 leniency was duplicated **three times**. Now one `OPENING_LENIENCY_CP`.
+
+The tests are the other half of the lesson. About a dozen assertions hardcoded 50/51/100/
+101; every one failed on the rescale and not one of them was telling us anything about the
+code under test. They now reference the constants, plus one new assertion that the bands
+are *ordered*, which is the invariant that actually holds and which a rescale could break
+while every boundary test still passed.
+
+### What this does NOT fix, and the standing risk
+
+Normalization changed the unit, not the accuracy. The drawn KPK position now reads +178
+where it read +355; the answer is 0. The ~50cp residual against Stockfish on quiet
+positions is untouched, and it is still as wide as the whole `sound` band — so row 62's
+conclusion, and the magnitude change built on it, both stand.
+
+**The Blunder change is uncommitted.** These thresholds assume it. If it is reverted or a
+clean checkout is built, they become 2x too strict and the coach starts criticising the
+Sicilian — BUG-008 all over again. Probe to check with: the KPK position at depth 16 reads
+178 normalized, 355 raw.

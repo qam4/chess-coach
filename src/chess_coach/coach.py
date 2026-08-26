@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import chess
 
 from chess_coach.analyzer import analyze_position, format_analysis_for_llm
-from chess_coach.coaching_phrases import DUBIOUS_MAX_DROP_CP, SOUND_MAX_DROP_CP
+from chess_coach.coaching_phrases import DUBIOUS_MAX_DROP_CP, OPENING_LENIENCY_CP, SOUND_MAX_DROP_CP
 from chess_coach.coaching_templates import generate_move_coaching, generate_position_coaching
 from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol, UciEngine
 from chess_coach.llm.base import LLMProvider
@@ -534,9 +534,13 @@ class Coach:
         Thresholds (from side-to-move perspective) share the single-source
         centipawn boundaries in ``coaching_phrases`` with the move-menu
         soundness tags, so the numbers are defined in exactly one place:
-        - good: eval drop <= 50 cp  (less than half a pawn — not worth critiquing)
-        - inaccuracy: eval drop 51-100 cp
-        - blunder: eval drop > 100 cp
+        - good: drop <= ``SOUND_MAX_DROP_CP`` (not worth critiquing)
+        - inaccuracy: drop up to ``DUBIOUS_MAX_DROP_CP``
+        - blunder: past that
+
+        The values are deliberately not repeated here. They were, and the docstring went
+        stale the moment the engine's output scale changed — a comment is the one place a
+        threshold can be wrong with no test to catch it.
         """
         if eval_drop_cp <= SOUND_MAX_DROP_CP:
             return "good"
@@ -679,7 +683,10 @@ class Coach:
                     "Move ends the game — coaching it regardless of eval drop",
                     tool="engine",
                 )
-            if not ends_game and move_number <= 6 and report.eval_drop_cp <= 150:
+            # 75 was 150 before the engine started normalizing its output (see
+            # OPENING_LENIENCY_CP): an algebraic halving, verified against the row-53
+            # book positions, which now score 55 where they scored 110.
+            if not ends_game and move_number <= 6 and report.eval_drop_cp <= OPENING_LENIENCY_CP:
                 _trace(
                     "eval_skip_llm",
                     f"Opening move (move {move_number}, drop {report.eval_drop_cp}cp) — skipping LLM",
@@ -693,7 +700,7 @@ class Coach:
                     feedback="",
                     _comparison=report,
                 )
-            if not ends_game and report.eval_drop_cp <= 50:
+            if not ends_game and report.eval_drop_cp <= SOUND_MAX_DROP_CP:
                 _trace(
                     "eval_skip_llm",
                     f"Good move (drop {report.eval_drop_cp}cp) — skipping LLM",
@@ -861,7 +868,7 @@ class Coach:
         # the two paths cannot disagree about whether a won game gets a word.
         move_number = int(fen_before.split()[-1]) if fen_before.split() else 1
         ends_game = _move_ends_game(fen_before, user_move)
-        if not ends_game and move_number <= 6 and eval_drop <= 150:
+        if not ends_game and move_number <= 6 and eval_drop <= OPENING_LENIENCY_CP:
             _trace(
                 "eval_skip_llm",
                 f"Opening move (move {move_number}, drop {eval_drop}cp) — skipping LLM feedback",
@@ -875,7 +882,7 @@ class Coach:
                 feedback="",
                 _result_after=result_after,
             )
-        if not ends_game and eval_drop <= 50:
+        if not ends_game and eval_drop <= SOUND_MAX_DROP_CP:
             _trace(
                 "eval_skip_llm",
                 f"Good move (drop {eval_drop}cp) — skipping LLM feedback",

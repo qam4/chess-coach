@@ -52,12 +52,24 @@ def test_drop_without_reinstatement_criterion_is_rejected() -> None:
         et.FieldTrust(field="X.y", verdict=et.DROPPED, basis="b", reason="r", evidence="e")
 
 
-def test_partial_drops_are_recorded_as_defects() -> None:
-    """``critical_reason`` and ``best_move_idea`` are suppressed on one path and
-    live on another. Recorded so they get fixed rather than rediscovered."""
-    fields = {e.field for e in et.inconsistent()}
-    assert "ComparisonReport.critical_reason" in fields
-    assert "ComparisonReport.best_move_idea" in fields
+def test_no_partial_drops_remain() -> None:
+    """A field dropped on one path and live on another is always a defect.
+
+    This test used to assert the opposite — that ``critical_reason`` and
+    ``best_move_idea`` WERE recorded as partial — because both were, and recording
+    them was how they stayed visible instead of being rediscovered. Row 63 closed
+    both: ``critical_reason`` came off the position prompt (it was already off the
+    move prompt), and the dead v1 template that still rendered ``best_move_idea``
+    was deleted.
+
+    Inverted rather than deleted, so the register cannot quietly acquire a new
+    partial drop. If this fails, a field is being suppressed on one surface and
+    rendered on another, and the fix is to pick one.
+    """
+    partial = et.inconsistent()
+    assert not partial, "partial drops must be completed or reversed, not left: " + ", ".join(
+        f"{e.field} ({e.reason[:60]}...)" for e in partial
+    )
 
 
 def test_capability_gaps_are_enumerable() -> None:

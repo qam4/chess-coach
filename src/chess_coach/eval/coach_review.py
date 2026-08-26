@@ -134,6 +134,16 @@ class ReviewStats:
     # position; a log warning is not a guard, so this is surfaced in the stats
     # block of every run (and to the frontier reviewer). Should be 0.
     prompt_uci_leaks: int = 0
+    # Turns where the coach pronounced a grade on the move ("that was a blunder") or
+    # put a number on what it cost. Both were withheld from the prompt once the eval
+    # magnitude was measured as indefensible, so a non-zero count here is the model
+    # supplying them out of its own vocabulary — the falsifier for that change rather
+    # than a restatement of it. Should be 0.
+    graded_or_priced: int = 0
+    # Turns whose PROMPT still carried an eval magnitude. The same guard one level up:
+    # a rendered figure is one f-string from returning, and two of this project's
+    # recorded drops turned out to be live on a second path. Should be 0.
+    prompt_magnitude_leaks: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -151,6 +161,8 @@ class ReviewStats:
             "lesson_concentration_rate": round(self.lesson_concentration_rate, 4),
             "fidelity_by_phase": {k: dict(v) for k, v in self.fidelity_by_phase.items()},
             "prompt_uci_leaks": self.prompt_uci_leaks,
+            "graded_or_priced": self.graded_or_priced,
+            "prompt_magnitude_leaks": self.prompt_magnitude_leaks,
         }
 
     @classmethod
@@ -179,6 +191,8 @@ class ReviewStats:
             lesson_concentration_rate=d.get("lesson_concentration_rate", 0.0),
             fidelity_by_phase={k: dict(v) for k, v in (d.get("fidelity_by_phase") or {}).items()},
             prompt_uci_leaks=d.get("prompt_uci_leaks", 0),
+            graded_or_priced=d.get("graded_or_priced", 0),
+            prompt_magnitude_leaks=d.get("prompt_magnitude_leaks", 0),
         )
 
 
@@ -214,6 +228,14 @@ _SQUARE_RE = re.compile(r"(?<![a-h][1-8])[a-h][1-8]")
 # A bare UCI move token ("f6g4"): should never appear in a rendered prompt, since
 # every move is meant to be SAN. Detects silent SAN-conversion fallbacks.
 _UCI_TOKEN_RE = re.compile(r"\b[a-h][1-8][a-h][1-8][qrbn]?\b")
+# An eval magnitude or a relayed engine verdict in a rendered PROMPT. Anchored on the
+# labels and units the prompt used to carry ("Evaluation drop: 90 centipawns",
+# "Classification: inaccuracy", "(+40 cp, sound)") rather than on bare digits, which
+# occur legitimately all over a prompt (square names, move numbers, word limits).
+_PROMPT_MAGNITUDE_RE = re.compile(
+    r"centipawns?\b|[-+]?\d+\s*cp\b|\bevaluation drop\b|\bclassification:|\bannotation:|\boverall evaluation\b",
+    re.IGNORECASE,
+)
 # NB: a list of "principle keywords" used to live here, with a 120-character
 # proximity rule, to detect whether the coach applied a principle to the position
 # instead of just stating one. It is gone. Words like "material", "capture",
@@ -389,6 +411,61 @@ def names_unsourced_square(turn: ReviewTurn) -> bool:
     return any(sq not in prompt for sq in _extra_squares(turn))
 
 
+# A grade pronounced on the move, or a price put on it. The prompt no longer supplies
+# either, so anything matching here came out of the model's own vocabulary.
+#
+# Grade words are matched only where they describe the MOVE ("that was a blunder",
+# "this is an inaccuracy"), not in general chess talk, because "a blunder" can appear
+# in a legitimate warning ("that square invites a blunder"). The price patterns are
+# unambiguous: a centipawn figure or a pawn-valued cost has no innocent reading in
+# coaching text.
+#
+# Shape: a subject pronoun, a copula (including the contraction), then up to four
+# filler words before the grade word. The copula is what keeps it honest — "that
+# square invites a blunder" is a warning about a square and has none, while "that
+# was a blunder" is a verdict on the move and does.
+_GRADE_RE = re.compile(
+    r"\b(?:that|this|it|which)(?:'s|’s|\s+(?:was|is|wasn't|isn't|was\s+not))\s+"
+    r"(?:\w+[\s-]+){0,4}?(?:blunder|inaccuracy|mistake|error)\b",
+    re.IGNORECASE,
+)
+#
+# The pawn forms are the fiddly half, and a first version got them wrong: it flagged
+# three real turns for "the e5 pawn", "your a2 pawn" and "the h7 pawn", because the
+# rank digit of a square sits immediately before the word. Hence the ``(?<![a-h])``
+# guard on every digit. The mirror image of the square-regex bug in _SQUARE_RE, and it
+# would have reported the change as failing when it had not.
+#
+# A bare whole number of pawns is NOT a price: "wins two pawns" or "wins 2 pawns" is a
+# material count, checkable on the board, and legitimate coaching. What is a price is a
+# FRACTIONAL pawn figure (which only ever came from dividing an eval drop by 100) or any
+# pawn figure attached to cost language, which is how the old templates phrased it.
+_COST_VERB = r"(?:lost|lose|loses|losing|costs?|costing|drops?|dropping|gave up|gives up|throws? away)"
+_PRICE_RE = re.compile(
+    r"[-+]?(?<![a-h])\d+(?:\.\d+)?\s*(?:centipawns?|cp)\b"
+    r"|(?<![a-h])\d+\.\d+\s*pawns?\b"
+    rf"|{_COST_VERB}\s+(?:about\s+|roughly\s+|around\s+|approximately\s+)?(?<![a-h])\d+(?:\.\d+)?\s*pawns?\b",
+    re.IGNORECASE,
+)
+
+
+def grades_or_prices_the_move(turn: ReviewTurn) -> bool:
+    """True if the coach pronounced a grade on the move or put a number on its cost.
+
+    The thing "stop asserting magnitude" is supposed to have stopped, measured on the
+    output rather than assumed from the prompt. Both halves were withheld from the
+    prompt — no eval, no drop, no engine classification, no NAG — but a 14B model can
+    still produce "that was a blunder" from its own pretraining, and this project's
+    own ledger records three separate occasions where an instruction alone did not
+    change what the model wrote (rows 2, 39, and the phase-gated lesson table in 20).
+
+    So this is the falsifier. If it sits at zero on the next report card, withholding
+    was sufficient. If it does not, the instruction is not carrying the weight and the
+    next lever is a gating check in :mod:`chess_coach.verify`, not more prompt text.
+    """
+    return bool(_GRADE_RE.search(turn.coach_feedback) or _PRICE_RE.search(turn.coach_feedback))
+
+
 def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
     """Roll a list of :class:`ReviewTurn` into deterministic :class:`ReviewStats`."""
     n = len(turns)
@@ -414,6 +491,8 @@ def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
         lesson_concentration_rate=lesson_concentration(turns),
         fidelity_by_phase={k: dict(v) for k, v in by_phase.items()},
         prompt_uci_leaks=sum(1 for t in turns if t.prompt and _UCI_TOKEN_RE.search(t.prompt)),
+        graded_or_priced=sum(1 for t in turns if grades_or_prices_the_move(t)),
+        prompt_magnitude_leaks=sum(1 for t in turns if t.prompt and _PROMPT_MAGNITUDE_RE.search(t.prompt)),
     )
 
 
@@ -615,6 +694,13 @@ def _fmt_stats(stats: ReviewStats) -> str:
         f"position; this is measured, so you do not need to count it by hand)\n"
         f"Empty feedback turns: {stats.empty_feedback}\n"
         f"Prompts still containing raw UCI (should be 0): {stats.prompt_uci_leaks}\n"
+        # Spelled out for the reviewer, because a reviewer once read a neutrally
+        # labelled rate backwards and built its headline recommendation on it.
+        f"Turns grading the move or pricing it (should be 0): {stats.graded_or_priced} "
+        f"(LOWER IS BETTER — the engine's eval magnitude is not in centipawns and is "
+        f"off by a signed +122cp where the coach speaks, so no grade or cost is "
+        f"supplied to the coach at all; anything here is the model's own invention)\n"
+        f"Prompts still containing an eval magnitude (should be 0): {stats.prompt_magnitude_leaks}\n"
         f"Generation latency (s): mean {stats.latency_mean_s:.1f}, "
         f"p90 {stats.latency_p90_s:.1f}, max {stats.latency_max_s:.1f}"
     )

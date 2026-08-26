@@ -52,7 +52,14 @@ Make the LLM the primary coaching voice in the chess-coach application. Currentl
 1. THE Prompt_Builder SHALL include an instruction in the move evaluation prompt directing the LLM to explain what the student's move failed to address or what it allowed the opponent to do.
 2. THE Prompt_Builder SHALL include an instruction in the move evaluation prompt directing the LLM to explain why the best move is stronger in concrete terms (what it achieves, what it prevents).
 3. THE Prompt_Builder SHALL include an instruction in the move evaluation prompt directing the LLM to frame feedback constructively — acknowledging what the student may have been trying to do before explaining what was missed.
-4. THE Prompt_Builder SHALL include the missed tactics, refutation line, best move idea, and eval drop in the move evaluation prompt.
+4. ~~THE Prompt_Builder SHALL include the missed tactics, refutation line, best move idea, and eval drop in the move evaluation prompt.~~
+   **AMENDED 2026-08-24 — the eval drop is excluded.** The rest stands. Blunder's
+   reported cp are not conventional centipawns (`PIECE_VALUE_BONUS` pawn = 124 midgame,
+   206 endgame, unnormalized) and the drop carries a signed +122cp error against
+   Stockfish 18 on the turns the coach speaks, with a 50-60cp residual under every
+   conversion tried. Including it stated a precision the system does not have. The
+   engine's `classification` and `nag` are excluded for the same reason. Superseded by
+   measurement, not by preference: see `docs/coach-report-card.md` ledger rows 56-63.
 5. THE Prompt_Builder SHALL include an instruction in the move evaluation prompt directing the LLM to stay grounded in the Comparison_Report data and not invent analysis.
 
 ### Requirement 4: Simplified Template Fallback
@@ -64,7 +71,14 @@ Make the LLM the primary coaching voice in the chess-coach application. Currentl
 1. THE Coaching_Templates SHALL generate position coaching text by presenting each non-empty Structured_Engine_Data section (assessment, piece safety, tactics, strategy, tensions, suggestion) in plain English.
 2. THE Coaching_Templates SHALL NOT contain scenario-specific branching logic that attempts to replicate LLM-level chess reasoning (e.g., specialized if-statements for specific piece configurations, opening-specific advice, or endgame technique instructions).
 3. THE Coaching_Templates SHALL preserve the structured section output format (list of CoachingSection objects with category, label, text, and optional arrows) for UI rendering.
-4. THE Coaching_Templates SHALL generate move evaluation coaching text by presenting the classification, eval drop, best move suggestion, missed tactics, and refutation line from the Comparison_Report in plain English.
+4. ~~THE Coaching_Templates SHALL generate move evaluation coaching text by presenting the classification, eval drop, best move suggestion, missed tactics, and refutation line from the Comparison_Report in plain English.~~
+   **AMENDED 2026-08-24 — the classification and the eval drop are excluded.** The best
+   move suggestion, missed tactics and refutation line stand. Same reason as Requirement
+   3.4, and it applies with more force here: this template is what a student reads when
+   the fidelity gate distrusts the model, so it is the last place to assert an unearned
+   number. It previously said "you lost about 1.2 pawns of advantage", which was not in
+   pawns either. It now states that a stronger move existed and lets the board-derived
+   sections say what it does.
 5. WHEN no notable features exist in any data section, THE Coaching_Templates SHALL produce a brief generic assessment rather than an empty response.
 
 ### Requirement 5: Hallucination Detector Improvements

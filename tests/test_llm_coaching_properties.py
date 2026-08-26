@@ -429,9 +429,19 @@ def test_position_prompt_data_sections(report: PositionReport) -> None:
     # FEN must always be present (Req 6.3)
     assert report.fen in prompt, "Prompt must contain the FEN string"
 
-    # Eval breakdown always present with delimiter
+    # Sections are delimited.
     assert "---" in prompt, "Prompt must use section delimiters"
-    assert "Material" in prompt or "material" in prompt.lower(), "Eval breakdown section must always be present"
+
+    # There is deliberately NO eval-breakdown section any more. It rendered the engine's
+    # `material` and `mobility` terms as "N cp", in Blunder units where a pawn is 124-206
+    # — "Material: 206" read as two pawns and meant one. A board-derived material count
+    # was written to replace it and then removed: substituting our own chess logic for an
+    # untrustworthy engine field is what the division of labour forbids. Material is
+    # countable from the placement block, which IS always present, so the model still has
+    # the facts — it just is not handed a verdict. Req 8.1 amended accordingly.
+    assert "--- Material Balance ---" not in prompt
+    assert "--- Piece Activity / Mobility ---" not in prompt
+    assert "--- Board (piece placement) ---" in prompt, "the model must still get every piece"
 
     # Threats: present only if non-empty
     has_threats = any(len(report.threats.get(s, [])) > 0 for s in ("white", "black"))
@@ -490,9 +500,17 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     elif report.eval_drop_cp <= SOUND_MAX_DROP_CP:
         assert "sound, reasonable move" in prompt_lower  # BUG-016 (affirm)
     elif report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
-        assert "slightly missed the mark" in prompt_lower  # inaccuracy tier
+        # Neither of the two tiers above `sound` asserts a size any more. The boundary
+        # between them is 100cp on an eval whose error against Stockfish 18 is 50-60cp
+        # under every conversion tried, so the distinction they used to draw ("a small
+        # inaccuracy" vs "a serious mistake") sat inside the noise. They still differ
+        # in what they lead with, and in word limit.
+        assert "there was a stronger move here" in prompt_lower
     else:
-        assert "serious mistake" in prompt_lower  # serious tier: direct
+        assert "lead with the consequence" in prompt_lower
+
+    if not played_best and report.eval_drop_cp > SOUND_MAX_DROP_CP:
+        assert "do not grade the move" in prompt_lower
 
     # Every tier forbids filler sign-offs.
     assert "no motivational sign-off" in prompt_lower
@@ -500,8 +518,17 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
     # Grounding instruction (Req 3.5)
     assert "grounded" in prompt_lower or "only" in prompt_lower, "Prompt must contain grounding instruction"
 
-    # Eval drop value present (Req 3.4)
-    assert str(report.eval_drop_cp) in prompt, f"Prompt must contain eval drop value {report.eval_drop_cp}"
+    # Req 3.4 said the prompt SHALL include the eval drop. It no longer does, and the
+    # requirement is superseded by measurement rather than dropped by oversight — see
+    # the amendment note in .kiro/specs/llm-primary-coaching/requirements.md. Blunder's
+    # cp are not centipawns (a pawn is 124 MG to 206 EG, unnormalized) and the drop
+    # carries a signed +122cp error on the turns the coach speaks. The magnitude is
+    # withheld rather than instructed against, because on this model withholding is the
+    # only thing that has ever worked (ledger rows 2, 39, 41).
+    assert "centipawn" not in prompt_lower, "no centipawn figure may reach the prompt"
+    assert "evaluation drop" not in prompt_lower
+    assert f"classification: {report.classification}" not in prompt_lower
+    assert f"annotation: {report.nag}".strip() not in prompt_lower
 
     # Best move idea present (Req 3.4) — but only on the tiers that COMPARE the
     # student's move against the engine's. Below EQUAL_MAX_DROP_CP the two moves are
@@ -570,10 +597,21 @@ def test_critical_moment_prompt_content(report: PositionReport) -> None:
         assert any(phrase in prompt_lower for phrase in critical_phrases), (
             "When critical_moment is True, prompt must contain critical moment language"
         )
-        # Critical reason should appear if provided
-        if report.critical_reason:
-            assert report.critical_reason.lower() in prompt_lower, (
-                "Critical reason must appear in prompt when critical_moment is True"
+        # The FLAG earns a fuller explanation; the engine's `critical_reason` must NOT
+        # reach the prompt. Its only format is "eval spread between best and 3rd-best
+        # line is 107cp" — our own bookkeeping, in units that are not centipawns, and
+        # the coach voiced it verbatim as though it were a chess reason. Suppressed on
+        # the move path since v27 and, until now, still live here; engine_trust
+        # recorded that half-drop as a defect rather than a decision.
+        # Length guard: the strategy can generate a one-character reason like "0",
+        # which occurs incidentally all over a prompt and would fail a substring test
+        # on nothing. Real reasons are sentences ("eval spread between best and
+        # 3rd-best line is 107cp"), so only those are meaningful to look for here.
+        # test_no_magnitude_leak asserts the exact realistic string.
+        reason = (report.critical_reason or "").strip()
+        if len(reason) >= 12:
+            assert reason.lower() not in prompt_lower, (
+                "The engine's critical_reason is eval bookkeeping and must not reach the prompt"
             )
     else:
         # The specific critical moment marker should NOT be present

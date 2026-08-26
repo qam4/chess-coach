@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from chess_coach.eval.coach_review import (
     PHASE_ENDGAME,
     PHASE_MIDDLEGAME,
     PHASE_OPENING,
+    ReviewStats,
     ReviewTurn,
     aggregate_review,
     build_coach_review_prompt,
+    grades_or_prices_the_move,
 )
 
 
@@ -369,3 +373,97 @@ def test_repetition_metrics_survive_the_round_trip() -> None:
     assert restored.recycled_phrase_rate == round(original.recycled_phrase_rate, 4)
     assert restored.lesson_concentration_rate == round(original.lesson_concentration_rate, 4)
     assert restored.to_dict() == original.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# grades_or_priced: the falsifier for "stop asserting magnitude"
+# ---------------------------------------------------------------------------
+#
+# This metric exists to be able to say the change FAILED, so it is worth more scrutiny
+# than most. Two earlier metrics in this module were deleted for being unable to fail:
+# `principle_connection_rate` passed on all 44 real responses and on prose written
+# specifically to break it, and an earlier lesson-concentration design was rebuilt
+# three times. A counter that only ever reports 0 is worse than no counter, because
+# someone will cite it. So both halves are pinned: the sentences it must catch, and
+# the coaching it must not flag.
+
+
+@pytest.mark.parametrize(
+    "feedback",
+    [
+        # The grade, in the forms the coach actually used before this change.
+        "That was a blunder — you left the knight on g5.",
+        "That was a serious mistake.",
+        "That's a small inaccuracy.",
+        "This is an inaccuracy, not a disaster.",
+        "It was a mistake to move the rook.",
+        # A grade with hedging words in between.
+        "That was really quite a bad blunder.",
+        # The price, in every unit it appeared in.
+        "The evaluation drop was 90 centipawns.",
+        "It costs about 2.0 pawns.",
+        "You lost about 1.2 pawns of advantage.",
+        "That drops 140 cp.",
+    ],
+)
+def test_grades_or_prices_catches_what_it_must(feedback: str) -> None:
+    assert grades_or_prices_the_move(_turn(1, PHASE_MIDDLEGAME, feedback=feedback)) is True
+
+
+@pytest.mark.parametrize(
+    "feedback",
+    [
+        # The replacement shape: a stronger move plus what it does. No grade, no price.
+        "There was a stronger move here. Nd5 hits the bishop on b4.",
+        "Good move. It develops the knight and takes aim at d5.",
+        # Board facts that mention pawns without pricing anything — the case a
+        # digits-only pattern would have flagged and the reason this is anchored on
+        # units and grammar instead.
+        "Your pawn on e4 is undefended.",
+        "You have 3 pawns on the queenside and the opponent has 2.",
+        # A square name immediately before the word "pawn". THE bug in the first
+        # version of this metric: the rank digit reads as a quantity, so these three
+        # real v32 turns were reported as pricing the move when none of them did.
+        "The better move was exd4, gaining a strong central e5 pawn.",
+        "Your a2 pawn is isolated, so keeping your king safe matters.",
+        "The stronger option was Rxh7, capturing the h7 pawn.",
+        # A whole number of pawns is a material count, not a price.
+        "Rxh7 wins 2 pawns and opens the file.",
+        "After your move the opponent plays Bb7+, winning your rook on a8.",
+        # "blunder" in a legitimate warning about a square, not a verdict on the move.
+        "Careful — that square invites a blunder later on.",
+        "Counting defenders first is how you avoid a blunder like that.",
+        # The composed takeaway.
+        "Worth remembering: count the defenders before you capture.",
+        "",
+    ],
+)
+def test_grades_or_prices_does_not_flag_ordinary_coaching(feedback: str) -> None:
+    assert grades_or_prices_the_move(_turn(1, PHASE_MIDDLEGAME, feedback=feedback)) is False
+
+
+def test_aggregate_reports_graded_and_prompt_magnitude_counts() -> None:
+    turns = [
+        _turn(1, PHASE_MIDDLEGAME, feedback="There was a stronger move here."),
+        _turn(2, PHASE_MIDDLEGAME, feedback="That was a blunder."),
+        _turn(3, PHASE_MIDDLEGAME, feedback="It costs about 1.5 pawns."),
+    ]
+    # One prompt still carrying a magnitude; the others clean.
+    turns[0] = dataclasses.replace(turns[0], prompt="Best move: Nd5\nEvaluation drop: 90 centipawns")
+    turns[1] = dataclasses.replace(turns[1], prompt="Best move: Nd5")
+    stats = aggregate_review(turns)
+    assert stats.graded_or_priced == 2
+    assert stats.prompt_magnitude_leaks == 1
+    # Both survive a serialization round-trip: the from_dict path silently dropped
+    # newer fields once already, and a reviewer was then shown 0 for a real number.
+    assert ReviewStats.from_dict(stats.to_dict()).graded_or_priced == 2
+    assert ReviewStats.from_dict(stats.to_dict()).prompt_magnitude_leaks == 1
+
+
+def test_stats_block_states_which_direction_is_good() -> None:
+    # A number handed to a reviewer without its sign is an invitation to misread it,
+    # which is exactly what happened with the composed-fact rate (ledger row 17).
+    stats = aggregate_review([_turn(1, PHASE_MIDDLEGAME, feedback="That was a blunder.")])
+    block = build_coach_review_prompt([_turn(1, PHASE_MIDDLEGAME)], stats)
+    assert "grading the move or pricing it (should be 0): 1" in block
+    assert "LOWER IS BETTER" in block

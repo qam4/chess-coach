@@ -17,6 +17,11 @@ from starlette.responses import StreamingResponse
 
 from chess_coach.analyzer import analyze_position
 from chess_coach.coach import Coach, CoachingResponse, MoveEvaluation, TraceStep
+from chess_coach.coaching_phrases import (
+    DUBIOUS_MAX_DROP_CP,
+    OPENING_LENIENCY_CP,
+    SOUND_MAX_DROP_CP,
+)
 from chess_coach.llm import classify_exception, describe
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -639,10 +644,16 @@ def create_app(coach: Coach) -> FastAPI:
                 from chess_coach.openings import lookup_fen as _lfen
 
                 is_book = _lfen(board_tmp.fen()) is not None
-                skip_threshold = 150 if is_book else 50
+                # Thresholds from the single source in coaching_phrases, not literals.
+                # These were hardcoded 150/50/100 and so were missed when the bands were
+                # halved for the engine's rescale — this streaming path would have gone
+                # on using pre-normalization numbers while every other path moved. The
+                # duplication of Coach's own rule is pre-existing and worth collapsing;
+                # using the constants at least stops the two drifting numerically.
+                skip_threshold = OPENING_LENIENCY_CP if is_book else SOUND_MAX_DROP_CP
                 if report.eval_drop_cp <= skip_threshold:
                     classification = "good"
-                elif report.eval_drop_cp <= 100:
+                elif report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
                     classification = "inaccuracy"
                 else:
                     classification = Coach.classify_move(report.eval_drop_cp)

@@ -459,13 +459,161 @@ END_COACH_RESPONSE
 
 ## 5. Protocol Versioning
 
-This protocol uses [Semantic Versioning](https://semver.org/):
+This protocol uses [Semantic Versioning](https://semver.org/). The current version is
+**1.0.0**.
 
-- **Major** version: incremented for breaking changes (removed fields, changed semantics, renamed commands)
-- **Minor** version: incremented for backward-compatible additions (new optional fields, new commands)
-- **Patch** version: incremented for clarifications or documentation fixes
+### 5.0 Why the version rarely moves, and what to do instead
 
-The current version is **1.0.0**.
+**One engine implements this protocol and one client consumes it, both owned by the same
+person and always updated together.** There is no third-party engine, no published client,
+and no supported configuration where a new chess-coach talks to an old Blunder. Version
+negotiation exists to coordinate independent release cycles, and there are none here.
+
+So the practical rule is not "bump the version". It is:
+
+> **When the meaning of a field changes, both repos change in the same session, and the
+> change gets a changelog row.**
+
+The number is optional; the coordination and the record are not. A bump's only mechanism
+is to make the client refuse to use the protocol, which helps exactly when the two sides
+can drift apart — and ours cannot without someone doing it deliberately on their own dev
+machine.
+
+It is also worth being clear that a bump would not have caught the incident that prompted
+this section. Bumping depends on the person changing the units recognising that they
+changed the contract, which is precisely what did not happen. What caught it was a
+downstream measurement. **Version discipline is not a substitute for detection**; see 5.7.
+
+The taxonomy below is therefore kept for a different reason than semver usually is: it
+tells you **when the two repos must move together**, which is the part that matters. Read
+"MAJOR" as "the client cannot absorb this on its own — change both, same session, write it
+down."
+
+If a second consumer or a published build ever appears, revisit this: at that point the
+version numbers start doing real work and 5.6 becomes load-bearing.
+
+### 5.1 What the version does and does not tell you
+
+The version answers exactly one question: **can this client parse and correctly interpret
+this engine's responses?** It is a statement about the *contract*, not about the
+*quality* of the data.
+
+It deliberately says nothing about whether the numbers are any good. An engine whose
+evaluation becomes more accurate — a better-tuned eval, or NNUE replacing a hand-crafted
+one — is emitting the same fields with the same meaning, and **must not** bump any version
+component. If it did, every accuracy improvement would present as a breaking change and
+the signal would be worthless.
+
+Trustworthiness is tracked separately, per field, in `chess_coach.engine_trust`. Keep the
+two apart: version = "can I read it", trust register = "should I believe it".
+
+### 5.2 MAJOR — the client must refuse to use the protocol
+
+Bump major when an existing client that parses successfully would nonetheless be
+**wrong**. The test to apply: *could a client keep working without noticing?* If yes, and
+the answer it produces has changed, it is a major bump.
+
+- **The unit, scale or meaning of a numeric field changes.** Includes rescaling
+  (normalizing to conventional centipawns), changing the reference frame (side-to-move vs
+  White-relative), or changing what a field measures. **This is the dangerous class**: the
+  JSON shape is identical, every schema validation passes, and nothing fails until someone
+  notices the coaching has changed. It is listed first because it is the one that has
+  actually happened.
+- A field is **removed** or **renamed**.
+- A field's **type** changes, including nullable becoming non-nullable or vice versa.
+- A field's **cut points change such that the same position yields a different label** —
+  e.g. moving `classification`'s boundaries so a given eval drop reports `mistake` where
+  it used to report `inaccuracy`. Note the converse: converting thresholds *alongside* a
+  rescale so the label is unchanged in chess terms is **not** a major change on its own
+  account, because no client-visible answer moved.
+- An **optional field becomes required**, or a required field becomes optional.
+- **Command syntax or the response envelope changes** incompatibly, including the marker
+  lines.
+- An **error `code` is removed or repurposed**.
+
+### 5.3 MINOR — additive, and old clients keep working untouched
+
+Bump minor when a conforming older client continues to be correct while simply not using
+the new thing.
+
+- A **new optional field** is added to a response.
+- A **new command** is added.
+- A **new optional parameter** is accepted on an existing command.
+- A **new error `code`** is introduced for a condition that previously produced a generic
+  error.
+- A **new enum value** is added to a string field (e.g. a new `tactics[].type`, or a new
+  `classification` label) — but read 5.5 first, because this one has a trap.
+
+### 5.4 PATCH — nothing a client can observe
+
+- The engine is fixed to **conform to behaviour this document already specified**. The
+  contract did not change; the implementation stopped violating it.
+- Documentation, wording and example fixes.
+- Performance, search strength, and evaluation *accuracy* changes (see 5.1).
+
+### 5.5 Judgement calls, written down so they are not re-litigated
+
+**A new enum value is additive to parse and can still break a client.** This client's
+validators do not whitelist enum values, so an unknown `classification` or tactic `type`
+parses fine. But client code that *branches* on the value will silently fall through its
+cases. So: minor is correct, and the engine should treat a new enum value as a change
+worth announcing in the changelog rather than a silent minor.
+
+**Accuracy is not a version change; a change in what accuracy *means* is.** NNUE landing
+with the same output units is a patch-level detail. NNUE landing with a different output
+scale is major.
+
+**Adding a field the client had asked for is still minor, not major.** Wanting a field
+does not make its absence a breaking contract.
+
+**When in doubt, treat it as major** — meaning change both repos together and write the
+row. That costs a few minutes. Getting it wrong the other way put silently miscalibrated
+coaching in front of a student for a full report-card cycle.
+
+### 5.6 If the version ever does need to move
+
+Only relevant if a second consumer or a published build appears (see 5.0). A major bump is
+a hard failure by design — the client sets `coaching_available = False` and drops to plain
+UCI — so the order would matter: **client first** (teaching it the new semantics and the
+new `EXPECTED_VERSION` in one change), **engine second**, same session, with the gap kept
+short. Never the engine alone: every existing client silently loses coaching, and on the
+template/mobile path there is no visible symptom at all.
+
+Today the same instruction reduces to "change both, same session", which is 5.0's rule.
+
+### 5.7 Enforcement — because a policy nothing can fail gets skipped
+
+This policy was skipped once, so it needs a tripwire rather than good intentions.
+
+- **Engine side (the producer asserts its own contract).**
+  `test/source/TestScoreNormalization.cpp` in the Blunder repo pins the unit contract —
+  one pawn is 100 cp, mate scores pass through undivided, ordering is preserved. A future
+  change to the output scale now has to edit a test that says in words what the unit is,
+  which is the prompt to bump the version that was missing.
+- **Client side.** `check_version_compatibility` enforces the table below, and
+  `tests/test_engine_trust.py` forces a recorded judgement for every report field, so a
+  new field cannot arrive unnoticed.
+- **What neither side catches, and the cheap fix.** CI has no engine, so nothing in this
+  repo can detect the engine changing underneath us. It took forensics on file timestamps
+  to work out that v31 and v32 had run against different engines at all.
+
+  The fix is not a version check, it is **provenance**: record the engine binary's
+  identity (path, size, mtime or hash) in `transcript.json` alongside the stats. Then two
+  runs that disagree carry the reason with them, and a confounded comparison announces
+  itself instead of being reconstructed weeks later. Cheap, and it would have turned this
+  incident into a one-line observation. Tracked in `BACKLOG.md`.
+
+  A runtime assertion on a known position at handshake time would also work, but it costs
+  a search on every startup to catch something that happens once a year.
+
+### 5.8 Changelog
+
+Every version gets a row and a reason. A version with no row is a version nobody decided.
+
+| Version | Date | Change | Notes |
+|---------|------|--------|-------|
+| 1.0.0 | — | Initial protocol: `ping`, `eval`, `compare`. | |
+| 1.0.0 | 2026-08-24 | **Scores normalized to conventional centipawns** at the engine's output boundary (`NORMALIZE_TO_PAWN = 200`), halving every `*_cp` value. Blunder `d2b228a`. | A meaning change, so by 5.2 the two repos had to move together — and they did not. The engine changed on 2026-08-24 and the client's eval-drop thresholds were not converted until 2026-08-25, so for one report-card cycle (v32) the coach was ~2x more lenient than intended and went silent on 6 turns nobody chose. Deliberately **not** renumbered after the fact: the version stayed 1.0.0, and rewriting history to pretend otherwise would lose the only useful thing here, which is that the record is what catches this, not the number. Client side: chess-coach thresholds halved, ledger rows 67-68. |
 
 ### Compatibility Rules
 

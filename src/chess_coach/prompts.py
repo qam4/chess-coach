@@ -11,6 +11,7 @@ from chess_coach.coaching_phrases import (
     EQUAL_MAX_DROP_CP,
     SOUND_MAX_DROP_CP,
     build_move_menu,
+    describe_eval,
     describe_hanging,
     describe_king_safety,
     describe_move_menu,
@@ -221,24 +222,12 @@ generic platitudes.
 # Rich prompt templates for coaching protocol data
 # ---------------------------------------------------------------------------
 
-RICH_COACHING_PROMPT = """\
-{system}
-
-Student level: {level}
-
-You are given a structured engine analysis of a chess position. Your job is \
-to explain this analysis in plain language. Do NOT add your own analysis or \
-invent ideas not present in the data below. Only explain what the engine found.
-
-Position (FEN): {fen}
-Overall evaluation: {eval_cp} centipawns
-
-{sections}
-
-{critical_section}\
-Based on the data above, explain the position to the student. Cover the most \
-important features first. Keep your response concise (under 200 words).\
-"""
+# NOTE: the v1 rich templates (``RICH_COACHING_PROMPT`` and
+# ``RICH_MOVE_EVALUATION_PROMPT``) were deleted here. They had no call site left —
+# every path builds the V2 prompt — but they were not harmless dead code:
+# ``engine_trust`` recorded ``ComparisonReport.best_move_idea`` as DROPPED_PARTIAL
+# *because* the v1 move template still rendered it, and dead text is exactly how a
+# dropped field creeps back. Deleting them turns that partial drop into a real one.
 
 RICH_COACHING_PROMPT_V2 = """\
 {system}
@@ -249,8 +238,7 @@ You are given a structured engine analysis of a chess position. Use ONLY the \
 data below — do not add your own analysis or invent ideas not present here.
 
 Position (FEN): {fen}
-Overall evaluation: {eval_cp} centipawns (from White's perspective: positive \
-favors White, negative favors Black)
+{standing}
 {perspective}
 
 {sections}
@@ -287,54 +275,40 @@ MOVE_SOURCING_RULE = (
     "against them).\n"
 )
 
-RICH_MOVE_EVALUATION_PROMPT = """\
-{system}
-
-Student level: {level}
-
-You are given a structured comparison of the student's move against the \
-engine's best move. Your job is to explain what the student missed. Do NOT \
-re-analyze the position or add ideas not present in the data below.
-
-Position (FEN): {fen}
-
-Student's move: {user_move}
-Student's move evaluation: {user_eval_cp} centipawns
-Best move: {best_move}
-Best move evaluation: {best_eval_cp} centipawns
-Evaluation drop: {eval_drop_cp} centipawns
-Classification: {classification}
-Annotation: {nag}
-
-What the best move achieves: {best_move_idea}
-
-{sections}
-
-{critical_section}\
-Based on the data above, explain what the student missed and why the best \
-move is stronger. Keep your response concise (under 100 words).\
-"""
-
+# No evaluations, no eval drop, no engine classification, no NAG.
+#
+# Measured, not stylistic. Blunder's reported cp are not conventional centipawns
+# (a pawn is 124 MG to 206 EG, unnormalized), and against Stockfish 18 the
+# magnitude carries a signed +122cp error on the turns the coach actually speaks,
+# with a 50-60cp residual under every conversion we tried — wider than the 50/100
+# bands we were sorting moves into. So "Evaluation drop: 90 centipawns" asserted a
+# precision we do not have, and "Classification: inaccuracy" relayed the engine's
+# verdict computed on those same units with cut points of unknown provenance.
+#
+# They are WITHHELD rather than accompanied by an instruction not to repeat them.
+# Three ledger rows say that is the only thing that works on this model: a bare
+# grounding rule against invented causes did nothing (row 2), renaming a header the
+# model kept copying made it worse (0 -> 6 -> 8 echoes, row 39), and removing the
+# header outright fixed it (8 -> 0, row 41).
+#
+# What survives is the engine's move ORDERING, which is what a 2500 engine is
+# actually good at, and the board-derived clauses in ``{best_move_line}`` and the
+# sections — facts a student can check on the board. Severity now reaches the model
+# only through the tier's tone and word limit, not as a number it can quote.
 RICH_MOVE_EVALUATION_PROMPT_V2 = """\
 {system}
 
 Student level: {level}
 
 You are given a structured comparison of the student's move against the \
-engine's best move. Use ONLY the data below — do not re-analyze the position \
-or add ideas not present here.
+engine's preferred move. Use ONLY the data below — do not re-analyze the \
+position or add ideas not present here.
 
 Position (FEN): {fen}
 {perspective}
 
 Student's move: {user_move}
-Student's move evaluation: {user_eval_cp} centipawns
-Best move: {best_move}
-Best move evaluation: {best_eval_cp} centipawns
-Evaluation drop: {eval_drop_cp} centipawns
-Classification: {classification}
-Annotation: {nag}
-{best_move_line}
+{alternative_line}{best_move_line}
 {sections}
 
 {move_instructions}\
@@ -396,30 +370,40 @@ sign-off.
 placements, tactics, or "and then..." continuations.
 """
 
-# Student's move was a small INACCURACY (eval drop within the dubious band).
-# A brief redirect — do not over-dramatize a small slip.
+# Student's move fell short, but by how much is NOT something we can state. The two
+# lower tiers used to assert a size — "a small inaccuracy, not a disaster" and "this
+# was a serious mistake" — and those are the sentences the measurement took away: on
+# the 18 turns the coach spoke in one game, at least 7 criticised a move Stockfish
+# scores good or near-good, and the residual under every conversion is as wide as the
+# band that separates these two tiers. So neither claims a size. What they lead with
+# instead is the board-verified consequence, which is a fact either way: if the
+# opponent's reply wins a rook, saying so IS the severity, and the student can check
+# it. The tiers still differ, in directness and in length.
 _MOVE_EVAL_INSTRUCTIONS_INACCURACY = """\
 COACHING INSTRUCTIONS:
-- The student's move slightly missed the mark — a small inaccuracy, not a \
-disaster. Give a BRIEF redirect (2-3 sentences): acknowledge the intent in a \
-few words, then name the stronger move and its specific idea — use the line \
-above stating what the move does — not a generic principle. No motivational \
-sign-off.
+- There was a stronger move here. Give a BRIEF redirect (2-3 sentences): \
+acknowledge the intent in a few words, then name the stronger move and its \
+specific idea — use the line above stating what the move does — not a generic \
+principle. No motivational sign-off.
+- Do NOT grade the move or say how much it cost. Do not call it an \
+inaccuracy, a mistake or a blunder, and do not quantify what was lost. \
+Describe what the stronger move does; that is the lesson.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
 
-# Student's move was a SERIOUS mistake (eval drop past the dubious band). Be
-# direct — the student must feel the severity; no cushioning praise.
 _MOVE_EVAL_INSTRUCTIONS_SERIOUS = """\
 COACHING INSTRUCTIONS:
-- This was a serious mistake — say so directly and plainly. Do NOT open with \
-praise or "great job". Lead with the cost: if an "Opponent's reply" is shown, \
-name that single reply ("after your move, the opponent plays X") and what it \
-wins, using the eval and threats shown. Do NOT list a longer sequence of moves.
+- This move let something concrete happen. Do NOT open with praise or "great \
+job". Lead with the consequence: if an "Opponent's reply" is shown, name that \
+single reply ("after your move, the opponent plays X") and what it wins, using \
+the threats shown. Do NOT list a longer sequence of moves.
 - Then give the concrete better move and the specific idea it achieves \
 (squares, pieces, threats). Be direct and specific, not generic. No \
 motivational sign-off.
+- Do NOT grade the move or say how much it cost. Do not call it an \
+inaccuracy, a mistake or a blunder, and do not quantify what was lost. The \
+reply and what it wins are the cost, stated as a fact the student can check.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -577,16 +561,23 @@ def _uci_line_to_numbered_san(fen: str, ucis: list[str]) -> str:
     return " ".join(out)
 
 
-def _format_eval_breakdown(report: PositionReport) -> str:
-    """Format the eval breakdown section."""
-    eb = report.eval_breakdown
-    return (
-        "--- Material Balance ---\n"
-        f"Material: {eb.material} cp\n"
-        "\n"
-        "--- Piece Activity / Mobility ---\n"
-        f"Mobility: {eb.mobility} cp"
-    )
+# NOTE: there is deliberately no material section here any more.
+#
+# The old one printed the engine's own `material` and `mobility` terms as "N cp",
+# both in Blunder units where a pawn is 124 (MG) to 206 (EG) — so "Material: 206"
+# read as two pawns and meant one. Those are gone for the reasons in row 63.
+#
+# A first replacement counted material from the board in points, and that was the
+# wrong instinct: it is chess logic in the wrong repo. The agreed division of labour
+# (BACKLOG, 2026-08-21) is that when engine data cannot be trusted we DROP it, record
+# the drop, and accept a quieter coach until the engine improves — not that we build a
+# substitute. Piece values are contested knowledge, and `pedagogy.features` already
+# restricts its own copy of them to keying guidance, "never to evaluate a position".
+#
+# Nothing is actually lost from the model's point of view: the placement block above
+# lists every piece on both sides, so material is countable from what it already has,
+# and any claim it makes about the board is checked by verify.py before the student
+# sees it. Supply facts, let the model reason, verify the output.
 
 
 def _format_placement(fen: str) -> str | None:
@@ -745,12 +736,19 @@ def _build_level_instructions(level: str) -> str:
             "square references."
         )
 
-    # Beginner + intermediate: avoid engine jargon
+    # Beginner + intermediate: plain language, and no invented numbers.
+    #
+    # This used to enumerate "centipawns, PV lines, depth numbers" — all things the
+    # prompt itself was handing over three sections earlier, which made it an
+    # instruction not to repeat our own data, the one shape of constraint this model
+    # reliably ignores. None of them are supplied any more, so the enumeration is
+    # stale; what remains is about the model's OWN vocabulary, where it can still
+    # produce a rating out of its pretraining even though nothing here suggests one.
     if level in ("beginner", "intermediate"):
         parts.append(
-            "- Avoid engine jargon: Do not mention centipawns, PV lines, "
-            "depth numbers, or other engine-specific terminology. Translate "
-            "engine concepts into plain language the student can understand."
+            "- Plain language, no engine jargon: describe what is happening "
+            "on the board in words the student can check against the pieces. "
+            "Do not rate the position or the move with a number or a score."
         )
 
     if not parts:
@@ -843,7 +841,6 @@ def build_rich_coaching_prompt(
         sections.append(placement_section)
 
     # Always-present sections
-    sections.append(_format_eval_breakdown(report))
     sections.append(_format_pawn_structure(report))
 
     # Conditionally-present sections
@@ -876,11 +873,18 @@ def build_rich_coaching_prompt(
 
     # Critical moment
     if report.critical_moment:
+        # ``critical_reason`` is deliberately not passed on, matching the move path.
+        # Its only format is "eval spread between best and 3rd-best line is 107cp" —
+        # our own bookkeeping in units that are not centipawns. Handed it, the coach
+        # dutifully voiced it. This was the last live half of that drop:
+        # engine_trust recorded it as DROPPED_PARTIAL, suppressed on the move path
+        # and still rendered here. The flag still earns a fuller explanation; the
+        # number never reaches the student.
         critical_section = (
-            "⚠ CRITICAL MOMENT: This position demands precise play. "
-            f"Reason: {report.critical_reason}\n"
+            "⚠ CRITICAL MOMENT: This position demands precise play.\n"
             "Please provide a MORE DETAILED explanation of this position, "
-            "covering all key features and why accuracy matters here.\n\n"
+            "covering all key features and why accuracy matters here — in terms of "
+            "the position, never in terms of evaluations or engine line rankings.\n\n"
         )
     else:
         critical_section = ""
@@ -896,7 +900,10 @@ def build_rich_coaching_prompt(
         system=SYSTEM_PROMPT_V2,
         level=level,
         fen=report.fen,
-        eval_cp=report.eval_cp,
+        # Qualitative standing, not "Overall evaluation: N centipawns". Same reason
+        # as the move prompt: the number was not in centipawns and its magnitude is
+        # not defensible, while the band word survives a 50-60cp error.
+        standing=describe_eval(report),
         perspective=_format_perspective(report.fen),
         sections="\n\n".join(sections),
         level_instructions=level_instructions,
@@ -1547,14 +1554,26 @@ def compose_safe_move_feedback(report: ComparisonReport) -> str:
         return terminal
 
     tier = _move_feedback_tier(report)
+    # The two lower tiers no longer state a size. "That slightly missed the mark" and
+    # "That was a serious mistake" are claims resting on an eval drop whose error is as
+    # wide as the band between them, and this text is what a student reads precisely
+    # when we did not trust the model — the last place to assert something we cannot
+    # support. The board-derived clause below carries the weight honestly instead.
+    #
+    # On those two tiers there is deliberately NO opener: the named stronger move leads.
+    # A first version opened with "There was a stronger move here." and a live run
+    # produced "There was a stronger move here. Bc3 was stronger here — attacking their
+    # undefended bishop on b4." Saying it twice is worse than the number was. The
+    # affirming tiers keep their opener, because there affirmation IS the content and
+    # "sound" has to affirm before it offers a refinement (BUG-016).
     opening = {
         "best": "Good move.",
         "equal": "That works — it is as good as anything else here.",
         "sound": "A reasonable move.",
-        "inaccuracy": "That slightly missed the mark.",
-        "serious": "That was a serious mistake.",
+        "inaccuracy": "",
+        "serious": "",
     }[tier]
-    parts = [opening]
+    parts = [opening] if opening else []
 
     if tier in _OWN_MOVE_TIERS:
         category, clause = _move_effect(board, report.user_move, target_possessive="their ")
@@ -1564,6 +1583,10 @@ def compose_safe_move_feedback(report: ComparisonReport) -> str:
         if best_san:
             detail = clause.removeprefix(", ").strip()
             parts.append(f"{best_san} was stronger here{' — ' + detail if detail else ''}.")
+        elif not opening:
+            # Nothing nameable and no opener would leave the student with only a
+            # takeaway and no idea what prompted it.
+            parts.append("There was a stronger move here.")
     if tier in _OWN_MOVE_TIERS and clause:
         parts.append(f"Your move is {clause.removeprefix(', ').strip()}.")
 
@@ -1704,7 +1727,11 @@ def _format_comparison_top_lines(report: ComparisonReport) -> str:
         if not header_shown:
             lines.append(f"--- Top Engine Lines ({opp} = your opponent, {you} = you) ---")
             header_shown = True
-        lines.append(f"Line {i} ({whose}, depth {pv.depth}, {pv.eval_cp} cp): {moves_str} — theme: {pv.theme}")
+        # No eval and no depth. Both were engine bookkeeping in units we cannot
+        # defend, and the level instructions already had to ask the model not to
+        # repeat the very numbers we were handing it. The line's POSITION in this
+        # list carries the engine's preference, which is the trustworthy part.
+        lines.append(f"Line {i} ({whose}): {moves_str} — theme: {pv.theme}")
     return "\n".join(lines)
 
 
@@ -1738,6 +1765,12 @@ def build_rich_move_evaluation_prompt(
     """
     sections: list[str] = []
 
+    # The tier is needed while assembling the sections, not just after: on the tiers
+    # that make no comparison it decides whether the engine's alternative is put in
+    # front of the model at all.
+    tier = _move_feedback_tier(report)
+    compares = tier not in _OWN_MOVE_TIERS
+
     # Curated guidance (the "what to focus on" half of the teaching bridge),
     # level-filtered. Inserted first so the move feedback LEADS with the
     # selected themes; the engine-grounding instructions below are untouched.
@@ -1767,8 +1800,18 @@ def build_rich_move_evaluation_prompt(
     if refutation_section is not None:
         sections.append(refutation_section)
 
-    # Top lines for context
-    sections.append(_format_comparison_top_lines(report))
+    # Top lines for context — but ONLY on the tiers that compare. On the
+    # no-comparison tiers this section was the remaining half of a withhold that the
+    # ledger already recorded as complete: with `Best move:` suppressed, the engine's
+    # preferred move still arrived here as "Line 1 (from the position you were in):
+    # 3.Nd5", three lines above an instruction reading "Do NOT offer an alternative —
+    # there isn't one". Caught by a cross-surface test, not by review, which is the
+    # argument for having one. On the `best` tier the top line IS the student's move,
+    # so nothing is lost; on `equal` the whole point is that no alternative is named.
+    if compares:
+        top_lines_section = _format_comparison_top_lines(report)
+        if top_lines_section:
+            sections.append(top_lines_section)
 
     # Critical moment. The engine's ``critical_reason`` is DELIBERATELY not passed
     # on: its only format is "eval spread between best and 3rd-best line is 107cp"
@@ -1782,8 +1825,8 @@ def build_rich_move_evaluation_prompt(
         critical_section = (
             "⚠ CRITICAL MOMENT: This was a critical decision point.\n"
             "Please provide a MORE DETAILED explanation of what was missed "
-            "and why this moment was so important, in terms of the position — "
-            "never in terms of evaluations, centipawns or engine line rankings.\n\n"
+            "and why this moment was so important, in terms of the pieces and "
+            "squares on the board.\n\n"
         )
     else:
         critical_section = ""
@@ -1800,7 +1843,6 @@ def build_rich_move_evaluation_prompt(
     # redirect; serious -> direct, lead with the cost. The word limit is set per
     # tier so a best move gets one sentence and a blunder gets room to be
     # specific.
-    tier = _move_feedback_tier(report)
     best_move_line = _achievement_line(report, tier)
     move_instructions = _TIER_INSTRUCTIONS[tier]
     if not best_move_line:
@@ -1812,18 +1854,22 @@ def build_rich_move_evaluation_prompt(
     word_limit = _TIER_WORD_LIMIT[tier]
     takeaway_instruction = _build_takeaway_instruction(report, tier)
 
+    # The engine's move, named only on the tiers that actually compare against it.
+    # It used to be rendered unconditionally, so on the `equal` tier the prompt said
+    # "Best move: d4" three lines above an instruction reading "Do NOT offer an
+    # alternative — there isn't one". That is a negative constraint over data we
+    # supplied ourselves, the one pattern this model reliably ignores, and it means
+    # the tier was never the clean withhold the ledger recorded (row 28): only the
+    # achievement line and the engine's label were withheld, never the move.
+    alternative_line = f"Best move: {uci_to_san(report.fen, report.best_move)}\n" if compares else ""
+
     return RICH_MOVE_EVALUATION_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,
         level=level,
         fen=report.fen,
         perspective=_format_perspective(report.fen),
         user_move=uci_to_san(report.fen, report.user_move),
-        user_eval_cp=report.user_eval_cp,
-        best_move=uci_to_san(report.fen, report.best_move),
-        best_eval_cp=report.best_eval_cp,
-        eval_drop_cp=report.eval_drop_cp,
-        classification=report.classification,
-        nag=report.nag,
+        alternative_line=alternative_line,
         best_move_line=best_move_line,
         sections="\n\n".join(sections),
         move_instructions=move_instructions,

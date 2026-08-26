@@ -395,11 +395,18 @@
   // =========================================================================
   // User feedback badge
   // =========================================================================
+  // The badge no longer grades the move. "?! Inaccuracy" / "?? Blunder" came
+  // straight from the engine's own classification, whose cut points sit on
+  // unnormalized units and disagreed with a strong reference on 20 of 44 turns in
+  // one measured game. Leaving the grade here while the coaching text stopped
+  // asserting it would be the same field dropped on one path and live on another —
+  // the failure mode engine_trust.py exists to catch. So the badge now says only
+  // whether there was something to learn, and the text says what.
   function showUserFeedback(classification, text) {
     var badges = {
-      good: '✓ Good',
-      inaccuracy: '?! Inaccuracy',
-      blunder: '?? Blunder',
+      good: '✓ Good move',
+      inaccuracy: 'Something to look at',
+      blunder: 'Something to look at',
     };
     var cls = 'feedback-' + (classification || 'good');
     userFeedback.className = 'user-feedback ' + cls;

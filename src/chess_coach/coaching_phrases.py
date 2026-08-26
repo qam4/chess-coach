@@ -419,7 +419,28 @@ def describe_king_safety(ks: KingSafety, side: str) -> str | None:
 
 
 def describe_eval(report: PositionReport) -> str:
-    """Summarize the overall evaluation in plain language, from structured cp."""
+    """Summarize the overall evaluation in plain language, from structured cp.
+
+    Qualitative only — the pawn figure that used to close each band ("a slight edge
+    (+0.75 pawns)") is gone. It was never in pawns: Blunder's pawn is 124 (MG) to
+    206 (EG), so +0.75 was somewhere between half a pawn and a third of one, and the
+    magnitude carries a 50-60cp residual against a strong reference under every
+    conversion tried. A number a student cannot check and we cannot defend is worse
+    than the word next to it, which is why the word is what survives.
+
+    The BANDS (30 / 100 / 300) are kept but are NOT clean. They are eval-derived, so
+    they inherit the same problem one level down: a position at -102 units lands in
+    "clear advantage" when, deflated to conventional centipawns, it is a slight edge.
+    Being 3x apart makes them less brittle than the 50/100 move-grading bands, but
+    "less brittle" is not "unaffected" and nobody has measured how often a position
+    lands the wrong side of one. Keeping them is a judgement that one of four coarse
+    words is worth more to a student than silence, not a claim that they are correct.
+    Re-deriving them needs the same answer as the move bands and is on the backlog
+    with them; picking replacements by hand is what produced the current numbers.
+
+    Sign and dominant-factor claims are comparisons between terms rather than
+    magnitudes, so those stand on firmer ground.
+    """
     cp = report.eval_cp
     abs_cp = abs(cp)
     if abs_cp < 30:
@@ -427,11 +448,11 @@ def describe_eval(report: PositionReport) -> str:
     else:
         side = "White" if cp > 0 else "Black"
         if abs_cp < 100:
-            assessment = f"{side} has a slight edge ({cp / 100:+.2f} pawns)."
+            assessment = f"{side} has a slight edge."
         elif abs_cp < 300:
-            assessment = f"{side} has a clear advantage ({cp / 100:+.2f} pawns)."
+            assessment = f"{side} has a clear advantage."
         else:
-            assessment = f"{side} is winning ({cp / 100:+.2f} pawns)."
+            assessment = f"{side} is winning."
 
     eb = report.eval_breakdown
     factors = [
@@ -540,15 +561,54 @@ def king_safety_relevant(report: PositionReport) -> bool:
 # (docs/coaching-standard-audit.md) puts "manufactures fault on genuinely good
 # moves" in the actively-harmful tier — it trains the student to distrust the
 # instincts you most want to reinforce. Measured on one game, 10 of 44 turns did
-# exactly that, at drops of 0, 0, 0, 0, 0, 0, 6, 17 and 17cp.
+# exactly that, at drops of 0, 0, 0, 0, 0, 0, 6, 17 and 17cp (old units, so 0-8 now).
 #
-# 25 is deliberately conservative: it covers every observed case and stays well
-# inside the "sound" band rather than redefining it. The audit argues for roughly a
-# pawn, which would swallow the whole inaccuracy band — a much larger behavioural
-# change than the evidence so far supports.
-EQUAL_MAX_DROP_CP = 25
-SOUND_MAX_DROP_CP = 50
-DUBIOUS_MAX_DROP_CP = 100
+# The `equal` band is deliberately conservative: it covers every observed case and
+# stays well inside the "sound" band rather than redefining it. The audit argues for
+# roughly a pawn, which would swallow the whole inaccuracy band — a much larger
+# behavioural change than the evidence so far supports.
+#
+# HALVED 2026-08-25 (was 25 / 50 / 100) because the ENGINE's output scale changed, not
+# because anyone re-judged where the boundaries belong. Blunder now normalizes at its
+# output boundary (NORMALIZE_TO_PAWN = 200), so every drop we read is half what it was.
+# These values are the exact algebraic equivalent: the engine reports round(raw/2), so
+# `<= 12` admits raw <= 25, precisely the old band. Behaviour is preserved, deliberately
+# — widening the band to compensate for the engine being wrong would be working around
+# a shortcoming instead of recording it, and any real change of opinion about where
+# these belong is a separate, argued decision (BACKLOG, "Two band questions that need
+# judgement, not arithmetic").
+#
+# Verified against the engine, not assumed: the row-53 book positions came back at
+# exactly 2.00x (Ruy Lopez ...a6 110 -> 55, Sicilian 1...c5 109 -> 55, 1.f3 52 -> 26).
+#
+# ⚠ These assume a NORMALIZED engine. The Blunder change is uncommitted; if it is
+# reverted or a clean checkout is built, these become 2x too STRICT and the coach will
+# criticise sound book moves. `docs/coach-report-card.md` row 67 has the probe to
+# re-check with (KPK at depth 16: 178 normalized, 355 raw).
+EQUAL_MAX_DROP_CP = 12
+SOUND_MAX_DROP_CP = 25
+DUBIOUS_MAX_DROP_CP = 50
+
+#: Opening leniency: in the first six moves, only a drop past this is worth flagging.
+#:
+#: Not arbitrary and not obsolete — `0d0d664` added it for BUG-008 because at depth 8 the
+#: engine scores sound book moves as mistakes, and ledger row 53 re-confirmed it after a
+#: proposal to lower it was withdrawn. Re-measured on the normalized engine: Ruy Lopez
+#: Morphy `...a6` = 55, Sicilian `1...c5` = 55, while the genuinely bad `1.f3` = 26. The
+#: bad move scores LOWER than the good ones, so no threshold separates them and the only
+#: safe choice is one that stays above the book moves. Lowering this criticises the
+#: Sicilian.
+#:
+#: Halved from 150 with the bands above, for the engine's scale change only.
+#:
+#: ⚠ Assumes a normalized engine. If Blunder's (currently uncommitted) output
+#: normalization is reverted, this becomes 2x too strict and the coach will criticise the
+#: Sicilian — the precise defect BUG-008 added it to prevent.
+#:
+#: Was duplicated in three places (both `Coach.evaluate_move` paths and
+#: `coaching_templates.effective_move_classification`); consolidated here so the LLM and
+#: template paths cannot drift apart about which opening moves get flagged.
+OPENING_LENIENCY_CP = 75
 
 
 def classify_drop(drop_cp: int) -> str:
@@ -612,14 +672,26 @@ def build_move_menu(report: PositionReport) -> list[MenuMove]:
 def describe_move_menu(menu: list[MenuMove]) -> str | None:
     """Render the tagged menu as a compact prompt section, or None if empty.
 
-    Deliberately compact — first move + eval + soundness tag + theme, not the
-    full deep line — to keep the prompt readable for small models while still
-    telling the coach which moves are sound and which are blunders.
+    Deliberately compact — first move + soundness tag + theme, not the full deep
+    line — to keep the prompt readable for small models while still telling the
+    coach which moves are sound and which are blunders.
+
+    The per-move ``eval_cp`` is no longer rendered. It put a number in front of the
+    model for every candidate, in units that are not centipawns, and the coach has
+    no use for the magnitude: what it needs from this block is *which moves it may
+    name*, which the tag already says. The order of the block carries the engine's
+    preference, and ordering is the part of a 2500 engine's output we trust.
+
+    Known and deliberately NOT fixed here: ``tag`` itself is derived from
+    eval-drop-from-best against the 50/100 thresholds, so it inherits the same
+    magnitude problem. Re-deriving the tags needs the band question settled, and
+    picking new numbers by hand is what produced the current ones. Recorded in
+    ``engine_trust`` under ``top_lines`` and in the backlog rather than guessed at.
     """
     if not menu:
         return None
     lines = ["--- Candidate moves (engine-verified) ---"]
     for m in menu:
         suffix = f" — {m.theme}" if m.theme else ""
-        lines.append(f"{m.san}  ({m.eval_cp:+d} cp, {m.tag}){suffix}")
+        lines.append(f"{m.san}  ({m.tag}){suffix}")
     return "\n".join(lines)

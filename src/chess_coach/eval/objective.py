@@ -36,9 +36,13 @@ from .benchmark import BenchmarkPosition, GroundTruthPoint
 
 # Coaching on a position within this many centipawns of zero is treated
 # as "equal" for the direction check. Deliberately more lenient than
-# the templates' 30cp so we don't flag a coach who calls a +0.40
+# the templates' band so we don't flag a coach who calls a +0.40
 # position "roughly equal" — that's a judgment call, not an error.
-EQUAL_THRESHOLD_CP = 50
+#
+# Halved 2026-08-25 (was 50) with the rest of the cp thresholds: Blunder now normalizes
+# its output (NORMALIZE_TO_PAWN = 200), so every score we read is half what it was. An
+# algebraic conversion to preserve behaviour, not a re-judgement of the boundary.
+EQUAL_THRESHOLD_CP = 25
 
 # Multiplicative penalty applied per hard factual error (hallucination,
 # illegal move, backwards eval direction). 0.3 < the 0.8 pass threshold,

@@ -138,56 +138,72 @@ _ENTRIES: tuple[FieldTrust, ...] = (
         compensated_by="verify.py opponent_reply check (first ply)",
     ),
     # --- ComparisonReport: eval-derived, currently used unverified ---------
+    # --- ComparisonReport: eval-derived, now withheld from every coach surface ---
+    #
+    # These five were USED_UNVERIFIED until "stop asserting magnitude" (ledger row 63)
+    # took them out of the prompt, the templates, the composed fallback and the web
+    # badge. They still drive the coach INTERNALLY -- the severity tier, the word
+    # limit, and the rule that keeps the coach silent on good moves are all computed
+    # from eval_drop_cp -- so the drop is about what we ASSERT, not about what we read.
+    # That distinction is the reinstatement criterion's whole point: the numbers become
+    # sayable again when they are trustworthy, not when they are merely present.
     _t(
         "ComparisonReport.eval_drop_cp",
-        USED_UNVERIFIED,
+        DROPPED,
         EVAL,
-        "Rendered to the model as 'Evaluation drop: N centipawns' when it is NOT in "
-        "centipawns -- Blunder's pawn is 124 (MG) to 206 (EG), unnormalized. And the "
-        "magnitude is off by a signed +92cp on quiet positions.",
-        "ledger rows 60-62",
+        "Was rendered as 'Evaluation drop: N centipawns' when it is not in centipawns "
+        "-- Blunder's pawn is 124 (MG) to 206 (EG), unnormalized -- and the magnitude "
+        "is off by a signed +122cp on the turns the coach speaks. Now withheld from "
+        "every coach surface. Still used internally to pick the severity tier and the "
+        "word limit, and to decide whether to speak at all, which are OUR bands on OUR "
+        "side of the boundary.",
+        "ledger rows 60-63",
         reinstate_when=REFERENCE_CRITERION + ", and the unit relabelled or converted",
-        compensated_by="",
+        compensated_by="the tier still scales tone and length; severity reaches the "
+        "student as the board-verified consequence (what the opponent's reply wins)",
     ),
     _t(
         "ComparisonReport.user_eval_cp",
-        USED_UNVERIFIED,
+        DROPPED,
         EVAL,
-        "Same unit problem; rendered as 'centipawns'.",
-        "ledger row 60",
+        "Same unit problem; was rendered as 'centipawns'. Withheld.",
+        "ledger rows 60, 63",
         reinstate_when=REFERENCE_CRITERION,
-        compensated_by="",
+        compensated_by="describe_eval states the standing qualitatively where a standing is wanted at all",
     ),
     _t(
         "ComparisonReport.best_eval_cp",
-        USED_UNVERIFIED,
+        DROPPED,
         EVAL,
-        "Same unit problem; rendered as 'centipawns'.",
-        "ledger row 60",
+        "Same unit problem; was rendered as 'centipawns'. Withheld.",
+        "ledger rows 60, 63",
         reinstate_when=REFERENCE_CRITERION,
-        compensated_by="",
+        compensated_by="the engine's move ORDERING is kept, which is the part a 2500 "
+        "engine is good at; the menu tag says which moves may be named",
     ),
     _t(
         "ComparisonReport.classification",
-        USED_UNVERIFIED,
+        DROPPED,
         EVAL,
-        "The engine's verdict, relayed verbatim into three prompt templates. Its cut "
-        "points sit on unnormalized units -- it calls a 37cp drop an 'inaccuracy', which "
-        "is roughly 18-30 conventional cp, i.e. nothing. Provenance of the cut points "
-        "is unknown.",
-        "ledger row 62; threshold extraction over 170 engine-labelled drops",
+        "The engine's verdict, formerly relayed verbatim into three prompt templates "
+        "and out to the web badge. Its cut points sit on unnormalized units -- it calls "
+        "a 37cp drop an 'inaccuracy', which is roughly 18-30 conventional cp, i.e. "
+        "nothing -- and their provenance is unknown. No longer reaches the prompt or "
+        "the student. Note it is still the value returned on MoveEvaluation and stored "
+        "in eval transcripts, where it is a research field, not a claim.",
+        "ledger rows 62-63; threshold extraction over 170 engine-labelled drops",
         reinstate_when="cut points are defined on normalized units AND " + REFERENCE_CRITERION,
-        compensated_by="a board-side material check covers the severe cases (see "
-        "capability note on losing material for nothing)",
+        compensated_by="our own severity tier, computed from client-owned bands, plus "
+        "a board-side material check for the severe cases",
     ),
     _t(
         "ComparisonReport.nag",
-        USED_UNVERIFIED,
+        DROPPED,
         EVAL,
-        "Annotation glyph, same eval basis as classification.",
-        "ledger row 62",
+        "Annotation glyph, same eval basis as classification. Withheld.",
+        "ledger rows 62-63",
         reinstate_when="as classification",
-        compensated_by="",
+        compensated_by="the coach names a stronger move instead of annotating the played one",
     ),
     _t(
         "ComparisonReport.critical_moment",
@@ -203,24 +219,31 @@ _ENTRIES: tuple[FieldTrust, ...] = (
     # --- ComparisonReport: already dropped, and one of them only partly ----
     _t(
         "ComparisonReport.best_move_idea",
-        DROPPED_PARTIAL,
+        USED_UNVERIFIED,
         PROSE,
-        "A CATEGORY LABEL, not a fact. It said 'king safety -- repositioning the king' "
-        "on endgame turns, which is where v24-v26 chased phantom king-safety talk before "
-        "finding the engine was the source. Dropped from the shipping v2 template, but "
-        "still rendered by RICH_MOVE_EVALUATION_PROMPT at prompts.py:309.",
-        "ledger rows for v24-v26; report card 'an empty slot is worse than no slot'",
+        "A CATEGORY LABEL, not a fact: 44 turns produced only 10 distinct values ('king "
+        "safety -- repositioning the king' x13). Still rendered, deliberately, but never "
+        "alone -- it trails a composed board clause as the theme, '(piece activity -- "
+        "improving piece placement)', which is ledger row 9 kept and row 13 made "
+        "sufficient. It is NOT a partial drop: the position report has no such field, so "
+        "there is no second path to be inconsistent with. The v1 template that rendered "
+        "it as the ONLY explanation was deleted at row 63.\n"
+        "Recorded honestly after an earlier version of this entry claimed it was fully "
+        "dropped -- reading a real rendered prompt showed the label still there.",
+        "ledger rows 9, 13, and row 63; report card 'an empty slot is worse than no slot'",
         reinstate_when="the label is derived per-phase and validated against the board, not emitted from the eval",
-        compensated_by="compose_safe_move_feedback builds the same sentence from board facts",
+        compensated_by="a composed, board-derived clause always precedes it, and "
+        "_label_wrong_for_phase suppresses it where the phase makes it wrong",
     ),
     _t(
         "ComparisonReport.critical_reason",
-        DROPPED_PARTIAL,
+        DROPPED,
         PROSE,
         "Only ever formatted as 'eval spread between best and 3rd-best line is 107cp', "
         "which voices our eval bookkeeping at the student. Suppressed on the move path "
-        "(prompts.py:1773) but STILL RENDERED on the position path (prompts.py:881).",
-        "report card, 'Stop manufacturing fault + stop voicing eval bookkeeping'",
+        "at v27 and, at row 63, on the position path too -- it was the last live half "
+        "of a drop this register had recorded as partial.",
+        "report card, 'Stop manufacturing fault + stop voicing eval bookkeeping'; row 63",
         reinstate_when="it carries a board-derived reason rather than an eval spread",
         compensated_by="the critical_moment flag alone, without the numeric reason",
     ),
@@ -228,10 +251,15 @@ _ENTRIES: tuple[FieldTrust, ...] = (
         "ComparisonReport.top_lines",
         USED_UNVERIFIED,
         EVAL,
-        "Mixed: PVLine.moves are legality-checkable, PVLine.eval_cp carries the unit and "
-        "magnitude problem, PVLine.theme is engine prose. The move menu's soundness tags "
-        "are computed from these eval_cp values, so our own tags inherit it.",
-        "ledger rows 60-62",
+        "Mixed, and the mix is now split. PVLine.moves are legality-checkable and their "
+        "ORDER is the engine's preference, which is what we kept. PVLine.eval_cp is no "
+        "longer rendered anywhere (row 63). PVLine.theme is engine prose. What remains "
+        "unverified is the part that still SPEAKS: the move menu's best/sound/dubious/"
+        "blunder tags are computed from eval_cp against the 50/100 thresholds, so a tag "
+        "inherits the magnitude problem even though the number behind it is hidden. "
+        "Deliberately not fixed with the rest: re-deriving the tags means choosing new "
+        "bands, and choosing bands by hand is what produced the current ones.",
+        "ledger rows 60-63",
         reinstate_when="tags are computed from normalized units, or from board facts",
         compensated_by="",
     ),
@@ -297,23 +325,39 @@ _ENTRIES: tuple[FieldTrust, ...] = (
     # --- PositionReport: eval-derived ---------------------------------------
     _t(
         "PositionReport.eval_cp",
-        USED_UNVERIFIED,
+        DROPPED,
         EVAL,
-        "Same unit and magnitude problem as the comparison evals.",
-        "ledger rows 60-62",
+        "Same unit and magnitude problem as the comparison evals. The FIGURE is dropped "
+        "-- it was rendered as 'Overall evaluation: N centipawns' and the prompt now "
+        "carries a qualitative standing instead -- but the 30/100/300 bands behind that "
+        "wording are still eval-derived and still inherit the problem: a position at "
+        "-102 units reads 'clear advantage' where deflated it is a slight edge. Being "
+        "~3x apart makes them less brittle than the 50/100 move bands; how often they "
+        "land the wrong side of a boundary is NOT measured. Recorded as partial rather "
+        "than claimed as safe.",
+        "ledger rows 60-63",
         reinstate_when=REFERENCE_CRITERION,
-        compensated_by="",
+        compensated_by="describe_eval renders one of four coarse words with no figure, "
+        "which is a smaller claim than a number even where the band is wrong",
     ),
     _t(
         "PositionReport.eval_breakdown",
-        USED_UNVERIFIED,
+        DROPPED,
         EVAL,
         "material / mobility / king_safety / pawn_structure / tempo / piece_bonuses are "
         "the eval TERMS, in Blunder units. 'material: 206' reads as two pawns and means "
-        "one.",
-        "ledger row 60 (pawn = 124 MG / 206 EG, unnormalized)",
+        "one. The two that were rendered ('Material: N cp', 'Mobility: N cp') are gone "
+        "and nothing replaced them. A board-derived material count was written and then "
+        "REMOVED: substituting our own chess logic for an untrustworthy engine field is "
+        "the thing the division of labour forbids, and piece values are contested "
+        "knowledge. This is therefore a real capability gap, deliberately left open -- "
+        "the coach cannot state the material balance. It is not fatal, because the "
+        "placement block lists every piece, so the model can count and verify.py checks "
+        "what it claims. The remaining terms are still read by describe_eval to name the "
+        "DOMINANT factor, which is a comparison between terms rather than a magnitude.",
+        "ledger rows 60, 63 (pawn = 124 MG / 206 EG, unnormalized)",
         reinstate_when="terms are normalized, or converted at our boundary",
-        compensated_by="material specifically is recomputable from the board",
+        compensated_by="",
     ),
     _t(
         "PositionReport.king_safety",
@@ -346,11 +390,13 @@ _ENTRIES: tuple[FieldTrust, ...] = (
     ),
     _t(
         "PositionReport.critical_reason",
-        DROPPED_PARTIAL,
+        DROPPED,
         PROSE,
-        "THIS is the live leak: suppressed on the move-feedback path but still rendered "
-        "on the position path at prompts.py:881.",
-        "report card, 'stop voicing eval bookkeeping'",
+        "Was the live leak this register was written to catch: suppressed on the "
+        "move-feedback path at v27 and still rendered on the position path. Closed at "
+        "row 63 -- the position prompt now shows the critical-moment flag with no "
+        "reason attached, matching the move path.",
+        "report card, 'stop voicing eval bookkeeping'; row 63",
         reinstate_when="it carries a board-derived reason rather than an eval spread",
         compensated_by="the critical_moment flag alone",
     ),

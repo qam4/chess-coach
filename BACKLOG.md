@@ -65,21 +65,166 @@ Full write-up: `docs/coach-report-card.md`, "The engine's numbers are not the
 truth". Ledger rows 52–57. Data in `output/bias_v31_stockfish.json`,
 `output/fair_v31_abcd.json`, `output/depth_sweep_v31.json`.
 
-### 1. Stop asserting magnitude — NEXT, small, do this first
+**Items under this heading** (named rather than numbered — an earlier revision had two
+items both labelled `1b` and a `1d` before `1c`, which made every cross-reference from
+the code a guess):
 
-Any coach sentence that grades a move (`blunder` vs `inaccuracy`) or quotes a cost
-claims precision we have now measured and do not have. Softening this is cheap,
-reduces harm immediately, and is correct regardless of how the Blunder question
-resolves. Needs its own commit and its own re-judge, so it is not bundled with the
-documentation of the finding.
+- DONE — Stop asserting magnitude
+- DONE — Convert the cp thresholds for the engine's normalized output
+- NEXT — Record the engine's identity in every measurement artefact
+- NEXT — Re-run the report card on the corrected thresholds
+- NEXT — The judge is graded against numbers we no longer trust
+- OPEN — Two band questions that need judgement, not arithmetic
+- ANSWERED — Three problems, two of them Blunder-side wins
+- DONE — Handoff brief to Blunder
+- OPEN — Structural options, blocked on the engine answer
+- OPEN — Re-run the breadth sweep against the reference engine
+- Closed by measurement, do not reopen
 
-Note the interaction: `EQUAL_MAX_DROP_CP = 25` and the `equal` tier were added to
-stop the model manufacturing fault on good moves. That fixed the coach's behaviour
-while the *input* still said the moves were bad. Widening that band is the obvious
-lever, but picking a number by hand is what got us here — decide it from the
-Blunder answer, not by guessing.
+### DONE — Stop asserting magnitude (2026-08-24/25), both sides measured
 
-### 2. ANSWERED — three problems, two of them Blunder-side wins
+Shipped. Ledger rows 63-65 and the report card's "Stop asserting magnitude" section.
+Every eval figure, the engine's `classification` and `nag`, the per-candidate and
+per-line `cp`, the template pawn-unit costs and the web "?? Blunder" badge are all
+withheld. Severity now reaches the student as the board-verified consequence (the
+opponent's reply and what it captures) and the model only as tier tone plus word limit.
+Measured prompt-side on the 18 spoken turns of the v31 game, re-rendered through the
+engine: **18/18 turns carried a magnitude -> 0/18**.
+
+**Output side now answered (v32, qwen3:14b, seed 7).** `graded_or_priced` went **11 of
+18 spoken turns -> 0 of 12**. The v31 turns all said the same thing — "That was a
+serious mistake" seven times, "This was a serious blunder", "This was a critical
+mistake" three times — which was the model obeying v31's own tier text. With nothing to
+grade from, it did not grade once. No `verify.py` check is needed. Item 1 is closed.
+
+Caveat recorded in ledger row 66: my first reading of that metric said 3, not 0, from a
+regex that read the rank digit of "the e5 pawn" as a quantity. Fixed and re-derived over
+both transcripts.
+
+### DONE — Convert the cp thresholds for the engine's normalized output (2026-08-25)
+
+**The binary we run against started reporting normalized centipawns, and that changes
+the band question from "wait" to "do it".** `NORMALIZE_TO_PAWN = 200`, a single fixed
+divisor at the UCI/coaching JSON boundary, uncommitted in the Blunder tree, binary built
+2026-08-24. Reported cp are now conventional centipawns.
+
+**Provenance unknown, and worth establishing before anything is built on it.** The
+product owner did not make this change. The Blunder tree also carries a modified
+`.kiro/specs/code-quality-hardening/tasks.md` and stray `build_err.txt` / `make2.out`,
+which suggests an agent session in that repo. Confirmed against the engine rather than
+the diff: the brief's KPK position at depth 16 returns `score cp 178 nodes 122039` where
+the pre-change session log recorded `score cp 355 nodes 122039` — identical nodes and PV,
+half the score, so search is untouched and only the output scale moved.
+
+Every threshold we own was calibrated on the old inflated units and is therefore about
+twice as lenient as intended. Measured, not inferred: six plies that the coach spoke on
+in v31 went silent in v32 with no coaching change, each because its drop halved across
+`SOUND_MAX_DROP_CP` — 66->33, 67->34, 72->36, 53->27, 58->29, 60->30. **The coach went
+from 18 spoken turns to 12.**
+
+The affected constants, all in `coaching_phrases` unless noted:
+
+- `EQUAL_MAX_DROP_CP = 25` -> was ~12 real cp, now genuinely 25
+- `SOUND_MAX_DROP_CP = 50` -> was ~25 real cp
+- `DUBIOUS_MAX_DROP_CP = 100` -> was ~50 real cp
+- the 150cp opening leniency in `Coach.evaluate_move` and
+  `coaching_templates.effective_move_classification` -> was ~75 real cp
+- `objective.EQUAL_THRESHOLD_CP`, and `describe_eval`'s 30/100/300 standing bands
+
+**Shipped, as a pure algebraic conversion.** `EQUAL 25->12`, `SOUND 50->25`,
+`DUBIOUS 100->50`, opening leniency `150->75`, `objective.EQUAL_THRESHOLD_CP 50->25`,
+`describe_eval` bands `30/100/300 -> 15/50/150`. Nothing was widened to compensate for
+the engine being wrong — that would be working around a shortcoming instead of recording
+it. The engine reports `round(raw/2)`, so `<= 12` admits `raw <= 25`: the old band
+exactly.
+
+Three things found while doing it, all now fixed:
+
+- **The `<= 50` skip rule was hardcoded in two places in `coach.py`**, not reading the
+  constant, so the "say nothing about a good move" rule would have kept using
+  pre-normalization numbers.
+- **`web/server.py` had a third copy** of the whole classification ladder (`150`/`50`/
+  `100`) in the SSE play path. Now on the constants. The duplication of `Coach`'s rule is
+  pre-existing and still worth collapsing.
+- **`OPENING_LENIENCY_CP` now exists** as one constant; the 150 had been duplicated three
+  times across `coach.py` (twice) and `coaching_templates.py`.
+
+Verified against the engine rather than by arithmetic:
+
+- Row 53's book positions came back at exactly 2.00x — Ruy Lopez Morphy `...a6` 110->55,
+  Sicilian `1...c5` 109->55, the genuinely bad `1.f3` 52->26. Row 53's finding survives:
+  the bad move still scores LOWER than the good book moves, so the leniency must stay
+  above 55 and 75 does.
+- All **6 of the 6** plies the rescale had silenced (22, 26, 38, 44, 56, 58) speak again,
+  at drops of 33/34/36/27/29/30 against the new `sound` band of 25.
+
+Tests were re-keyed to the constants instead of literals. Roughly a dozen assertions had
+hardcoded 50/51/100/101 and every one failed on the rescale while saying nothing about
+the code under test — a test that breaks on a constant it does not own is testing the
+constant.
+
+Also worth knowing: every cp figure recorded in this repo's docs, ledger and
+`engine_trust` entries predates normalization and is in old units. Do not compare a new
+measurement against an old number without dividing.
+
+**⚠ ONE RISK, and it is not closed.** The Blunder change is uncommitted. The thresholds
+now assume a normalized engine, so if that change is reverted or a clean checkout is
+built, they become 2x too STRICT and the coach will start criticising sound book moves —
+the exact defect BUG-008 and row 53 exist to prevent. Someone should confirm the Blunder
+side is committed. The probe to check with is in ledger row 67: the KPK position at depth
+16 reads 178 normalized, 355 raw.
+
+### NEXT, small — Record the engine's identity in every measurement artefact
+
+v31 and v32 ran against **different engines** and nothing in either transcript said so. It
+took forensics on source-file and binary timestamps to establish it, after the numbers had
+already been read as a before/after.
+
+Fix: write the engine binary's identity (path, size, mtime, ideally a hash) and the
+resolved coaching-protocol version into `transcript.json` next to `stats`, in
+`scripts/eval_coach_review.py` and the other eval drivers. Then a confounded comparison
+declares itself rather than being reconstructed later, and stored transcripts stay
+interpretable once the binary has moved on.
+
+Cheap — a few lines and no new dependency. It is the detection this incident actually
+wanted; a protocol version bump would not have caught it, because bumping relies on the
+person who changed the units noticing that they changed the contract, which is exactly
+what did not happen. See `docs/coaching-protocol.md` §5.7.
+
+### NEXT — Re-run the report card on the corrected thresholds
+
+v32 is not usable as a before/after: it measured a coach whose bands were accidentally
+2x too lenient, so it spoke on 12 turns where the design intends 18. A v33 on the same
+seed-7 game gives the first clean read of the magnitude change. Cheap — one tunnelled
+run, and `graded_or_priced` / `prompt_magnitude_leaks` should both stay at 0.
+
+### OPEN — Two band questions that need judgement, not arithmetic
+
+- **`EQUAL_MAX_DROP_CP = 25` and the `equal` tier** were added to stop the model
+  manufacturing fault on good moves. That fixed the coach's behaviour while the *input*
+  still said the moves were bad. Widening the band is the obvious lever, but picking a
+  number by hand is what got us here.
+- **The move-menu soundness tags** (`best`/`sound`/`dubious`/`blunder`) are computed
+  from eval-drop against 50/100, so a tag still inherits the magnitude problem even
+  though the number behind it is now hidden. Same for `describe_eval`'s 30/100/300
+  standing bands — a position at -102 units reads "clear advantage" where deflated it is
+  a slight edge. Recorded in `engine_trust` under `top_lines` and `eval_cp`.
+
+### NEXT, small — The judge is graded against numbers we no longer trust
+
+`eval/judge.py` builds a prompt section headed `--- Evaluation (ground truth) ---`
+carrying `eval_cp`, the eval-term breakdown and per-line `eval_cp`. The heading is now
+known to be false: those are Blunder units with a signed +122cp error where the coach
+speaks. This is a measurement surface rather than a coach surface, so it was left out of
+item 1, but it means the frontier judge has been grading coaching against numbers we
+have stopped believing — and may have penalised the coach for disagreeing with them.
+
+Cheap fix, two parts: relabel the section so the judge knows what it is holding, and
+drop the figures the judge cannot use. Worth doing before the next report card so its
+verdict is not anchored to them. Check `eval/objective.py`'s `eval_direction` check too
+— direction is a sign claim and survives, but the equal band is in Blunder units.
+
+### ANSWERED — Three problems, two of them Blunder-side wins
 
 A Kiro session in the Blunder repo answered `docs/blunder-eval-brief.md`. Verdict:
 **no Blunder defect.** Follow-up analysis of the paired data then split the
@@ -114,7 +259,7 @@ permanently dead.
 **We are not replacing Blunder.** Stockfish's role is a calibration reference,
 which is what a reference engine is for.
 
-### 3. Old handoff notes — brief written
+### DONE — Handoff brief to Blunder (written, and answered)
 
 `docs/blunder-eval-brief.md`. Leading hypothesis, unverified: our binary is
 hand-crafted-eval only (no `EvalType` option, no `.nnue` weights in the tree) while
@@ -126,7 +271,7 @@ and specifies the controls a real evaluation needs: equal nodes, equal time, and
 static-eval-only comparison, which is the most diagnostic since the error does not
 shrink with depth.
 
-### 3. Blocked on 2 — structural options
+### OPEN — Structural options, blocked on the engine answer above
 
 - **Stockfish as a confirming second opinion** on the ~18 turns per game where we
   are about to speak, with Blunder keeping the structured features it is good at
@@ -137,7 +282,7 @@ shrink with depth.
 - **Point at an NNUE-enabled Blunder build** if one exists. Cheapest possible fix
   if the hypothesis holds.
 
-### 4. Re-run the breadth sweep with the reference
+### OPEN — Re-run the breadth sweep against the reference engine
 
 Check the 45% disagreement is not a property of this one game. The five fixed games
 already exist in `scripts/eval_check_breadth.py`; the reference harness now exists

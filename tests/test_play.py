@@ -8,6 +8,11 @@ from chess_coach.coach import (
     Coach,
     MoveEvaluation,
 )
+from chess_coach.coaching_phrases import (
+    DUBIOUS_MAX_DROP_CP,
+    EQUAL_MAX_DROP_CP,
+    SOUND_MAX_DROP_CP,
+)
 from chess_coach.engine import AnalysisLine, AnalysisResult, EngineProtocol
 from chess_coach.llm.base import LLMProvider
 
@@ -72,29 +77,40 @@ def _make_coach(
 
 
 class TestClassifyMove:
-    """Direct tests for Coach.classify_move thresholds."""
+    """Direct tests for Coach.classify_move thresholds.
+
+    Keyed to the constants rather than to literals. They were literals (50/51/100/101)
+    and every one of them broke when the engine's output scale changed and the bands
+    were halved — which told us nothing about the classifier and cost a round of
+    edits. What matters is the behaviour AT each boundary, whatever the boundary is.
+    """
 
     def test_good_zero_drop(self):
         assert Coach.classify_move(0) == "good"
 
     def test_good_at_boundary(self):
-        assert Coach.classify_move(50) == "good"
+        assert Coach.classify_move(SOUND_MAX_DROP_CP) == "good"
 
     def test_inaccuracy_just_above_good(self):
-        assert Coach.classify_move(51) == "inaccuracy"
+        assert Coach.classify_move(SOUND_MAX_DROP_CP + 1) == "inaccuracy"
 
     def test_inaccuracy_at_boundary(self):
-        assert Coach.classify_move(100) == "inaccuracy"
+        assert Coach.classify_move(DUBIOUS_MAX_DROP_CP) == "inaccuracy"
 
     def test_blunder_just_above_inaccuracy(self):
-        assert Coach.classify_move(101) == "blunder"
+        assert Coach.classify_move(DUBIOUS_MAX_DROP_CP + 1) == "blunder"
 
     def test_blunder_large_drop(self):
-        assert Coach.classify_move(500) == "blunder"
+        assert Coach.classify_move(DUBIOUS_MAX_DROP_CP * 5) == "blunder"
 
     def test_good_negative_drop(self):
         # Negative drop means the move improved the position
-        assert Coach.classify_move(-50) == "good"
+        assert Coach.classify_move(-SOUND_MAX_DROP_CP) == "good"
+
+    def test_bands_are_ordered(self):
+        # A rescale that accidentally inverted or collapsed the bands would leave every
+        # test above still passing. This is the invariant that actually holds.
+        assert 0 < EQUAL_MAX_DROP_CP < SOUND_MAX_DROP_CP < DUBIOUS_MAX_DROP_CP
 
 
 # -------------------------------------------------------------------
@@ -123,36 +139,40 @@ class TestEvaluateMove:
         assert result.eval_drop_cp == 0
 
     def test_good_move_at_boundary(self):
-        """eval_before=100, eval_after=50 => drop=50 => good."""
-        coach = _make_coach(eval_before_cp=100, eval_after_cp=50)
+        """A drop exactly at the sound boundary is still good."""
+        drop = SOUND_MAX_DROP_CP
+        coach = _make_coach(eval_before_cp=100, eval_after_cp=100 - drop)
         result = coach.evaluate_move(STARTING_FEN, "e2e4")
 
         assert result.classification == "good"
-        assert result.eval_drop_cp == 50
+        assert result.eval_drop_cp == drop
 
     def test_inaccuracy_just_over_boundary(self):
-        """eval_before=100, eval_after=49 => drop=51 => inaccuracy."""
-        coach = _make_coach(eval_before_cp=100, eval_after_cp=49)
+        """One cp past the sound boundary becomes an inaccuracy."""
+        drop = SOUND_MAX_DROP_CP + 1
+        coach = _make_coach(eval_before_cp=100, eval_after_cp=100 - drop)
         result = coach.evaluate_move(MIDDLEGAME_FEN, "c4b5")
 
         assert result.classification == "inaccuracy"
-        assert result.eval_drop_cp == 51
+        assert result.eval_drop_cp == drop
 
     def test_inaccuracy_at_upper_boundary(self):
-        """eval_before=100, eval_after=0 => drop=100 => inaccuracy."""
-        coach = _make_coach(eval_before_cp=100, eval_after_cp=0)
+        """A drop exactly at the dubious boundary is still an inaccuracy."""
+        drop = DUBIOUS_MAX_DROP_CP
+        coach = _make_coach(eval_before_cp=100, eval_after_cp=100 - drop)
         result = coach.evaluate_move(MIDDLEGAME_FEN, "c4b5")
 
         assert result.classification == "inaccuracy"
-        assert result.eval_drop_cp == 100
+        assert result.eval_drop_cp == drop
 
     def test_blunder_just_over_boundary(self):
-        """eval_before=100, eval_after=-1 => drop=101 => blunder."""
-        coach = _make_coach(eval_before_cp=100, eval_after_cp=-1)
+        """One cp past the dubious boundary becomes a blunder."""
+        drop = DUBIOUS_MAX_DROP_CP + 1
+        coach = _make_coach(eval_before_cp=100, eval_after_cp=100 - drop)
         result = coach.evaluate_move(MIDDLEGAME_FEN, "c4b5")
 
         assert result.classification == "blunder"
-        assert result.eval_drop_cp == 101
+        assert result.eval_drop_cp == drop
 
     def test_blunder_large_drop(self):
         """eval_before=200, eval_after=-300 => drop=500 => blunder."""

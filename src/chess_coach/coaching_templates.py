@@ -15,6 +15,7 @@ from dataclasses import dataclass
 import chess
 
 from chess_coach.coaching_phrases import (
+    OPENING_LENIENCY_CP,
     describe_eval,
     describe_hanging,
     describe_king_safety,
@@ -380,13 +381,16 @@ def effective_move_classification(report: ComparisonReport) -> str:
     """Return the coaching-adjusted classification for a move.
 
     In the opening (first 6 moves), engine eval at shallow depth is
-    unreliable — only flag moves with a large eval drop (>150cp).
-    This prevents sound openings like 1...e5, 1.d4, or the Scandinavian
-    from being called inaccuracies or mistakes.
+    unreliable — only flag moves with a large eval drop. This prevents sound
+    openings like 1...e5, 1.d4, or the Scandinavian from being called
+    inaccuracies or mistakes.
+
+    Shares ``OPENING_LENIENCY_CP`` with ``Coach.evaluate_move`` so the template and
+    LLM paths cannot disagree about which opening moves are worth flagging.
     """
     cls = report.classification
     if cls != "good" and _move_number_from_fen(report.fen) <= 6:
-        if report.eval_drop_cp <= 150:
+        if report.eval_drop_cp <= OPENING_LENIENCY_CP:
             return "good"
     return cls
 
@@ -403,25 +407,22 @@ def generate_move_coaching(
     # it may penalize perfectly sound openings (e.g. 1...e5, 1.d4, Scandinavian).
     # In the first few moves, only flag moves with a large eval drop.
     cls = effective_move_classification(report)
-    drop = abs(report.eval_drop_cp)
 
     if cls == "good":
         sections.append("Good move!")
     else:
-        # No raw evaluations. A cost in pawns is something a student can picture;
-        # "(eval -12.9 → -14.3)" is engine bookkeeping, and an external audit of
-        # coaching quality lists it as a defect — not information to a 1200, and it
-        # trains attention on the outcome rather than the process. This text is also
-        # the fidelity gate's fallback, so it is what a student sees precisely when
-        # the model could not be trusted; it should not introduce a different defect
-        # while fixing a falsehood (it was the only turn in v27 still showing an
-        # evaluation, and it was our own safety net doing it).
-        if cls == "inaccuracy":
-            sections.append(f"That's a small inaccuracy — you lost about {drop / 100:.1f} pawns of advantage.")
-        elif cls == "mistake":
-            sections.append(f"That's a mistake — it costs about {drop / 100:.1f} pawns.")
-        elif cls == "blunder":
-            sections.append(f"That's a blunder — it drops {drop / 100:.1f} pawns. Let's look at what went wrong.")
+        # No cost, in any unit. Converting the drop to pawns looked like the fix for
+        # showing raw evals, and it was half a fix: "you lost about 1.2 pawns" is
+        # still a magnitude, and it was never even in pawns — Blunder's pawn is 124
+        # (MG) to 206 (EG), so the division by 100 produced a number belonging to no
+        # scale at all. Measured against Stockfish 18 the drop carries a 50-60cp
+        # residual under every conversion, wider than the bands separating these
+        # three labels, so the label is not defensible either.
+        #
+        # This text is a fallback a student reads when the model could not be
+        # trusted, so it says only what we can stand behind: a stronger move existed,
+        # and here is what it does. The sections below supply that from the board.
+        sections.append("There was a stronger move here.")
 
     # What was stronger
     if report.best_move and cls != "good":

@@ -14,6 +14,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from chess_coach.coaching_phrases import (
+    DUBIOUS_MAX_DROP_CP,
+    SOUND_MAX_DROP_CP,
     build_move_menu,
     classify_drop,
     describe_eval,
@@ -322,29 +324,39 @@ def _report_with_lines(fen: str, lines: list[PVLine]) -> PositionReport:
 
 
 def test_classify_drop_boundaries() -> None:
-    # Single source of the cp boundaries: <=50 sound, 51-100 dubious, >100 blunder.
+    # Keyed to the constants, not to literals. The literals (50/51/100/101) all broke
+    # when the engine started normalizing its output and the bands were halved, which
+    # said nothing about classify_drop. The behaviour AT each boundary is the contract.
     assert classify_drop(0) == "sound"
-    assert classify_drop(50) == "sound"
-    assert classify_drop(51) == "dubious"
-    assert classify_drop(100) == "dubious"
-    assert classify_drop(101) == "blunder"
+    assert classify_drop(SOUND_MAX_DROP_CP) == "sound"
+    assert classify_drop(SOUND_MAX_DROP_CP + 1) == "dubious"
+    assert classify_drop(DUBIOUS_MAX_DROP_CP) == "dubious"
+    assert classify_drop(DUBIOUS_MAX_DROP_CP + 1) == "blunder"
     assert classify_drop(10_000) == "blunder"
 
 
 def test_build_move_menu_tags_and_drops() -> None:
-    # White to move; best-first lines. Drops from best: 0, 30, 60, 120.
+    # White to move, best-first. Line evals are derived from the bands so the four tags
+    # are exercised whatever the bands are: drop 0 (best), inside sound, inside dubious,
+    # past dubious. Fixed evals here meant every tag changed when the engine's scale did.
+    best = 40
     report = _report_with_lines(
         DA_FEN,
         [
-            _line("d2d4", 40, "central pawn break"),
-            _line("c3d5", 10, "piece development"),
-            _line("f1c4", -20, "piece development"),
-            _line("d1h5", -80, "king attack"),
+            _line("d2d4", best, "central pawn break"),
+            _line("c3d5", best - SOUND_MAX_DROP_CP, "piece development"),
+            _line("f1c4", best - DUBIOUS_MAX_DROP_CP, "piece development"),
+            _line("d1h5", best - (DUBIOUS_MAX_DROP_CP + 1), "king attack"),
         ],
     )
     menu = build_move_menu(report)
     assert [m.tag for m in menu] == ["best", "sound", "dubious", "blunder"]
-    assert [m.drop_cp for m in menu] == [0, 30, 60, 120]
+    assert [m.drop_cp for m in menu] == [
+        0,
+        SOUND_MAX_DROP_CP,
+        DUBIOUS_MAX_DROP_CP,
+        DUBIOUS_MAX_DROP_CP + 1,
+    ]
     # SAN is rendered from the board (not raw UCI) for legal moves.
     assert menu[0].san == "d4"
     assert menu[1].san == "Nd5"
@@ -372,15 +384,19 @@ def test_build_move_menu_skips_lines_without_moves() -> None:
 
 
 def test_build_move_menu_black_to_move_perspective() -> None:
-    # Black to move: drop is still best[0] - line[i] with index 0 = best,
-    # regardless of side. Bxc3 best, then Ba5 (drop 50 -> sound), Bd6 (drop 120).
+    # Black to move: drop is still best[0] - line[i] with index 0 = best, regardless of
+    # side. Evals derived from the bands so the assertion is about the perspective rule
+    # rather than about where the bands happen to sit.
+    best = 200
+    sound_drop = SOUND_MAX_DROP_CP
+    blunder_drop = DUBIOUS_MAX_DROP_CP + 1
     report = _report_with_lines(
         PIN_FEN,
-        [_line("b4c3", 200), _line("b4a5", 150), _line("b4d6", 80)],
+        [_line("b4c3", best), _line("b4a5", best - sound_drop), _line("b4d6", best - blunder_drop)],
     )
     menu = build_move_menu(report)
     assert [m.tag for m in menu] == ["best", "sound", "blunder"]
-    assert [m.drop_cp for m in menu] == [0, 50, 120]
+    assert [m.drop_cp for m in menu] == [0, sound_drop, blunder_drop]
     assert menu[0].san == "Bxc3+"
 
 

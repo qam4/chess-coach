@@ -349,19 +349,17 @@ header h1 {
 
 .feedback-good .badge { color: #22c55e; }
 
-.feedback-inaccuracy {
+/* Amber for both "inaccuracy" and "blunder": the red/amber split was a severity
+   grade in a second channel, resting on the same eval magnitude the text stopped
+   asserting. One colour for "there is something to look at here". */
+.feedback-inaccuracy,
+.feedback-blunder {
   background: rgba(234, 179, 8, 0.15);
   border-left: 3px solid #eab308;
 }
 
-.feedback-inaccuracy .badge { color: #eab308; }
-
-.feedback-blunder {
-  background: rgba(239, 68, 68, 0.15);
-  border-left: 3px solid #ef4444;
-}
-
-.feedback-blunder .badge { color: #ef4444; }
+.feedback-inaccuracy .badge,
+.feedback-blunder .badge { color: #eab308; }
 
 /* --- Hint --- */
 .hint-container {

@@ -56,7 +56,10 @@ class TestBuildCoachingPrompt:
 # BUG-011 regression: the rich prompts must state side-to-move / student color
 # --------------------------------------------------------------------------
 
-from chess_coach.coaching_phrases import EQUAL_MAX_DROP_CP  # noqa: E402
+from chess_coach.coaching_phrases import (  # noqa: E402
+    EQUAL_MAX_DROP_CP,
+    SOUND_MAX_DROP_CP,
+)
 from chess_coach.coaching_phrases import uci_to_san as _uci_to_san  # noqa: E402
 from chess_coach.models import (  # noqa: E402
     ComparisonReport,
@@ -148,9 +151,16 @@ class TestPerspective:
         prompt = build_rich_coaching_prompt(_position_report(WHITE_TO_MOVE_FEN), "beginner")
         assert "Side to move: White" in prompt
 
-    def test_coaching_prompt_states_eval_is_white_relative(self) -> None:
+    def test_coaching_prompt_states_standing_without_a_number(self) -> None:
+        # This used to assert "White's perspective", which existed to disambiguate the
+        # sign of "Overall evaluation: N centipawns". There is no number to give a sign
+        # to any more: the standing is stated qualitatively, because the magnitude
+        # behind it is not in centipawns and carries a 50-60cp residual against a
+        # strong reference. The side is still named, via the perspective block.
         prompt = build_rich_coaching_prompt(_position_report(BLACK_TO_MOVE_FEN), "beginner")
-        assert "White's perspective" in prompt
+        assert "Side to move: Black" in prompt
+        assert "centipawns" not in prompt.split("COACHING INSTRUCTIONS")[0]
+        assert "Overall evaluation" not in prompt
 
     def test_move_evaluation_prompt_names_black_side_to_move(self) -> None:
         prompt = build_rich_move_evaluation_prompt(_comparison_report(BLACK_TO_MOVE_FEN), "beginner")
@@ -271,7 +281,9 @@ class TestPlayedBestMove:
     def test_sound_move_affirms_but_may_note_stronger_move(self) -> None:
         # user != best, small eval drop (within the sound band): affirm the move,
         # a genuinely better move may be a refinement (BUG-016), kept short.
-        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=30)
+        # Drop derived from the bands: a literal 30 silently became an `inaccuracy`
+        # when the bands were halved, so the test stopped testing the sound tier.
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=EQUAL_MAX_DROP_CP + 1)
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
         assert "sound, reasonable move" in prompt
         assert "as a refinement" in prompt
@@ -279,21 +291,29 @@ class TestPlayedBestMove:
         assert "serious mistake" not in prompt
 
     def test_inaccuracy_uses_brief_redirect(self) -> None:
-        # drop in (SOUND, DUBIOUS] -> inaccuracy tier: brief, not dramatized.
-        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=70)
+        # drop in (SOUND, DUBIOUS] -> inaccuracy tier: a brief redirect that names a
+        # stronger move WITHOUT grading the one played. It used to open "slightly
+        # missed the mark"; the band separating this tier from `serious` is narrower
+        # than the measured error, so neither tier states a size any more.
+        report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=SOUND_MAX_DROP_CP + 1)
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-        assert "slightly missed the mark" in prompt
-        assert "serious mistake" not in prompt
+        assert "There was a stronger move here" in prompt
+        assert "BRIEF redirect" in prompt
         assert "sound, reasonable move" not in prompt
+        assert "Do NOT grade the move" in prompt
 
-    def test_serious_mistake_is_direct(self) -> None:
-        # drop past the dubious band -> serious tier: direct, lead with the cost.
+    def test_serious_tier_leads_with_the_consequence_not_a_grade(self) -> None:
+        # drop past the dubious band -> serious tier: still the most direct tier and
+        # still the longest, but the severity now comes from the opponent's reply and
+        # what it wins — a board fact — rather than from calling the move a mistake.
         report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-        assert "serious mistake" in prompt
-        assert "Lead with the cost" in prompt
-        assert "slightly missed the mark" not in prompt
+        assert "Lead with the consequence" in prompt
+        assert "serious mistake" not in prompt
+        assert "Do NOT grade the move" in prompt
         assert "No motivational sign-off" in prompt
+        # The tier still differs in length, which is where severity survives.
+        assert "under 120 words" in prompt
 
 
 def test_refutation_renders_only_first_reply() -> None:

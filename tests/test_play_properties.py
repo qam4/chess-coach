@@ -17,6 +17,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from chess_coach.coach import Coach
+from chess_coach.coaching_phrases import DUBIOUS_MAX_DROP_CP, SOUND_MAX_DROP_CP
 
 
 @settings(max_examples=200)
@@ -32,18 +33,22 @@ def test_classification_matches_thresholds(
 
     **Validates: Requirements 8.5**
 
-    For any pair of eval values, the eval drop (clamped to >= 0)
-    determines the classification:
-    - good: drop <= 50
-    - inaccuracy: 51 <= drop <= 100
-    - blunder: drop > 100
+    For any pair of eval values, the eval drop (clamped to >= 0) determines the
+    classification, against the single-source bands in ``coaching_phrases``:
+    - good: drop <= SOUND_MAX_DROP_CP
+    - inaccuracy: up to DUBIOUS_MAX_DROP_CP
+    - blunder: past that
+
+    The bands are referenced rather than written out. Hardcoding them (50/100) made this
+    property fail when the engine's output scale changed and the bands were halved — a
+    property test that breaks on a constant it does not own is testing the constant.
     """
     eval_drop = max(0, eval_before - eval_after)
     classification = Coach.classify_move(eval_drop)
 
-    if eval_drop <= 50:
+    if eval_drop <= SOUND_MAX_DROP_CP:
         assert classification == "good", f"drop={eval_drop} should be 'good', got '{classification}'"
-    elif eval_drop <= 100:
+    elif eval_drop <= DUBIOUS_MAX_DROP_CP:
         assert classification == "inaccuracy", f"drop={eval_drop} should be 'inaccuracy', got '{classification}'"
     else:
         assert classification == "blunder", f"drop={eval_drop} should be 'blunder', got '{classification}'"

@@ -643,6 +643,17 @@ def compute_nag(eval_drop_cp: int, user_move: str, best_move: str) -> str:
     Returns:
         A NAG string: ``"!!"`, ``"!"``, ``"!?"``, ``"?!"``, ``"?"``, or ``"??"``.
 
+    NOT rescaled when the client's own bands were halved for Blunder's output
+    normalization, and that is deliberate. These boundaries are the CONVENTIONAL
+    centipawn values from chess annotation practice, so they were always meant to be
+    read against real centipawns. Before normalization they were being applied to
+    inflated units and were therefore effectively about twice as strict as intended;
+    now they mean what they say. Nothing to convert.
+
+    (Unused at runtime: the engine supplies its own ``nag`` and the client drops it —
+    see ``engine_trust``. Kept because it is the spec's stated mapping and a NAG is a
+    plausible thing to want again from board-side data.)
+
     The mapping follows standard thresholds:
         - ``!!``  brilliant — user played the best move with no eval loss
         - ``!``   good — eval drop ≤ 10 cp (or user played best move)
