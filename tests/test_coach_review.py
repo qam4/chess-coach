@@ -15,6 +15,7 @@ from chess_coach.eval.coach_review import (
     aggregate_review,
     build_coach_review_prompt,
     grades_or_prices_the_move,
+    lesson_concentration,
 )
 
 
@@ -467,3 +468,44 @@ def test_stats_block_states_which_direction_is_good() -> None:
     block = build_coach_review_prompt([_turn(1, PHASE_MIDDLEGAME)], stats)
     assert "grading the move or pricing it (should be 0): 1" in block
     assert "LOWER IS BETTER" in block
+
+
+def test_lesson_concentration_is_deterministic_under_ties() -> None:
+    """The same turns must always score the same, whatever the hash seed.
+
+    This failed. ``_lesson_terms`` returns a set, set iteration order is randomized
+    per process, and ``Counter.most_common`` left ties in insertion order — so the cut
+    at the third-most-common term fell differently on different runs and one stored
+    transcript scored 72% on one invocation and 83% on another. A number that moves
+    while the data stands still cannot accept or reject a change.
+
+    Constructed so several terms tie at the boundary, which is the case that broke:
+    every closing sentence contributes one distinct content word, so all of them are
+    tied at count 1 and only the tie-break decides which three are "the usual
+    lessons".
+    """
+    words = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+    turns = [
+        _turn(i, PHASE_MIDDLEGAME, feedback=f"Some coaching. Worth remembering: {w}.") for i, w in enumerate(words)
+    ]
+
+    first = lesson_concentration(turns)
+    # Re-running in-process must agree...
+    assert lesson_concentration(turns) == first
+    # ...and so must a different ordering of the same turns, which is what a
+    # randomized set iteration effectively produced.
+    assert lesson_concentration(list(reversed(turns))) == first
+
+
+def test_lesson_concentration_still_detects_a_repeated_lesson() -> None:
+    """Guard against fixing determinism by making the metric blind.
+
+    Six turns closing on one idea must score far higher than six closing on six.
+    """
+    same = [_turn(i, PHASE_MIDDLEGAME, feedback="Worth remembering: count the defenders.") for i in range(6)]
+    varied = [
+        _turn(i, PHASE_MIDDLEGAME, feedback=f"Worth remembering: {w}.")
+        for i, w in enumerate(["defenders", "promotion", "castling", "tempo", "outpost", "endgames"])
+    ]
+    assert lesson_concentration(same) == 1.0
+    assert lesson_concentration(varied) < lesson_concentration(same)

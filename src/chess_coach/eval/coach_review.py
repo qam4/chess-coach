@@ -325,8 +325,17 @@ _TEMPLATE_WORDS = frozenset(
     whom how why where takeaway transferable move moves moved making make makes made
     piece pieces play plays played player position positions board game games one two
     first next last other another same different good better best strong stronger
-    weak weaker safe safer keep keeps kept get gets got put puts placing place""".split()
+    weak weaker safe safer keep keeps kept get gets got put puts placing place
+    worth remembering remember takeaways""".split()
 )
+# ``worth`` and ``remembering`` were the late additions, and they mattered more than
+# the rest put together: "Worth remembering: ..." is the frame OUR OWN composer puts
+# round every takeaway, so those two words appeared on nearly every coached turn and
+# ranked as two of the three "most common lessons". The metric was reporting our
+# boilerplate back to us as evidence of repetition, which inflated every reading and
+# made runs with different silence rates incomparable. Caught by a test asserting the
+# obvious — six turns teaching six different things must score below six turns
+# teaching one — which returned 1.0 for both.
 
 #: How many of the most common closing terms count as "the coach's usual lessons".
 #: Three, because that is the claim being measured: a reviewer counting by hand
@@ -367,7 +376,19 @@ def lesson_concentration(turns: list[ReviewTurn]) -> float:
         frequency.update(terms)
     if not frequency or not turns:
         return 0.0
-    common = {term for term, _ in frequency.most_common(_CONCENTRATION_TOP_N)}
+    # Total order: count descending, then the term alphabetically. NOT
+    # ``Counter.most_common``, which leaves ties in insertion order — and the
+    # insertion order here comes from iterating SETS, whose order is hash-randomized
+    # per process. With several terms tied at the third position (common: this is a
+    # 3-term cut over ~18 short sentences) the cut fell differently every run, so the
+    # SAME transcript scored 72% and 83% on separate invocations. A metric that moves
+    # without the data moving cannot be used to accept or reject a change, and two
+    # metrics in this module have already been deleted for being unsound.
+    #
+    # Same fix, same reason as ``pedagogy.selector._sort_key``: when ranking decides
+    # something, the tie-break has to be part of the ranking.
+    ranked = sorted(frequency.items(), key=lambda kv: (-kv[1], kv[0]))
+    common = {term for term, _ in ranked[:_CONCENTRATION_TOP_N]}
     return sum(1 for terms in per_turn if terms & common) / len(turns)
 
 

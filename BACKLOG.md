@@ -191,7 +191,34 @@ wanted; a protocol version bump would not have caught it, because bumping relies
 person who changed the units noticing that they changed the contract, which is exactly
 what did not happen. See `docs/coaching-protocol.md` §5.7.
 
-### TOP — The coach teaches one lesson five times (v33, ledger row 70)
+### TOP — The same explanation still repeats in the BODY (v34, ledger row 72)
+
+The lesson ladder shipped and works, but it governs the closing takeaway only. The
+repetition the reviewer actually named is in the body: "attacking their undefended
+bishop on b4" still appears on plies 20, 30, 38, 44 and 46 of v34. That sentence is the
+composed *achievement clause*, and it is the same every time because the engine keeps
+recommending the same move and the clause is a faithful description of it.
+
+Concentration (closing sentences) went 72% -> 50%, which is real but measures the part
+that was changed rather than the part that is wrong.
+
+Two follow-ups, both small:
+
+- **Vary or suppress the repeated achievement clause**, on the same ladder as the
+  takeaway. Second time the same clause would be emitted, shorten it ("a3 again"); third
+  time, drop the explanation and just name the move. Needs the clause's identity keyed
+  the same way `composed_lesson` keys the takeaway.
+- **`compose_safe_move_feedback` ignores the ladder.** When the fidelity gate fires it
+  appends its takeaway regardless, so a retired lesson ships anyway — visible at v34 ply
+  46, which is the fifth telling. It needs the same `times_taught` input the prompt
+  builder gets.
+
+Worth being honest about the shape of this: the coach says the same true thing five
+times because the position genuinely calls for the same move five times. The deeper fix
+is a coach that says "same idea as before, you know what to do" and moves on, which is
+what the ladder does for the takeaway and does not yet do for the explanation.
+
+### DONE — Lesson memory: teach, name the recurrence, then stop (v34, 2026-08-26)
 
 The regression v33 exposed, and now the highest-leverage open item. Lesson concentration
 over *spoken* turns went **44% (v31) -> 83% (v33)**: 9 of 18 closings are about "attack".
