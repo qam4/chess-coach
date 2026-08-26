@@ -26,6 +26,7 @@ from chess_coach.prompts import (
     build_rich_move_evaluation_prompt,
     build_socratic_prompt,
     compose_safe_move_feedback,
+    composed_achievement,
     composed_lesson,
     move_feedback_max_tokens,
 )
@@ -586,6 +587,7 @@ class Coach:
         report: ComparisonReport,
         max_tokens: int,
         trace: typing.Callable[..., None],
+        lesson_times_taught: int = 0,
     ) -> str:
         """Generate move feedback and refuse to return a false claim about the board.
 
@@ -639,8 +641,14 @@ class Coach:
             _generate,
             report.fen,
             # Composed from the board, keeping the teaching shape — not the general
-            # template, which showed pawn-unit costs and dumped raw tactic data.
-            lambda: compose_safe_move_feedback(report) or generate_move_coaching(report, level=self.level),
+            # template, which showed pawn-unit costs and dumped raw tactic data. Passed
+            # the lesson count so the safety net honours the same ladder as the prompt:
+            # at v34 ply 46 the gate fired and this text shipped the fifth telling of a
+            # lesson the prompt builder had already retired.
+            lambda: (
+                compose_safe_move_feedback(report, lesson_times_taught)
+                or generate_move_coaching(report, level=self.level)
+            ),
             retries=self.verify_retries,
             # The move actually played, so a mate described without notation is still
             # caught — the beginner level asks the coach to avoid notation.
@@ -761,19 +769,30 @@ class Coach:
             # teaches nothing and must not count against the ladder.
             lesson_key, _lesson = composed_lesson(report)
             times_taught = self._lessons_taught[lesson_key] if lesson_key else 0
-            if times_taught:
-                _trace(
-                    "eval_lesson_repeat",
-                    f"Lesson {lesson_key!r} already taught {times_taught}x this game — "
-                    + ("naming the recurrence" if times_taught < LESSON_RETIRE_AFTER else "retiring it"),
-                    tool="engine",
-                )
+            # The body sentence gets its own count, keyed on the rendered clause rather
+            # than the lesson category. v34 showed why both are needed: the takeaway
+            # ladder worked and "attacking their undefended bishop on b4" still appeared
+            # on five turns, because that sentence comes from the achievement clause.
+            clause_key, _clause = composed_achievement(report)
+            times_shown = self._lessons_taught[clause_key] if clause_key else 0
+            for key, count, what in (
+                (lesson_key, times_taught, "Lesson"),
+                (clause_key, times_shown, "Achievement clause"),
+            ):
+                if count:
+                    _trace(
+                        "eval_lesson_repeat",
+                        f"{what} {key!r} already used {count}x this game — "
+                        + ("naming the recurrence" if count < LESSON_RETIRE_AFTER else "retiring it"),
+                        tool="engine",
+                    )
             prompt = build_rich_move_evaluation_prompt(
                 report,
                 level=self.level,
                 guidance=guidance,
                 guidance_facts=guidance_facts,
                 lesson_times_taught=times_taught,
+                achievement_times_shown=times_shown,
             )
 
             if self.template_only:
@@ -803,6 +822,7 @@ class Coach:
                         # to be specific; a sound move is kept short.
                         max_tokens=min(self.max_tokens, move_feedback_max_tokens(report)),
                         trace=_trace,
+                        lesson_times_taught=times_taught,
                     )
                 except Exception as e:
                     logger.warning("LLM failed for move evaluation (coaching path): %s — falling back to templates", e)
@@ -829,8 +849,11 @@ class Coach:
             # side of this trade, and the alternative — threading "did the delivered text
             # actually close on the lesson" back out of three fallback layers — buys
             # precision that the ladder (teach, name, stop) is too coarse to use.
-            if lesson_key and feedback.strip():
-                self._lessons_taught[lesson_key] += 1
+            if feedback.strip():
+                if lesson_key:
+                    self._lessons_taught[lesson_key] += 1
+                if clause_key:
+                    self._lessons_taught[clause_key] += 1
 
             return MoveEvaluation(
                 classification=report.classification,

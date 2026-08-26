@@ -1582,7 +1582,7 @@ def _terminal_feedback(board: chess.Board, uci: str) -> str:
     return ""
 
 
-def compose_safe_move_feedback(report: ComparisonReport) -> str:
+def compose_safe_move_feedback(report: ComparisonReport, lesson_times_taught: int = 0) -> str:
     """Composed move feedback for the fidelity gate's fallback, or '' if nothing verifies.
 
     This is what a student reads precisely when the model could not be trusted, so it
@@ -1647,19 +1647,80 @@ def compose_safe_move_feedback(report: ComparisonReport) -> str:
     if tier in _OWN_MOVE_TIERS and clause:
         parts.append(f"Your move is {clause.removeprefix(', ').strip()}.")
 
+    # The takeaway is on the same ladder as the LLM path's. This function was outside it
+    # and the omission shipped: at v34 ply 46 the fidelity gate fired, this text was
+    # sent, and it closed on "going after a piece that has too few defenders" — the
+    # FIFTH telling of a lesson the prompt builder had already retired. The safety net
+    # cannot be the one path that ignores the rule.
     lesson = effect_takeaway(category, phase_of_board(board))
-    if lesson:
-        parts.append(f"Worth remembering: {lesson}.")
+    if lesson and lesson_times_taught < LESSON_RETIRE_AFTER:
+        if lesson_times_taught > 0:
+            # Composed rather than generated, so it can be exact: name the recurrence
+            # without re-teaching, which is what the LLM path is asked to do.
+            parts.append("Same idea as earlier in this game.")
+        else:
+            parts.append(f"Worth remembering: {lesson}.")
     return " ".join(parts)
 
 
-def _achievement_line(report: ComparisonReport, tier: str) -> str:
+#: How many times one achievement clause may be spelled out in a game before the coach
+#: stops explaining and just names the move. Two, matching the lesson ladder.
+ACHIEVEMENT_RETIRE_AFTER = 2
+
+
+def composed_achievement(report: ComparisonReport, tier: str | None = None) -> tuple[str, str]:
+    """``(key, clause)`` for the achievement this turn would spell out; ``("", "")`` if none.
+
+    Keyed on the board-derived effect clause. Two deliberate choices in that:
+
+    * NOT the effect category. "attacking their undefended bishop on b4" and
+      "attacking their undefended knight on f6" share a category but are different
+      sentences, and the second is news to the student.
+    * NOT the fully rendered line either, because that appends the engine's
+      ``best_move_idea`` label — and the label varies where the sentence does not. On
+      the real v34 turns the same clause arrived once as "(pawn structure — improving
+      pawn position)" and once as "(piece activity — improving piece placement)", so
+      keying on the rendered string reset the ladder and the repeat sailed through.
+      The label is an engine category with ten distinct values across a whole game;
+      the clause is what the student actually reads.
+
+    Known gap: a line carrying only the label and no verified effect is not keyed at
+    all, so it is never suppressed. Those are rare and ``engine_trust`` already records
+    the label as untrusted; narrowing that is a separate question.
+    """
+    if tier is None:
+        tier = _move_feedback_tier(report)
+    board = _safe_board(report.fen)
+    if tier in _OWN_MOVE_TIERS:
+        uci, rival = report.user_move, ""
+    else:
+        uci, rival = report.best_move, report.user_move
+    _category, effect = _move_effect(board, uci, target_possessive="their ", rival_uci=rival)
+    clause = effect.removeprefix(", ").strip()
+    if not clause:
+        return "", ""
+    return f"clause:{clause}", clause
+
+
+def _achievement_line(report: ComparisonReport, tier: str, times_shown: int = 0) -> str:
     """The rendered achievement line for ``tier``, or '' to omit it.
 
     On the tiers that make no comparison the line describes the STUDENT's move and
     is headed accordingly, so the alternative is never put in front of the model at
     all. Supplying the engine's move and instructing the coach not to mention it
     would be a negative constraint, and those do not work here.
+
+    ``times_shown`` puts this line on the same ladder as the takeaway, for the same
+    reason and against harder evidence. In v34 the takeaway ladder worked and the
+    reviewer's actual complaint survived it: "attacking their undefended bishop on b4"
+    still appeared on plies 20, 30, 38, 44 and 46, because THIS clause is where that
+    sentence comes from and it was outside the ladder. The engine kept recommending
+    a3 and the clause kept describing it correctly.
+
+    So: state it, then say it is the same idea, then stop explaining and just name the
+    move. The third step returns ``''``, which the caller already handles — the tier
+    instructions' pointer at "the line above" is redirected to the position facts when
+    this line is absent.
     """
     if tier in _OWN_MOVE_TIERS:
         achievement = _move_achievement(report, report.user_move)
@@ -1669,6 +1730,14 @@ def _achievement_line(report: ComparisonReport, tier: str) -> str:
         subject = f"The best move ({uci_to_san(report.fen, report.best_move) or report.best_move})"
     if not achievement:
         return ""
+    if times_shown >= ACHIEVEMENT_RETIRE_AFTER:
+        # Nothing. The move is still named elsewhere in the prompt, and repeating the
+        # same explanation a third time is what this change exists to stop.
+        return ""
+    if times_shown > 0:
+        # Named, flagged as a repeat, not re-explained. The model still has the move;
+        # what it no longer has is the same clause to paraphrase again.
+        return f"\n{subject} does the same thing here as it did earlier in the game.\n"
     # A bare statement, not a labelled field. Renaming the label did not stop the
     # model copying it — turns echoing a prompt header went 0 -> 6 -> 8 across three
     # runs, and the rename happened between the last two. It copies whatever label it
@@ -1798,6 +1867,7 @@ def build_rich_move_evaluation_prompt(
     guidance: list[GuidanceEntry] | None = None,
     guidance_facts: dict[str, str] | None = None,
     lesson_times_taught: int = 0,
+    achievement_times_shown: int = 0,
 ) -> str:
     """Build a rich move evaluation prompt from a ComparisonReport.
 
@@ -1823,6 +1893,9 @@ def build_rich_move_evaluation_prompt(
             closed a turn in this game. Drives the teach / name-the-recurrence /
             say-nothing ladder in :func:`_build_takeaway_instruction`. Zero (the
             default) reproduces the memoryless behaviour.
+        achievement_times_shown: How many times this turn's achievement clause has
+            already been spelled out in this game. Same ladder, applied to the body
+            sentence rather than the closing one — see :func:`_achievement_line`.
 
     Returns:
         The complete prompt string ready to send to the LLM.
@@ -1907,7 +1980,7 @@ def build_rich_move_evaluation_prompt(
     # redirect; serious -> direct, lead with the cost. The word limit is set per
     # tier so a best move gets one sentence and a blunder gets room to be
     # specific.
-    best_move_line = _achievement_line(report, tier)
+    best_move_line = _achievement_line(report, tier, achievement_times_shown)
     move_instructions = _TIER_INSTRUCTIONS[tier]
     if not best_move_line:
         # Four tier blocks tell the model to "use '<header>' shown above". With the

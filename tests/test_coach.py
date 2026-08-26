@@ -461,9 +461,12 @@ class TestLessonMemory:
         # retires a lesson one turn early, which errs toward less repetition. The
         # opposite error would let a lesson repeat indefinitely whenever generation was
         # flaky. If this assertion ever needs to change, change it knowingly.
+        from chess_coach.prompts import composed_lesson
+
         coach = _coach_with_repeating_engine(feedback="   ")
         _prompts_from(coach, 2)
-        assert sum(coach._lessons_taught.values()) == 2
+        lesson_key, _ = composed_lesson(_comparison_with_repeatable_lesson())
+        assert coach._lessons_taught[lesson_key] == 2
 
     def test_new_game_forgets_the_history(self):
         coach = _coach_with_repeating_engine()
@@ -497,3 +500,97 @@ class TestLessonMemory:
         prompts = _prompts_from(coach, 1)
         assert "CLOSE with one transferable takeaway on THIS lesson" in prompts[0]
         assert lesson_other in prompts[0]
+
+
+class TestAchievementClauseMemory:
+    """The BODY sentence is on the same ladder as the closing takeaway.
+
+    v34 is the reason this exists. The takeaway ladder worked and the reviewer's
+    actual complaint survived it: "attacking their undefended bishop on b4" still
+    appeared on plies 20, 30, 38, 44 and 46, because that sentence is the achievement
+    clause, which was outside the ladder. Fixing the closing sentence and leaving the
+    body untouched moved the metric and not the coaching.
+    """
+
+    def test_clause_is_stated_then_flagged_then_dropped(self):
+        coach = _coach_with_repeating_engine()
+        prompts = _prompts_from(coach, 3)
+
+        # 1st: the full clause, spelled out.
+        assert "does this:" in prompts[0]
+        assert "undefended bishop on b4" in prompts[0]
+        # 2nd: named as a repeat, NOT re-explained.
+        assert "does the same thing here as it did earlier" in prompts[1]
+        assert "does this:" not in prompts[1]
+        # 3rd: no achievement line at all.
+        assert "does this:" not in prompts[2]
+        assert "does the same thing here" not in prompts[2]
+        # And nothing may point at a line that is no longer there. (This tier — serious
+        # — never referenced it, so there is nothing to redirect; the tiers that DO
+        # reference it are covered below.)
+        assert "the line above stating what the move does" not in prompts[2]
+        # The move itself is still named, so retiring the explanation does not leave
+        # the student without a recommendation.
+        assert "Bc3" in prompts[2]
+
+    def test_retiring_the_clause_redirects_tiers_that_referenced_it(self):
+        # The inaccuracy tier tells the model to "use the line above stating what the
+        # move does". With the clause retired that points at nothing, which is an
+        # invitation to invent one — the existing redirect must fire.
+        from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP
+        from chess_coach.prompts import ACHIEVEMENT_RETIRE_AFTER, build_rich_move_evaluation_prompt
+
+        report = _comparison_with_repeatable_lesson(drop=SOUND_MAX_DROP_CP + 1)
+        shown = build_rich_move_evaluation_prompt(report, achievement_times_shown=0)
+        assert "the line above stating what the move does" in shown
+
+        retired = build_rich_move_evaluation_prompt(report, achievement_times_shown=ACHIEVEMENT_RETIRE_AFTER)
+        assert "the line above stating what the move does" not in retired
+        assert "the position facts above" in retired
+
+    def test_a_different_clause_is_not_suppressed(self):
+        # Keyed on the rendered clause, not the effect category: attacking a bishop on
+        # b4 and attacking something else are different sentences, and the second is
+        # news to the student even though the category matches.
+        from chess_coach.prompts import composed_achievement
+
+        coach = _coach_with_repeating_engine()
+        _prompts_from(coach, 3)  # retire the b4 clause
+
+        other = dataclasses.replace(_comparison_with_repeatable_lesson(), best_move="d4e5")
+        key_other, clause_other = composed_achievement(other)
+        key_b4, _ = composed_achievement(_comparison_with_repeatable_lesson())
+        assert key_other and key_other != key_b4
+
+        coach.engine.get_comparison_report.return_value = other
+        prompts = _prompts_from(coach, 1)
+        assert "does this:" in prompts[0]
+        assert clause_other in prompts[0]
+
+
+def test_composed_fallback_honours_the_lesson_ladder():
+    """The fidelity gate's fallback must not ship a retired lesson.
+
+    At v34 ply 46 the gate fired, this text was sent, and it closed on "going after a
+    piece that has too few defenders" — the fifth telling of a lesson the prompt
+    builder had already retired two turns earlier. The safety net cannot be the one
+    path that ignores the rule.
+    """
+    from chess_coach.prompts import LESSON_RETIRE_AFTER, compose_safe_move_feedback
+
+    report = _comparison_with_repeatable_lesson()
+
+    first = compose_safe_move_feedback(report, lesson_times_taught=0)
+    assert "Worth remembering:" in first
+    assert "too few defenders" in first
+
+    second = compose_safe_move_feedback(report, lesson_times_taught=1)
+    assert "Same idea as earlier in this game." in second
+    assert "Worth remembering:" not in second
+
+    retired = compose_safe_move_feedback(report, lesson_times_taught=LESSON_RETIRE_AFTER)
+    assert "Worth remembering:" not in retired
+    assert "Same idea as earlier" not in retired
+    # Still a complete piece of feedback: the stronger move and what it does.
+    assert "Bc3" in retired
+    assert len(retired) > 30

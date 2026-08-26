@@ -191,7 +191,26 @@ wanted; a protocol version bump would not have caught it, because bumping relies
 person who changed the units noticing that they changed the contract, which is exactly
 what did not happen. See `docs/coaching-protocol.md` §5.7.
 
-### TOP — The same explanation still repeats in the BODY (v34, ledger row 72)
+### NEXT — Re-measure the body ladder (a v35 on seed 7)
+
+Both v34 follow-ups shipped (ledger row 73) and are verified prompt-side against the
+five real plies: the b4 clause is now stated once, flagged as a repeat once, then
+dropped. What is NOT measured is the effect on the coaching a student reads — that needs
+one tunnelled run on the same seed-7 game.
+
+What to look for, and what would count as a failure:
+
+- Concentration should fall below v34's 50%. But it measures closing sentences, so the
+  more informative check is by hand: does "attacking their undefended bishop on b4"
+  still appear five times?
+- Turns coached should stay at 18 and `graded_or_priced` at 0. Buying less repetition by
+  making the coach quieter, or by unravelling the magnitude change, is not a win.
+- Watch for the opposite failure: with the clause retired the model has less to say on
+  those turns, so the risk is thin or vague feedback. If plies 38/44/46 come back as
+  bare move names with no content, the ladder is too aggressive and the middle rung
+  should carry more.
+
+### DONE — The same explanation repeated in the BODY (v34, ledger rows 72-73)
 
 The lesson ladder shipped and works, but it governs the closing takeaway only. The
 repetition the reviewer actually named is in the body: "attacking their undefended
