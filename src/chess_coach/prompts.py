@@ -33,6 +33,7 @@ from chess_coach.pedagogy.features import PHASE_ENDGAME, PHASE_OPENING, phase_of
 from chess_coach.pedagogy.inject import format_guidance_block
 from chess_coach.pedagogy.instantiate import feature_facts
 from chess_coach.pedagogy.resource import GuidanceEntry
+from chess_coach.piece_history import PieceHistory
 
 logger = logging.getLogger(__name__)
 
@@ -434,6 +435,18 @@ of your own, and do NOT name a square, piece, file or threat that line does not 
 # for the diagnosis to work at all. It is backed by the mechanical gate instead:
 # verify._check_our_move_claims pushes the recommended move and checks any attack or
 # file-control claim against the resulting board.
+#: Voiced only when :func:`composed_history` produced something, and only on the tiers
+#: that are diagnosing a move rather than affirming one. Same contract as the reason
+#: blocks: we supply the sentence, the model voices it, and it may not extend it. The
+#: line is the answer to "what went wrong in my thinking", which is the whole of what
+#: Diagnosis asks for and the one thing the coach could not previously say.
+_HISTORY_SUPPLIED = """\
+- HOW IT CAME ABOUT: open with the "How this came about" line above, in your own \
+words, before naming the consequence. It is the only account of how this arose that \
+you have. Do NOT add to it — do not say the piece had no escape, was trapped, should \
+have moved earlier, or why it was left there.
+"""
+
 _REASON_WITHHELD = """\
 - WHY it is the better move is NOT established in the data above, so you do not \
 know it. Name the move and stop there. Do NOT say what it attacks, defends, \
@@ -1693,6 +1706,86 @@ def compose_safe_move_feedback(report: ComparisonReport, lesson_times_taught: in
 ACHIEVEMENT_REFRAME_AFTER = 1
 
 
+def refuted_square(report: ComparisonReport) -> chess.Square | None:
+    """The square the opponent's refutation lands on, if it takes something of ours.
+
+    The first move of ``refutation_line`` is the reply the coach is already told to lead
+    with. Where that reply is a capture, its destination holds the piece whose story the
+    diagnosis is about — the knight that dies, not the move that failed to save it.
+    """
+    board = _safe_board(report.fen)
+    if board is None or not report.refutation_line:
+        return None
+    try:
+        played = chess.Move.from_uci(report.user_move)
+    except ValueError:
+        return None
+    if played not in board.legal_moves:
+        return None
+    board.push(played)
+    try:
+        reply = board.parse_san(report.refutation_line[0])
+    except (chess.InvalidMoveError, chess.IllegalMoveError, chess.AmbiguousMoveError, ValueError):
+        try:
+            reply = chess.Move.from_uci(report.refutation_line[0])
+        except ValueError:
+            return None
+        if reply not in board.legal_moves:
+            return None
+    victim = board.piece_at(reply.to_square)
+    if victim is None or victim.color == board.turn:
+        return None  # not a capture of ours
+    return reply.to_square
+
+
+def composed_history(report: ComparisonReport, history: PieceHistory) -> str:
+    """How the piece the refutation takes came to be standing there. '' when we cannot say.
+
+    This is the Diagnosis lever. The score sat at 5 across v33, v35, v36 and v38, and the
+    reviewer's account of why never changed: "the coach sees one ply and the engine's
+    refutation, so it can only ever report the consequence ... Every one of those is in
+    the game record and none of it reaches the prompt." A process failure is a claim about
+    a sequence; we were supplying a single position and asking for one anyway, which is
+    the same error that produced the invented reasons in v36.
+
+    So the sequence is supplied, as fact and nothing more. Two things get said, both
+    read straight off the record:
+
+    * how long the piece has stood there — "your knight has been on g5 since move 6".
+      Withheld when the piece arrived on THIS move, where it is merely a restatement of
+      the move just played.
+    * whether we have raised it before — "you were told about this piece on move 14".
+      This is what makes a repeat nameable as a repeat.
+
+    What it deliberately does NOT say is why the piece is in trouble, whether it had a
+    retreat, or what the student should have done instead. Those are evaluations, and
+    they belong to the engine or to nobody.
+    """
+    square = refuted_square(report)
+    if square is None:
+        return ""
+    board = _safe_board(report.fen)
+    if board is None:
+        return ""
+    name = chess.square_name(square)
+    arrival = history.arrival_of(square)
+    piece = board.piece_at(square)
+    parts: list[str] = []
+    if arrival is not None and arrival.move_number < board.fullmove_number:
+        parts.append(f"Your {arrival.piece_name} has been on {name} since move {arrival.move_number} ({arrival.san})")
+    elif arrival is None and piece is not None:
+        # Never moved all game. For a piece that dies where it started, that is the more
+        # telling fact of the two.
+        parts.append(f"Your {chess.piece_name(piece.piece_type)} on {name} has not moved this game")
+    warned = [n for n in history.warnings_for(square) if n < board.fullmove_number]
+    if warned:
+        moves = ", ".join(str(n) for n in sorted(set(warned)))
+        parts.append(f"and this piece already came up on move {moves}")
+    if not parts:
+        return ""
+    return "--- How this came about ---\n" + ", ".join(parts) + "."
+
+
 def composed_achievement(report: ComparisonReport, tier: str | None = None) -> tuple[str, str]:
     """``(key, clause)`` for the achievement this turn would spell out; ``("", "")`` if none.
 
@@ -1903,6 +1996,7 @@ def build_rich_move_evaluation_prompt(
     guidance_facts: dict[str, str] | None = None,
     lesson_times_taught: int = 0,
     achievement_times_shown: int = 0,
+    history: PieceHistory | None = None,
 ) -> str:
     """Build a rich move evaluation prompt from a ComparisonReport.
 
@@ -2015,11 +2109,20 @@ def build_rich_move_evaluation_prompt(
     # redirect; serious -> direct, lead with the cost. The word limit is set per
     # tier so a best move gets one sentence and a blunder gets room to be
     # specific.
+    # How the refuted piece got where it is. A section rather than an instruction: it is
+    # a fact about the game record, on the same footing as the placement and threat
+    # blocks, and it is the only account of process the model is given.
+    history_section = composed_history(report, history) if history is not None else ""
+    if history_section:
+        sections.append(history_section)
+
     best_move_line = _achievement_line(report, tier, achievement_times_shown)
     # Authorship of the "why" follows the data: voice our clause when we have one, give
     # no reason at all when we do not. The tier blocks no longer ask for a reason
     # themselves, so this is the only thing in the prompt that permits one.
     move_instructions = _TIER_INSTRUCTIONS[tier] + (_REASON_SUPPLIED if best_move_line else _REASON_WITHHELD)
+    if history_section and tier not in _OWN_MOVE_TIERS:
+        move_instructions += _HISTORY_SUPPLIED
     word_limit = _TIER_WORD_LIMIT[tier]
     # ``lesson_times_taught`` comes from the caller's per-game memory: the coach used to
     # treat every turn as if it were the first, and taught one lesson five times.

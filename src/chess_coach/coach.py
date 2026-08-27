@@ -17,6 +17,7 @@ from chess_coach.engine import AnalysisResult, CoachingEngine, EngineProtocol, U
 from chess_coach.llm.base import LLMProvider
 from chess_coach.models import ComparisonReport, PositionReport
 from chess_coach.openings import lookup_fen
+from chess_coach.piece_history import PieceHistory
 from chess_coach.prompts import (
     LESSON_RETIRE_AFTER,
     build_coaching_prompt,
@@ -29,6 +30,7 @@ from chess_coach.prompts import (
     composed_achievement,
     composed_lesson,
     move_feedback_max_tokens,
+    refuted_square,
 )
 from chess_coach.verify import Violation, generate_verified
 
@@ -179,6 +181,10 @@ class Coach:
         # identically. A frontier reviewer called that "one lesson, five times, with no
         # escalation and no memory". Reset by :meth:`new_game`.
         self._lessons_taught: Counter[str] = Counter()
+        # The game record, kept so a turn can say how a piece came to be where it is.
+        # Diagnosis was stuck at 5 for four runs because this did not exist: the coach
+        # saw one position and could only ever report the consequence.
+        self._piece_history = PieceHistory()
 
         # Pedagogy guidance resource (loaded once, guarded) when the knob is on.
         # The profiler recommends turning this on per model; default off = no
@@ -225,6 +231,7 @@ class Coach:
         """
         self._lessons_taught.clear()
         self._last_position_report = None
+        self._piece_history.clear()
 
     def _select_guidance(self, pos_report: PositionReport, level: str) -> list | None:  # type: ignore[type-arg]
         """Select pedagogy guidance for a position when the guidance knob is on.
@@ -767,6 +774,10 @@ class Coach:
             # How often this turn's lesson has already closed a turn in this game.
             # Read before generating, recorded after — a turn the coach stays silent on
             # teaches nothing and must not count against the ladder.
+            # Record the move BEFORE composing, so a piece the student just moved shows
+            # this move as its arrival and the history line suppresses itself rather than
+            # restating the move we are already discussing.
+            self._piece_history.observe(fen_before, user_move)
             lesson_key, _lesson = composed_lesson(report)
             times_taught = self._lessons_taught[lesson_key] if lesson_key else 0
             # The body sentence gets its own count, keyed on the rendered clause rather
@@ -793,6 +804,7 @@ class Coach:
                 guidance_facts=guidance_facts,
                 lesson_times_taught=times_taught,
                 achievement_times_shown=times_shown,
+                history=self._piece_history,
             )
 
             if self.template_only:
@@ -854,6 +866,12 @@ class Coach:
                     self._lessons_taught[lesson_key] += 1
                 if clause_key:
                     self._lessons_taught[clause_key] += 1
+                # Remember WHICH PIECE this turn was about, so a later turn can say the
+                # student has been here before. Recorded against the position the move
+                # was played in, and only on a turn that actually spoke.
+                refuted = refuted_square(report)
+                if refuted is not None:
+                    self._piece_history.record_warning(fen_before, refuted, motif=lesson_key or "")
 
             return MoveEvaluation(
                 classification=report.classification,
