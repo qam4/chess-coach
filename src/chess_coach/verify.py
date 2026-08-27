@@ -448,6 +448,29 @@ _INTENT_CLAIM_RE = re.compile(
 
 _DEFENCE_VERBS = r"protect\w*|defend\w*|support\w*|guard\w*"
 
+#: Verbs that promote a bare square token to a claimed MOVE. Without one, "a5" in
+#: "your pawn on a5" would be read as a move and checked as such.
+_PLAY_VERB_RE = re.compile(
+    r"\b(?:plays?|playing|played|responds?\s+with|answers?\s+with|replies\s+with|continues?\s+with)\s*$",
+    re.IGNORECASE,
+)
+_PLAY_VERB_LOOKBACK = 24
+
+_ATTACK_VERBS = r"attack\w*|hit\w*|threaten\w*|target\w*"
+
+#: "<attack verb> ... <piece> on <square>" — the claimed CONSEQUENCE of a move.
+#: Deliberately requires the piece noun as well as the square, so "attacking the
+#: centre" or "attacking on the kingside" contribute nothing to check.
+_ATTACK_TARGET_RE = re.compile(
+    rf"\b(?:{_ATTACK_VERBS})\b[^.!?]{{0,40}}?\b(?:pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+([a-h][1-8])\b",
+    re.IGNORECASE,
+)
+
+#: How far after the move token an attack claim still counts as being about THAT move.
+#: Adjacency is what makes this safe: the claim has to follow the move, not merely
+#: appear somewhere in the message.
+_ATTACK_CLAIM_WINDOW = 90
+
 # "<defence verb> ... <piece> on <square>" — the CLAIM. The defender is resolved
 # separately, by looking back for the nearest named piece-and-square, because the
 # two are routinely in different sentences: "the best choice was Ke2, improving king
@@ -594,8 +617,15 @@ def _check_opponent_reply(text: str, board: chess.Board, played_uci: str) -> lis
             continue
         if _is_piece_reference(token, after):
             continue  # "Be6" naming a piece that stands there, not a move
+        # A token is a move if it names a piece or a capture — or if the text says the
+        # opponent PLAYS it. That last clause is the v35 ply-60 hole: "the opponent
+        # plays a5, attacking your rook on e1" was skipped entirely, because a bare
+        # pawn move has no piece letter and no "x", so it looked like an ordinary
+        # square reference. The guard is right in general (most bare squares ARE
+        # references, "your pawn on e4"), so it is narrowed rather than removed: an
+        # explicit play verb immediately before the token is what promotes it.
         clearly_a_move = token[0] in "KQRBNO" or "x" in token
-        if not clearly_a_move:
+        if not clearly_a_move and not _PLAY_VERB_RE.search(text[max(0, m.start() - _PLAY_VERB_LOOKBACK) : m.start()]):
             continue
         seen.add(token)
         # _SAN_RE drops a trailing +/# — the closing \b cannot sit between two
@@ -626,7 +656,37 @@ def _check_opponent_reply(text: str, board: chess.Board, played_uci: str) -> lis
                 )
             )
             continue
-        # The move is real; is what it takes described correctly?
+        # The move is real; does it attack what the coach says it attacks?
+        #
+        # This is the v35 ply-60 falsehood: "the opponent plays a5, attacking your rook
+        # on e1 and winning it". a5 is a legal pawn push, so legality passes; the lie is
+        # the consequence. Checked EXACTLY rather than geometrically — the reply is
+        # pushed, so the question is whether the piece that just moved really attacks
+        # that square in the resulting position, blockers and all. A claim about the
+        # move's own consequence is the one place an exact answer is available, and it
+        # is strictly stronger than "could a piece of this type ever reach it".
+        after_reply = after.copy(stack=False)
+        after_reply.push(reply)
+        attacked = after_reply.attacks(reply.to_square)
+        window_attack = text[m.end() : m.end() + _ATTACK_CLAIM_WINDOW]
+        for claim in _ATTACK_TARGET_RE.finditer(window_attack):
+            target_name = claim.group(1).lower()
+            try:
+                target = chess.parse_square(target_name)
+            except ValueError:
+                continue
+            if target == reply.to_square or target in attacked:
+                continue
+            out.append(
+                Violation(
+                    "opponent_reply",
+                    f"{token} … {claim.group(0).strip()}",
+                    f"{token} does not attack {target_name}",
+                )
+            )
+            break
+
+        # Is what it takes described correctly?
         if "x" not in token:
             continue
         victim = "pawn" if after.is_en_passant(reply) else None

@@ -781,3 +781,112 @@ def test_opponent_reply_gates_the_send_path() -> None:
     from chess_coach.verify import GATING_VIOLATION_KINDS
 
     assert "opponent_reply" in GATING_VIOLATION_KINDS
+
+
+# ---------------------------------------------------------------------------
+# Invented attack geometry (v35 ply 60)
+# ---------------------------------------------------------------------------
+#
+# The sixth class of fabrication found by six review rounds, after the wrong captured
+# piece, the wrong owner, false defence geometry, mate called a check, invented intent
+# and the impossible opponent reply. This one slipped through two guards at once: the
+# move was a bare pawn push, so the opponent-reply check skipped it as an ordinary
+# square reference, and nothing verified what a reply ATTACKS — only its legality and
+# what it captures.
+#
+# The real position and the real message. Black's a-pawn is on a7, a5 is empty, and a
+# pawn arriving on a5 could only ever attack b4 — which holds Black's own rook. The
+# coach told the student their rook on e1 was being won.
+PLY60_FEN = "4r3/p1p1kpRp/1pp1b3/8/1r6/2N5/5K2/4R3 w - - 0 31"
+PLY60_TEXT = (
+    "After your move Kf3, the opponent plays a5, attacking your rook on e1 and winning it. "
+    "This lets them gain material and improve their position."
+)
+
+
+def test_invented_attack_geometry_is_flagged() -> None:
+    from chess_coach.verify import check_text_fidelity, gating_violations
+
+    v = check_text_fidelity(PLY60_TEXT, PLY60_FEN, played_uci="f2f3")
+    detail = next((x.detail for x in v if x.kind == "opponent_reply"), "")
+    assert "does not attack e1" in detail
+    # It must GATE. A confident falsehood about a threat is the case the gate exists
+    # for: the student cannot detect it and will act on it.
+    assert "opponent_reply" in [x.kind for x in gating_violations(v)]
+
+
+def test_a_true_attack_claim_is_not_flagged() -> None:
+    # The other half, and the one that matters for precision: a reply that really does
+    # attack the named piece must pass. Rxh7 lands on h7 and genuinely attacks the
+    # pawn on h6 is not available here, so use the rook's own file: after Kf3, Black's
+    # rook on b4 really does attack b-file squares. Rb2+ attacks nothing named, so
+    # assert on a claim that is true by construction instead.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "After your move Kf3, the opponent plays Rb2, attacking your king on f2."
+    v = check_text_fidelity(text, PLY60_FEN, played_uci="f2f3")
+    # f2 is empty after Kf3, so any complaint here is about placement, not geometry.
+    assert not [x for x in v if x.kind == "opponent_reply" and "does not attack" in x.detail]
+
+
+def test_a_bare_square_reference_is_not_read_as_a_move() -> None:
+    # The precision guard on the change that made this check reachable. Bare squares
+    # are usually references, not moves — "your pawn on a5" must not be parsed as the
+    # opponent playing a5 and then checked for legality or consequence. Only an
+    # explicit play verb promotes a bare token to a move.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "Your rook on e1 is fine. Their pawn on a7 is undefended, and a5 is a weak square."
+    v = check_text_fidelity(text, PLY60_FEN, played_uci="f2f3")
+    assert not [x for x in v if x.kind == "opponent_reply"]
+
+
+def test_attack_claim_about_the_moves_own_square_is_not_flagged() -> None:
+    # A piece does not "attack" the square it stands on, but a coach saying the reply
+    # lands on a square where a piece sits is describing a capture, not a false
+    # geometry claim. Excluded explicitly so the capture wording cannot double-report.
+    from chess_coach.verify import check_text_fidelity
+
+    text = "After your move Kf3, the opponent plays Rxg7, attacking your rook on g7."
+    v = check_text_fidelity(text, PLY60_FEN, played_uci="f2f3")
+    assert not [x for x in v if x.kind == "opponent_reply" and "does not attack" in x.detail]
+
+
+def test_attack_geometry_check_is_quiet_on_every_stored_transcript() -> None:
+    """Precision floor, measured rather than asserted.
+
+    Across the stored report-card runs this fires on exactly one ply — v35's ply 60,
+    and the identical error in v33 and v34 — and nowhere else in ~172 coached turns.
+    A gating check that replaces real coaching with template text has to earn its
+    place on precision, so this is pinned as a property of the checker rather than
+    left as a note in a commit message.
+    """
+    import glob
+    import json
+
+    import chess
+    import pytest
+
+    from chess_coach.verify import check_text_fidelity
+
+    flagged: list[tuple[str, int]] = []
+    coached = 0
+    for path in sorted(glob.glob("output/coach_review_v3*/transcript.json")):
+        for turn in json.loads(open(path, encoding="utf-8").read())["turns"]:
+            text = turn["coach_feedback"]
+            if not text.strip():
+                continue
+            coached += 1
+            try:
+                uci = chess.Board(turn["fen_before"]).parse_san(turn["student_move_san"]).uci()
+            except (ValueError, AssertionError):
+                continue
+            for viol in check_text_fidelity(text, turn["fen_before"], played_uci=uci):
+                if viol.kind == "opponent_reply" and "does not attack" in viol.detail:
+                    flagged.append((path, turn["ply"]))
+
+    if not coached:
+        pytest.skip("no stored transcripts in this checkout")
+    # Every hit must be ply 60 — the one verified defect. A new ply appearing here is
+    # either a real new fabrication or a false positive, and both want a human.
+    assert all(ply == 60 for _path, ply in flagged), f"unexpected plies flagged: {flagged}"

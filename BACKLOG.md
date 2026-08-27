@@ -191,7 +191,42 @@ wanted; a protocol version bump would not have caught it, because bumping relies
 person who changed the units noticing that they changed the contract, which is exactly
 what did not happen. See `docs/coaching-protocol.md` §5.7.
 
-### NEXT — Re-measure the body ladder (a v35 on seed 7)
+### TOP — Stop the model authoring causal claims (ledger rows 74-76)
+
+**The score is capped at 2/10 by fidelity and has been for most of the project.** Ten
+runs were scored on the v1 ask, which cannot discriminate; re-judged under v2, v33 and
+v35 are both 2/10, both gated on an invented claim, uncapped 5.2 and 5.1. The uncapped
+series has been flat inside noise for seven runs. Nothing else we improve is visible
+until the gate clears, and the judge says so independently in both reviews: worth
+roughly 2 -> 5, and "the only change that can be".
+
+**Why another check is not the answer.** We have added six, one per review round, and
+each closed a class of fabrication only for a new class to appear: wrong owner, false
+defence geometry, mate called a check, invented intent, impossible opponent reply, and
+now invented attack geometry. The checks work — each fires on its case and nowhere else
+— but they are a net under a model that keeps inventing. Six nets in, it still invents.
+
+**The change:** the model does not get to author a causal claim. Where we have composed
+and verified a reason, it voices that; where we have not, it names the move and the
+principle with no "because" attached. That removes the category rather than policing
+instances, and it matches the two things that have reliably worked here — withholding
+beats instructing, composing beats checking.
+
+Expect the coach to say less. Given the gate exists to reward "say less but never lie",
+that trade is the point rather than a cost.
+
+Worth one architecture review first (the mode that gets the internals and the full
+lever log, not the report-card judge): the question is whether a small local model over
+composed facts can clear fidelity at all, and that is exactly what that mode is for.
+
+### DONE — Attack-claim geometry check (v35 ply 60, ledger row 75)
+
+The sixth check. `_check_opponent_reply` skipped bare pawn moves and nothing verified
+what a reply attacks. Both closed; catches ply 60 in v33/v34/v35 and fires nowhere else
+in ~172 coached turns. Kept because it is cheap, correct and gates a real falsehood —
+but see the item above for why it is not expected to move the score on its own.
+
+### DONE — Re-measure the body ladder (v35, 2026-08-26)
 
 Both v34 follow-ups shipped (ledger row 73) and are verified prompt-side against the
 five real plies: the b4 clause is now stated once, flagged as a repeat once, then
