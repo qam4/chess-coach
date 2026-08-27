@@ -1773,9 +1773,11 @@ def composed_history(report: ComparisonReport, history: PieceHistory) -> str:
     parts: list[str] = []
     if arrival is not None and arrival.move_number < board.fullmove_number:
         parts.append(f"Your {arrival.piece_name} has been on {name} since move {arrival.move_number} ({arrival.san})")
-    elif arrival is None and piece is not None:
+    elif arrival is None and piece is not None and history.complete:
         # Never moved all game. For a piece that dies where it started, that is the more
-        # telling fact of the two.
+        # telling fact of the two — but only sayable when the record runs from move one.
+        # v39 said it about a knight that had walked to g5 on move 4, on a quiet turn the
+        # coach had not been shown. An incomplete record says nothing here.
         parts.append(f"Your {chess.piece_name(piece.piece_type)} on {name} has not moved this game")
     warned = [n for n in history.warnings_for(square) if n < board.fullmove_number]
     if warned:

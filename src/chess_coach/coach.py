@@ -678,6 +678,15 @@ class Coach:
 
         _trace("config", "Pipeline config", tool="system", **self.debug_config)
 
+        # Record the move in the game history FIRST, before any of the early returns
+        # below. v39 is why this sits here and not next to the composition: it was
+        # placed after the "stay quiet on an unremarkable move" returns, so only 16 of
+        # the game's 40 student moves were ever seen. The knight that died on g5 had
+        # walked there on a quiet move, so the record held no arrival for it — and the
+        # composer read that absence as "has not moved this game" and said so. A piece
+        # the coach declines to comment on is still a piece whose story it needs later.
+        self._piece_history.observe(fen_before, user_move)
+
         # Note: coaching commands always run at full strength in Blunder
         # (UCI_LimitStrength is ignored for coach commands), so no need
         # to toggle strength here.
@@ -774,10 +783,6 @@ class Coach:
             # How often this turn's lesson has already closed a turn in this game.
             # Read before generating, recorded after — a turn the coach stays silent on
             # teaches nothing and must not count against the ladder.
-            # Record the move BEFORE composing, so a piece the student just moved shows
-            # this move as its arrival and the history line suppresses itself rather than
-            # restating the move we are already discussing.
-            self._piece_history.observe(fen_before, user_move)
             lesson_key, _lesson = composed_lesson(report)
             times_taught = self._lessons_taught[lesson_key] if lesson_key else 0
             # The body sentence gets its own count, keyed on the rendered clause rather

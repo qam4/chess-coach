@@ -80,12 +80,29 @@ class PieceHistory:
     #: (piece type, motif) -> times the coach has raised that pairing this game. Keyed on
     #: TYPE rather than square: the point of a pattern is that it recurs somewhere else.
     _motifs: dict[tuple[int, str], int] = field(default_factory=dict)
+    #: Whether the record starts from move one. Without this, "no arrival on record"
+    #: is ambiguous — it means either "this piece has never moved" or "we were not
+    #: watching when it did". v39 conflated the two and published the difference: the
+    #: knight on g5 had walked there on move 4, we had not been shown that move, and
+    #: the prompt asserted "your knight on g5 has not moved this game". Only a record
+    #: that begins at move one can support that sentence.
+    _from_start: bool = False
 
     def clear(self) -> None:
         """Forget the game. Called from ``Coach.new_game()``."""
         self._arrived.clear()
         self._warned.clear()
         self._motifs.clear()
+        self._from_start = False
+
+    @property
+    def complete(self) -> bool:
+        """Whether the record covers the game from move one.
+
+        Read before claiming a piece has NOT moved. Absence of an arrival only means
+        that when the record is complete; otherwise it means we did not see the move.
+        """
+        return self._from_start
 
     # ----- recording -----
 
@@ -99,6 +116,8 @@ class PieceHistory:
         board = _safe_board(fen_before)
         if board is None:
             return
+        if not self._arrived and not self._from_start and board.fullmove_number == 1:
+            self._from_start = True
         self._reconcile(board)
         try:
             move = chess.Move.from_uci(user_move_uci)

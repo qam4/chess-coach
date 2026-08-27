@@ -253,3 +253,66 @@ class TestHistoryReachesThePrompt:
         assert coach._piece_history.arrival_of(chess.F3) is not None
         coach._piece_history.clear()
         assert coach._piece_history.arrival_of(chess.F3) is None
+
+
+class TestIncompleteRecord:
+    """ "No arrival on record" must not be read as "the piece has never moved".
+
+    v39 shipped that conflation to the student. ``observe`` had been wired in after the
+    coach's "stay quiet on an unremarkable move" early returns, so only 16 of the game's
+    40 student moves reached it. The knight that died on g5 had walked there on move 4,
+    on a quiet turn nobody was watching, and the prompt duly announced "your knight on
+    g5 has not moved this game". Our own composer, fabricating — the exact class of
+    defect the last four changes were about.
+    """
+
+    def test_a_record_starting_mid_game_knows_it_is_incomplete(self):
+        h = PieceHistory()
+        board = chess.Board()
+        for san in ["e4", "e5", "Nf3", "Nc6", "Ng5", "h6"]:
+            board.push_san(san)
+        # The first move we are shown is White's 4th. Nothing before it is known.
+        h.observe(board.fen(), board.parse_san("d4").uci())
+        assert h.complete is False
+
+    def test_a_record_starting_at_move_one_is_complete(self):
+        h = PieceHistory()
+        h.observe(START, "e2e4")
+        assert h.complete is True
+
+    def test_clear_resets_completeness(self):
+        h = PieceHistory()
+        h.observe(START, "e2e4")
+        h.clear()
+        assert h.complete is False
+
+    def test_no_has_not_moved_claim_from_an_incomplete_record(self):
+        from chess_coach.prompts import build_rich_move_evaluation_prompt
+
+        from .test_piece_history import TestHistoryReachesThePrompt as E
+
+        h = PieceHistory()
+        # Reproduce v39: the knight is already on g5 when we start watching.
+        board = chess.Board("r1b1k2r/pppp1p1p/4ppn1/6N1/1bB2P2/1P2P3/P1P1K1PP/RNB4R w kq - 0 11")
+        h.observe(board.fen(), board.parse_san("Kd1").uci())
+        assert h.complete is False
+        report = E._report(board.fen(), board.parse_san("Kd1").uci(), ["fxg5"], board.parse_san("Nf3").uci())
+        prompt = build_rich_move_evaluation_prompt(report, history=h)
+        # Silence, not a guess. This is the exact sentence v39 published.
+        assert "has not moved this game" not in prompt
+
+    def test_a_complete_record_may_still_say_it(self):
+        from chess_coach.prompts import build_rich_move_evaluation_prompt
+
+        from .test_piece_history import TestHistoryReachesThePrompt as E
+
+        h = PieceHistory()
+        # Watched from move one, and the knight on g2 never moved within the record. A
+        # black pawn on h3 can take it — and the capture must not be a promotion, or the
+        # refutation is unparseable and the whole line drops out for the wrong reason.
+        board = chess.Board("4k3/8/8/8/8/7p/P5N1/4K3 w - - 0 1")
+        h.observe(board.fen(), "a2a3")
+        assert h.complete is True
+        report = E._report(board.fen(), "a2a3", ["hxg2"], "e1f2")
+        prompt = build_rich_move_evaluation_prompt(report, history=h)
+        assert "knight on g2 has not moved this game" in prompt
