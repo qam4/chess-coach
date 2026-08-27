@@ -512,43 +512,45 @@ class TestAchievementClauseMemory:
     body untouched moved the metric and not the coaching.
     """
 
-    def test_clause_is_stated_then_flagged_then_dropped(self):
+    def test_clause_is_stated_then_reframed_but_never_dropped(self):
         coach = _coach_with_repeating_engine()
         prompts = _prompts_from(coach, 3)
 
         # 1st: the full clause, spelled out.
         assert "does this:" in prompts[0]
         assert "undefended bishop on b4" in prompts[0]
-        # 2nd: named as a repeat, NOT re-explained.
-        assert "does the same thing here as it did earlier" in prompts[1]
-        assert "does this:" not in prompts[1]
-        # 3rd: no achievement line at all.
-        assert "does this:" not in prompts[2]
-        assert "does the same thing here" not in prompts[2]
-        # And nothing may point at a line that is no longer there; with the clause
-        # retired the model is told it does not know the reason.
-        assert "is the ONLY reason you may give" not in prompts[2]
-        assert "Name the move and stop there" in prompts[2]
-        # The move itself is still named, so retiring the explanation does not leave
-        # the student without a recommendation.
+        # 2nd and 3rd: framed as a recurrence, and STILL stated. This is the v37
+        # correction. The clause used to be flagged on the 2nd turn and dropped on the
+        # 3rd, and the fact went with it: on the three a3 turns that followed the drop,
+        # the model wrote its own reason instead — "a3 addresses the isolated pawn on a2",
+        # twice "c5 directly addresses the isolated a2 pawn". Neither is possible. A
+        # withheld fact produced invention, not silence.
+        for later in (prompts[1], prompts[2]):
+            assert "does the same thing here as it did earlier" in later
+            assert "undefended bishop on b4" in later
+            # And the model is still bound to it rather than told it has no reason.
+            assert "is the ONLY reason you may give" in later
+            assert "Name the move and stop there" not in later
         assert "Bc3" in prompts[2]
 
-    def test_retiring_the_clause_withholds_the_reason_entirely(self):
-        # While the clause is live it is the only reason the model may give. Once it
-        # retires the reason is withheld rather than redirected: v36 pointed the model at
-        # "the position facts above" instead, and it duly worked out a purpose of its own
-        # — ply 38 "a3 ... prevents the opponent from targeting g2".
+    def test_the_reason_is_never_withheld_however_often_it_recurs(self):
+        # The clause binds the model for as long as the engine keeps wanting the move.
+        # v37: the engine wanted a3 on plies 20, 38, 44 and 46 for the one reason, and
+        # withholding it after ply 20 is what let three inventions through. Ten showings
+        # here stands in for "no ceiling".
         from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP
-        from chess_coach.prompts import ACHIEVEMENT_RETIRE_AFTER, build_rich_move_evaluation_prompt
+        from chess_coach.prompts import build_rich_move_evaluation_prompt
 
         report = _comparison_with_repeatable_lesson(drop=SOUND_MAX_DROP_CP + 1)
         shown = build_rich_move_evaluation_prompt(report, achievement_times_shown=0)
         assert "is the ONLY reason you may give" in shown
 
-        retired = build_rich_move_evaluation_prompt(report, achievement_times_shown=ACHIEVEMENT_RETIRE_AFTER)
-        assert "is the ONLY reason you may give" not in retired
-        assert "the position facts above" not in retired
-        assert "Name the move and stop there" in retired
+        for times in (1, 2, 10):
+            later = build_rich_move_evaluation_prompt(report, achievement_times_shown=times)
+            assert "undefended bishop on b4" in later, times
+            assert "is the ONLY reason you may give" in later, times
+            # The redirect that invited invention in v36 stays gone.
+            assert "the position facts above" not in later, times
 
     def test_a_different_clause_is_not_suppressed(self):
         # Keyed on the rendered clause, not the effect category: attacking a bishop on

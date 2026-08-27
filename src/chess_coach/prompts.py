@@ -1685,9 +1685,12 @@ def compose_safe_move_feedback(report: ComparisonReport, lesson_times_taught: in
     return " ".join(parts)
 
 
-#: How many times one achievement clause may be spelled out in a game before the coach
-#: stops explaining and just names the move. Two, matching the lesson ladder.
-ACHIEVEMENT_RETIRE_AFTER = 2
+#: After this many showings, one achievement clause is FRAMED as a recurrence rather
+#: than presented fresh. It is never withheld: unlike a lesson, the reason a move is
+#: good is a fact about the position, and v37 measured what filled the gap when we
+#: dropped it (see :func:`_achievement_line`). One, because the second time the student
+#: meets the same idea is already the time worth pointing at.
+ACHIEVEMENT_REFRAME_AFTER = 1
 
 
 def composed_achievement(report: ComparisonReport, tier: str | None = None) -> tuple[str, str]:
@@ -1739,10 +1742,22 @@ def _achievement_line(report: ComparisonReport, tier: str, times_shown: int = 0)
     sentence comes from and it was outside the ladder. The engine kept recommending
     a3 and the clause kept describing it correctly.
 
-    So: state it, then say it is the same idea, then stop explaining and just name the
-    move. The third step returns ``''``, which the caller already handles — the tier
-    instructions' pointer at "the line above" is redirected to the position facts when
-    this line is absent.
+    That ladder used to end by withholding the clause, and v37 measured what happens
+    next. The engine wanted a3 on plies 20, 38, 44 and 46 for one reason — the
+    undefended bishop on b4 — and we stated it at ply 20, then retired it. On the three
+    turns that followed, with the fact gone and the prompt asking for no reason at all,
+    the model supplied its own: "a3 addresses the isolated pawn on a2" (advancing a pawn
+    does not de-isolate it) and twice "c5 directly addresses the isolated a2 pawn" (it
+    cannot touch it). A withheld fact did not produce silence, it produced invention.
+
+    So the ladder no longer withholds. The reason a move is good is a FACT about the
+    position, not a lesson: it does not go stale, it is simply true again. What gets
+    tiresome is being taught the same thing repeatedly, and that is what the takeaway
+    ladder is for. Here the clause is always stated and only the framing escalates —
+    after the first time it is marked as the same idea recurring, which is both honest
+    and the thing the student most needs to notice. The reviewer reached the same
+    conclusion independently, preferring "that reason four times with escalating
+    specificity" over "three contradictory inventions".
     """
     if tier in _OWN_MOVE_TIERS:
         achievement = _move_achievement(report, report.user_move)
@@ -1752,14 +1767,12 @@ def _achievement_line(report: ComparisonReport, tier: str, times_shown: int = 0)
         subject = f"The best move ({uci_to_san(report.fen, report.best_move) or report.best_move})"
     if not achievement:
         return ""
-    if times_shown >= ACHIEVEMENT_RETIRE_AFTER:
-        # Nothing. The move is still named elsewhere in the prompt, and repeating the
-        # same explanation a third time is what this change exists to stop.
-        return ""
-    if times_shown > 0:
-        # Named, flagged as a repeat, not re-explained. The model still has the move;
-        # what it no longer has is the same clause to paraphrase again.
-        return f"\n{subject} does the same thing here as it did earlier in the game.\n"
+    if times_shown >= ACHIEVEMENT_REFRAME_AFTER:
+        # Flagged as a repeat AND still stated. Flagging is the anti-repetition measure;
+        # dropping the clause was, and it backfired — see the docstring. The recurrence
+        # is worth naming in its own right: the student has now walked past the same
+        # undefended piece four times.
+        return f"\n{subject} does the same thing here as it did earlier in the game: {achievement}.\n"
     # A bare statement, not a labelled field. Renaming the label did not stop the
     # model copying it — turns echoing a prompt header went 0 -> 6 -> 8 across three
     # runs, and the rename happened between the last two. It copies whatever label it
