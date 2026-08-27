@@ -332,9 +332,8 @@ COACHING INSTRUCTIONS:
 - The student played the engine's top move — there is no better move here. \
 Do NOT suggest a different or "better" move, and do NOT imply a superior \
 alternative exists.
-- Keep it SHORT (1-2 sentences): affirm the move, then state the specific idea \
-it achieves — use the line above stating what the move does (that is this \
-move) — not a generic principle. No motivational sign-off.
+- Keep it SHORT (1-2 sentences): affirm the move, then the takeaway. No \
+motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -348,9 +347,8 @@ _MOVE_EVAL_INSTRUCTIONS_EQUAL = """\
 COACHING INSTRUCTIONS:
 - The student's move is as good as anything else here. Endorse it and move on. \
 Do NOT offer an alternative, a refinement, or a "better" move — there isn't one.
-- Keep it SHORT (1-2 sentences): say what their move achieves, using the line \
-above stating what the move does, then the takeaway. Write it in your own words. \
-No motivational sign-off.
+- Keep it SHORT (1-2 sentences): affirm their move, then the takeaway. Write it \
+in your own words. No motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -361,11 +359,9 @@ _MOVE_EVAL_INSTRUCTIONS_SOUND = """\
 COACHING INSTRUCTIONS:
 - The student played a sound, reasonable move — do NOT call it a mistake or \
 invent a correction the data does not support.
-- Keep it SHORT (2-3 sentences): affirm it and state the specific idea it \
-achieves (use the line above stating what the move does), not a generic \
-principle. If the engine's top move differs, you may briefly point it out as a \
-refinement — affirm first, never imply the move was bad. No motivational \
-sign-off.
+- Keep it SHORT (2-3 sentences): affirm it. If the engine's top move differs, \
+you may briefly name it as a refinement — affirm first, never imply the move \
+was bad. No motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -382,9 +378,8 @@ placements, tactics, or "and then..." continuations.
 _MOVE_EVAL_INSTRUCTIONS_INACCURACY = """\
 COACHING INSTRUCTIONS:
 - There was a stronger move here. Give a BRIEF redirect (2-3 sentences): \
-acknowledge the intent in a few words, then name the stronger move and its \
-specific idea — use the line above stating what the move does — not a generic \
-principle. No motivational sign-off.
+acknowledge the intent in a few words, then name the stronger move. No \
+motivational sign-off.
 - Do NOT grade the move or say how much it cost. Do not call it an \
 inaccuracy, a mistake or a blunder, and do not quantify what was lost. \
 Describe what the stronger move does; that is the lesson.
@@ -398,9 +393,8 @@ COACHING INSTRUCTIONS:
 job". Lead with the consequence: if an "Opponent's reply" is shown, name that \
 single reply ("after your move, the opponent plays X") and what it wins, using \
 the threats shown. Do NOT list a longer sequence of moves.
-- Then give the concrete better move and the specific idea it achieves \
-(squares, pieces, threats). Be direct and specific, not generic. No \
-motivational sign-off.
+- Then name the concrete better move. Be direct, not generic. No motivational \
+sign-off.
 - Do NOT grade the move or say how much it cost. Do not call it an \
 inaccuracy, a mistake or a blunder, and do not quantify what was lost. The \
 reply and what it wins are the cost, stated as a fact the student can check.
@@ -414,10 +408,38 @@ placements, tactics, or "and then..." continuations.
 # tight WORD LIMIT (the prominent final instruction the model follows) plus a
 # MAX_TOKENS ceiling (a mechanical backstop, sized well above the word target so
 # it caps runaway length without truncating a normal answer). A best move gets
-# The exact phrases the tier blocks above use to point at the achievement line.
-# Kept as constants so dropping that line can redirect the reference instead of
-# leaving the model pointed at a section that is not in the prompt.
-_ACHIEVEMENT_REFERENCES = ("the line above stating what the move does",)
+# Who authors the "why" — the v36 structural fix, and the one place a reason for a
+# move is allowed to come from.
+#
+# The five tier blocks above used to demand one unconditionally: "state the specific
+# idea it achieves (squares, pieces, threats)". When we had a board-derived clause that
+# was fine, we supplied it. When we did NOT, the demand stood anyway, and the prompt
+# helpfully redirected it to "the position facts above" — telling the model to work a
+# purpose out for itself from true facts. It did, and the results were false: v36 ply 58
+# "Re4 ... hits the h7 pawn", ply 52 "winning control of the e-file", ply 38 "a3 ...
+# prevents the opponent from targeting g2". The judge, reading the whole transcript
+# blind, put every remaining falsehood in this one slot and nowhere else.
+#
+# So the demand becomes conditional on whether we can meet it. This is the same
+# withhold-don't-instruct shape as the `equal` tier (ledger row 28): the model cannot
+# report a reason we never gave it, and asking it not to invent one has never worked.
+_REASON_SUPPLIED = """\
+- WHY it is the better move: the one line above describing what that move does is \
+the ONLY reason you may give. Put it in your own words. Do NOT add a second reason \
+of your own, and do NOT name a square, piece, file or threat that line does not name.
+"""
+
+# The withheld case is a negative instruction, which this model reliably ignores, and
+# it is here because there is nothing left to withhold — the position facts have to stay
+# for the diagnosis to work at all. It is backed by the mechanical gate instead:
+# verify._check_our_move_claims pushes the recommended move and checks any attack or
+# file-control claim against the resulting board.
+_REASON_WITHHELD = """\
+- WHY it is the better move is NOT established in the data above, so you do not \
+know it. Name the move and stop there. Do NOT say what it attacks, defends, \
+controls, wins, prevents or prepares, and do NOT reason one out from the position \
+facts. The takeaway principle carries the lesson on this turn.
+"""
 
 # one sentence; a serious mistake gets room to be specific.
 _TIER_INSTRUCTIONS = {
@@ -1981,13 +2003,10 @@ def build_rich_move_evaluation_prompt(
     # tier so a best move gets one sentence and a blunder gets room to be
     # specific.
     best_move_line = _achievement_line(report, tier, achievement_times_shown)
-    move_instructions = _TIER_INSTRUCTIONS[tier]
-    if not best_move_line:
-        # Four tier blocks tell the model to "use '<header>' shown above". With the
-        # line dropped that points at nothing, which is an invitation to invent one —
-        # so redirect the instruction to the data that IS there.
-        for reference in _ACHIEVEMENT_REFERENCES:
-            move_instructions = move_instructions.replace(reference, "the position facts above")
+    # Authorship of the "why" follows the data: voice our clause when we have one, give
+    # no reason at all when we do not. The tier blocks no longer ask for a reason
+    # themselves, so this is the only thing in the prompt that permits one.
+    move_instructions = _TIER_INSTRUCTIONS[tier] + (_REASON_SUPPLIED if best_move_line else _REASON_WITHHELD)
     word_limit = _TIER_WORD_LIMIT[tier]
     # ``lesson_times_taught`` comes from the caller's per-game memory: the coach used to
     # treat every turn as if it were the first, and taught one lesson five times.

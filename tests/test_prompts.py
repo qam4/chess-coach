@@ -270,10 +270,10 @@ class TestPlayedBestMove:
         assert "there is no better move here" in prompt
         assert 'Do NOT suggest a different or "better" move' in prompt
         assert "No motivational sign-off" in prompt  # severity/verbosity fix (lever 3)
-        # Lever 9: voice the engine's specific idea, not a generic principle. The
-        # reference is a description rather than a quoted label, because the model
-        # copied every label it was given (echoes 0 -> 6 -> 8 across three runs).
-        assert "use the line above stating what the move does" in prompt
+        # Lever 9, v36 form: the supplied clause is the ONLY reason the model may
+        # give. The reference is a description rather than a quoted label, because the
+        # model copied every label it was given (echoes 0 -> 6 -> 8 across 3 runs).
+        assert "is the ONLY reason you may give" in prompt
         # Not the mistake-tier framing.
         assert "serious mistake" not in prompt
         assert "slightly missed the mark" not in prompt
@@ -515,9 +515,12 @@ def test_king_safety_label_dropped_in_the_endgame() -> None:
     assert _best_move_achievement_line(report) == ""
     prompt = build_rich_move_evaluation_prompt(report, "intermediate")
     assert "does this:" not in prompt
-    # And the instructions must not still point at the dropped line — a dangling
-    # reference is an invitation to invent what it would have said.
-    assert "the line above stating what the move does" not in prompt
+    # And with no clause to voice, the model is told it does not know why the move is
+    # better — a dangling reference, or a redirect to the raw facts, is an invitation to
+    # invent what it would have said. That redirect is what v36 ply 38 walked through.
+    assert "is the ONLY reason you may give" not in prompt
+    assert "the position facts above" not in prompt
+    assert "Name the move and stop there" in prompt
     # The only surviving mention is the instruction telling it NOT to close on
     # king safety; nothing asserts king safety as a fact about this position.
     assert "king safety — repositioning" not in prompt
@@ -582,7 +585,7 @@ def test_equal_tier_withholds_the_alternative_entirely() -> None:
     assert "Your move does this:" in prompt
     assert "What your move achieves" not in prompt
     # And the instruction must point at the line that is actually there.
-    assert "the line above stating what the move does" in prompt
+    assert "is the ONLY reason you may give" in prompt
 
 
 def test_just_above_equal_still_offers_the_refinement() -> None:

@@ -525,28 +525,30 @@ class TestAchievementClauseMemory:
         # 3rd: no achievement line at all.
         assert "does this:" not in prompts[2]
         assert "does the same thing here" not in prompts[2]
-        # And nothing may point at a line that is no longer there. (This tier — serious
-        # — never referenced it, so there is nothing to redirect; the tiers that DO
-        # reference it are covered below.)
-        assert "the line above stating what the move does" not in prompts[2]
+        # And nothing may point at a line that is no longer there; with the clause
+        # retired the model is told it does not know the reason.
+        assert "is the ONLY reason you may give" not in prompts[2]
+        assert "Name the move and stop there" in prompts[2]
         # The move itself is still named, so retiring the explanation does not leave
         # the student without a recommendation.
         assert "Bc3" in prompts[2]
 
-    def test_retiring_the_clause_redirects_tiers_that_referenced_it(self):
-        # The inaccuracy tier tells the model to "use the line above stating what the
-        # move does". With the clause retired that points at nothing, which is an
-        # invitation to invent one — the existing redirect must fire.
+    def test_retiring_the_clause_withholds_the_reason_entirely(self):
+        # While the clause is live it is the only reason the model may give. Once it
+        # retires the reason is withheld rather than redirected: v36 pointed the model at
+        # "the position facts above" instead, and it duly worked out a purpose of its own
+        # — ply 38 "a3 ... prevents the opponent from targeting g2".
         from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP
         from chess_coach.prompts import ACHIEVEMENT_RETIRE_AFTER, build_rich_move_evaluation_prompt
 
         report = _comparison_with_repeatable_lesson(drop=SOUND_MAX_DROP_CP + 1)
         shown = build_rich_move_evaluation_prompt(report, achievement_times_shown=0)
-        assert "the line above stating what the move does" in shown
+        assert "is the ONLY reason you may give" in shown
 
         retired = build_rich_move_evaluation_prompt(report, achievement_times_shown=ACHIEVEMENT_RETIRE_AFTER)
-        assert "the line above stating what the move does" not in retired
-        assert "the position facts above" in retired
+        assert "is the ONLY reason you may give" not in retired
+        assert "the position facts above" not in retired
+        assert "Name the move and stop there" in retired
 
     def test_a_different_clause_is_not_suppressed(self):
         # Keyed on the rendered clause, not the effect category: attacking a bishop on

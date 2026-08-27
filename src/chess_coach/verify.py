@@ -461,8 +461,17 @@ _ATTACK_VERBS = r"attack\w*|hit\w*|threaten\w*|target\w*"
 #: "<attack verb> ... <piece> on <square>" — the claimed CONSEQUENCE of a move.
 #: Deliberately requires the piece noun as well as the square, so "attacking the
 #: centre" or "attacking on the kingside" contribute nothing to check.
+#:
+#: Both word orders are matched, because only accepting one of them silently exempted
+#: the other for as long as this check has existed. v36 ply 58 — "Re4 is stronger — it
+#: attacks the pinned bishop and hits the h7 pawn" — went unflagged purely because the
+#: coach wrote "the h7 pawn" rather than "the pawn on h7". The falsehood was in scope
+#: and the phrasing walked around the regex.
 _ATTACK_TARGET_RE = re.compile(
-    rf"\b(?:{_ATTACK_VERBS})\b[^.!?]{{0,40}}?\b(?:pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+([a-h][1-8])\b",
+    rf"\b(?:{_ATTACK_VERBS})\b[^.!?]{{0,40}}?(?:"
+    r"\b(?:pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+(?P<after>[a-h][1-8])\b"
+    r"|\b(?P<before>[a-h][1-8])\s+(?:pawn|knight|bishop|rook|queen|king)\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -470,6 +479,24 @@ _ATTACK_TARGET_RE = re.compile(
 #: Adjacency is what makes this safe: the claim has to follow the move, not merely
 #: appear somewhere in the message.
 _ATTACK_CLAIM_WINDOW = 90
+
+#: "winning control of the e-file" — the one claim about a FILE with a mechanical
+#: answer, because a move cannot take control of a file it puts no piece on. Only the
+#: word "control" counts; "pressure on the e-file" or "activity on the e-file" are
+#: vaguer claims we deliberately leave alone.
+_FILE_CONTROL_RE = re.compile(
+    r"\bcontrol\w*\b[^.!?]{0,30}?\b([a-h])[-\s]?file\b",
+    re.IGNORECASE,
+)
+
+#: Cues that promote a bare pawn token to a RECOMMENDED move: "the better move is a3",
+#: "a3 is stronger". The opponent-reply check keys off a play verb ("the opponent plays
+#: a5"); a recommendation has no play verb at all, so the comparative is what marks it.
+_RECOMMEND_CUE_RE = re.compile(
+    r"\b(?:stronger|strongest|better|best|instead|preferable|improvement)\b",
+    re.IGNORECASE,
+)
+_RECOMMEND_CUE_WINDOW = 60
 
 # "<defence verb> ... <piece> on <square>" — the CLAIM. The defender is resolved
 # separately, by looking back for the nearest named piece-and-square, because the
@@ -503,6 +530,74 @@ def _can_ever_attack(piece_type: int, frm: int, to: int) -> bool:
     probe = chess.BaseBoard.empty()
     probe.set_piece_at(frm, chess.Piece(piece_type, chess.WHITE))
     return to in probe.attacks(frm)
+
+
+def _attack_claim_violations(
+    kind: str,
+    token: str,
+    after_move: chess.Board,
+    move: chess.Move,
+    text: str,
+    claim_start: int,
+) -> list[Violation]:
+    """Check "<move> ... attacking the <piece> on <square>" against the pushed board.
+
+    Exact, not geometric: ``after_move`` already has the move on it, so the question is
+    whether the piece that just moved really attacks that square in the position the
+    claim is about, blockers and all. A claim about a move's own consequence is the one
+    place an exact answer is available, and it is strictly stronger than asking whether
+    a piece of that type could ever reach the square.
+
+    Shared by the opponent-reply and our-own-move checks so the two cannot drift.
+    """
+    attacked = after_move.attacks(move.to_square)
+    out: list[Violation] = []
+    for claim in _ATTACK_TARGET_RE.finditer(text[claim_start : claim_start + _ATTACK_CLAIM_WINDOW]):
+        target_name = (claim.group("after") or claim.group("before")).lower()
+        try:
+            target = chess.parse_square(target_name)
+        except ValueError:
+            continue
+        if target == move.to_square or target in attacked:
+            continue
+        out.append(
+            Violation(
+                kind,
+                f"{token} … {claim.group(0).strip()}",
+                f"{token} does not attack {target_name}",
+            )
+        )
+        break
+    return out
+
+
+def _file_control_violations(
+    kind: str,
+    token: str,
+    move: chess.Move,
+    text: str,
+    claim_start: int,
+) -> list[Violation]:
+    """Check "<move> ... control of the <x>-file" against where the move actually lands.
+
+    v36 ply 52: "the opponent plays Rh3+, winning control of the e-file". A move that
+    puts a rook on h3 cannot win the e-file, and that is decidable without evaluating
+    anything — control of a file requires a piece on it.
+    """
+    out: list[Violation] = []
+    for claim in _FILE_CONTROL_RE.finditer(text[claim_start : claim_start + _ATTACK_CLAIM_WINDOW]):
+        letter = claim.group(1).lower()
+        if chess.square_file(move.to_square) == ord(letter) - ord("a"):
+            continue
+        out.append(
+            Violation(
+                kind,
+                f"{token} … {claim.group(0).strip()}",
+                f"{token} does not put a piece on the {letter}-file",
+            )
+        )
+        break
+    return out
 
 
 def _check_terminal_label(text: str, board: chess.Board, played_uci: str = "") -> list[Violation]:
@@ -667,24 +762,8 @@ def _check_opponent_reply(text: str, board: chess.Board, played_uci: str) -> lis
         # is strictly stronger than "could a piece of this type ever reach it".
         after_reply = after.copy(stack=False)
         after_reply.push(reply)
-        attacked = after_reply.attacks(reply.to_square)
-        window_attack = text[m.end() : m.end() + _ATTACK_CLAIM_WINDOW]
-        for claim in _ATTACK_TARGET_RE.finditer(window_attack):
-            target_name = claim.group(1).lower()
-            try:
-                target = chess.parse_square(target_name)
-            except ValueError:
-                continue
-            if target == reply.to_square or target in attacked:
-                continue
-            out.append(
-                Violation(
-                    "opponent_reply",
-                    f"{token} … {claim.group(0).strip()}",
-                    f"{token} does not attack {target_name}",
-                )
-            )
-            break
+        out.extend(_attack_claim_violations("opponent_reply", token, after_reply, reply, text, m.end()))
+        out.extend(_file_control_violations("opponent_reply", token, reply, text, m.end()))
 
         # Is what it takes described correctly?
         if "x" not in token:
@@ -711,6 +790,56 @@ def _check_opponent_reply(text: str, board: chess.Board, played_uci: str) -> lis
                     )
                 )
                 break
+    return out
+
+
+def _check_our_move_claims(text: str, board: chess.Board) -> list[Violation]:
+    """Verify what the coach says OUR OWN named move achieves.
+
+    The v36 report card put every surviving falsehood in one slot, and the judge named
+    it unprompted: every claim about what is hanging and what captures it checked out,
+    while "the falsehoods live entirely in the clauses explaining why the recommended
+    move is good". Three in one game — ply 58 "Re4 ... hits the h7 pawn" (h7 is on
+    neither rank 4 nor the e-file), ply 52 "winning control of the e-file", ply 38 "a3,
+    which ... prevents the opponent from targeting g2".
+
+    :func:`_check_opponent_reply` already verifies exactly this shape of claim, but only
+    for moves attributed to the OPPONENT. Our own were exempt for no reason other than
+    the order the checks happened to be written in. The board is easier here: a move we
+    recommend is legal in the position as given, so pushing it needs no reconstruction.
+
+    Two shapes have mechanical answers and both are checked exactly, against the pushed
+    move: what it attacks, and which file it controls. A purpose that is not a geometric
+    relation — "prevents the opponent from targeting g2" — has no board answer, and this
+    check does not guess at one. Those are addressed on the prompt side instead, by not
+    demanding a reason we cannot supply.
+    """
+    out: list[Violation] = []
+    seen: set[str] = set()
+    for m in _SAN_RE.finditer(text):
+        token = m.group(1)
+        if token in seen or _attributed_to_opponent(text, m.start(), board):
+            continue
+        if _is_piece_reference(token, board):
+            continue  # "Re4" naming a rook already standing there, not a move
+        # Same guard as the opponent-reply check, with the cue that fits a
+        # recommendation. A piece letter or a capture makes a token a move outright
+        # ("Re4"); a bare pawn push needs the surrounding comparative to mark it as
+        # advice rather than a square reference ("the better move is a3").
+        clearly_a_move = token[0] in "KQRBNO" or "x" in token
+        if not clearly_a_move:
+            lo = max(0, m.start() - _RECOMMEND_CUE_WINDOW)
+            if not _RECOMMEND_CUE_RE.search(text[lo : m.end() + _RECOMMEND_CUE_WINDOW]):
+                continue
+        seen.add(token)
+        try:
+            move = board.parse_san(token)
+        except (chess.IllegalMoveError, chess.InvalidMoveError, chess.AmbiguousMoveError, ValueError):
+            continue  # legality of our own moves is _check_named_moves' job
+        after_move = board.copy(stack=False)
+        after_move.push(move)
+        out.extend(_attack_claim_violations("move_claim", token, after_move, move, text, m.end()))
+        out.extend(_file_control_violations("move_claim", token, move, text, m.end()))
     return out
 
 
@@ -1096,6 +1225,7 @@ def _run_fidelity_checks(
     violations.extend(_check_terminal_label(text, board, played_uci))
     violations.extend(_check_intent_attribution(text, board, played_uci))
     violations.extend(_check_opponent_reply(text, board, played_uci))
+    violations.extend(_check_our_move_claims(text, board))
     violations.extend(_check_development(text, board))
     violations.extend(_check_empty_source(text, board))
     violations.extend(_check_capture_piece_type(text, board))
@@ -1141,6 +1271,7 @@ GATING_VIOLATION_KINDS = frozenset(
         "terminal_label",
         "intent",
         "opponent_reply",
+        "move_claim",
         "piece_type",
         "empty_source",
         "illegal_move",

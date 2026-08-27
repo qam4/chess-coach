@@ -890,3 +890,114 @@ def test_attack_geometry_check_is_quiet_on_every_stored_transcript() -> None:
     # Every hit must be ply 60 — the one verified defect. A new ply appearing here is
     # either a real new fabrication or a false positive, and both want a human.
     assert all(ply == 60 for _path, ply in flagged), f"unexpected plies flagged: {flagged}"
+
+
+class TestOurOwnMoveClaims:
+    """Claims about the move WE recommend, checked against the board.
+
+    v36 is the run that motivated these. Its report card graded fidelity 4/10 and the
+    judge, reading blind, located every remaining falsehood in one slot: "every claim
+    about what is hanging and what captures it checks out ... the falsehoods live
+    entirely in the clauses explaining why the recommended move is good". Claims about
+    the OPPONENT's reply had been checked since v35; our own were exempt for no reason
+    beyond the order the checks were written in.
+    """
+
+    def test_attack_claim_about_our_recommended_move_is_checked(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # v36 ply 58, reduced: "Re4 is stronger — it hits the h7 pawn". Re4 is legal and
+        # h7 does hold a pawn, so nothing about the move or the board is wrong; the
+        # relation between them is. A rook on e4 covers rank 4 and the e-file, and h7 is
+        # on neither.
+        fen = "7k/7p/8/8/8/8/8/4R2K w - - 0 1"
+        out = check_text_fidelity("Re4 is stronger — it hits the h7 pawn.", fen)
+        assert [v.kind for v in out if v.kind == "move_claim"] == ["move_claim"]
+        assert "does not attack h7" in next(v.detail for v in out if v.kind == "move_claim")
+
+    def test_a_true_attack_claim_about_our_move_passes(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # Same shape, and true: a rook on e7 does attack h7 along the seventh rank. The
+        # check has to stay silent here or it just moves the falsehood into our gate.
+        fen = "7k/7p/8/8/8/8/8/4R2K w - - 0 1"
+        assert [
+            v for v in check_text_fidelity("Re7 is stronger — it hits the h7 pawn.", fen) if v.kind == "move_claim"
+        ] == []
+
+    def test_both_word_orders_are_read(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # "the h7 pawn" and "the pawn on h7" are the same claim. Accepting only the
+        # second is why ply 58 survived a check that was already looking for it.
+        fen = "7k/7p/8/8/8/8/8/4R2K w - - 0 1"
+        for phrasing in ("it hits the h7 pawn", "it hits the pawn on h7"):
+            out = [v for v in check_text_fidelity(f"Re4 is stronger — {phrasing}.", fen) if v.kind == "move_claim"]
+            assert out, phrasing
+
+    def test_bare_pawn_recommendation_is_promoted_by_the_comparative(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # A bare pawn push has no piece letter and no "x", so it reads as an ordinary
+        # square reference. What marks it as advice is the comparative around it.
+        fen = "7k/7p/8/8/8/8/P7/4R2K w - - 0 1"
+        out = [
+            v
+            for v in check_text_fidelity("The stronger move is a3, which hits the h7 pawn.", fen)
+            if v.kind == "move_claim"
+        ]
+        assert out and "does not attack h7" in out[0].detail
+
+    def test_a_square_reference_is_not_treated_as_a_move(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # The guard that makes the above safe: with no comparative, "a3" in a sentence
+        # about the board is a reference, and pushing it as a move would be a fabrication
+        # of our own.
+        fen = "7k/7p/8/8/8/8/P7/4R2K w - - 0 1"
+        assert [v for v in check_text_fidelity("Your pawn on a3 covers b4.", fen) if v.kind == "move_claim"] == []
+
+    def test_file_control_claim_is_checked(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # v36 ply 52: "the opponent plays Rh3+, winning control of the e-file". Decidable
+        # without evaluating anything — control of a file needs a piece on it, and this
+        # move puts the rook on h3.
+        fen = "4r2k/7p/8/8/8/8/7P/4R2K b - - 0 1"
+        out = [
+            v
+            for v in check_text_fidelity("Re4 is stronger, winning control of the a-file.", fen.replace(" b ", " w "))
+            if v.kind == "move_claim"
+        ]
+        assert out and "a-file" in out[0].detail
+
+    def test_control_of_the_file_the_move_lands_on_passes(self):
+        from chess_coach.verify import check_text_fidelity
+
+        fen = "7k/7p/8/8/8/8/7P/4R2K w - - 0 1"
+        assert [
+            v
+            for v in check_text_fidelity("Re4 is stronger, taking control of the e-file.", fen)
+            if v.kind == "move_claim"
+        ] == []
+
+    def test_vaguer_file_language_is_left_alone(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # "pressure on the e-file" is not the claim "this move controls the e-file", and
+        # guessing at it is how a precision-first check starts producing noise.
+        fen = "7k/7p/8/8/8/8/7P/4R2K w - - 0 1"
+        assert [
+            v
+            for v in check_text_fidelity("Rh3 is stronger, building pressure on the e-file.", fen)
+            if v.kind == "move_claim"
+        ] == []
+
+    def test_move_claim_blocks_the_response(self):
+        from chess_coach.verify import check_text_fidelity, gating_violations
+
+        # The point of the check is to stop the sentence reaching the student, not to
+        # count it. A 1200 cannot detect that a rook on e4 does not hit h7.
+        fen = "7k/7p/8/8/8/8/8/4R2K w - - 0 1"
+        out = check_text_fidelity("Re4 is stronger — it hits the h7 pawn.", fen)
+        assert [v.kind for v in gating_violations(out)] == ["move_claim"]
