@@ -454,10 +454,10 @@ not say the piece had no escape, was trapped, or should have moved earlier.
 #: hanging piece badly; it was that it wrote at full length about king repositioning and
 #: an isolated pawn instead, because those were the only facts it had.
 _FOCUS_SUPPLIED = """\
-- WHAT MATTERS HERE: after your move, {subject}. Say that plainly — it is the subject \
-of this turn, not pawn structure, king repositioning or piece placement. Do NOT claim \
-that any move defends it, saves it, or deals with the threat unless a line above says \
-so. If you do not know how it gets fixed, name the problem and stop there.
+- WHAT MATTERS HERE: the undefended piece named above is the subject of this turn — \
+not pawn structure, king repositioning or piece placement. Do NOT claim that any move \
+defends it, saves it, or deals with the threat unless a line above says so. If you do \
+not know how it gets fixed, name the problem and stop there.
 """
 
 
@@ -2181,20 +2181,28 @@ def build_rich_move_evaluation_prompt(
     focus_instruction = ""
     hanging_phrase = ""
     if position_after is not None:
-        hanging = _format_hanging_pieces(position_after)
-        if hanging:
-            # Relabelled so the framing cannot drift from the data again. v40 rendered a
-            # before-the-move list under a bare "Hanging Pieces" header and the model
-            # wrote "your move leaves X vulnerable" about a piece that had moved.
-            sections.append(hanging.replace("--- Hanging Pieces ---", "--- Undefended AFTER your move ---", 1))
-        threats = _format_threats(position_after)
-        if threats:
-            sections.append(threats.replace("--- Threats ---", "--- Threats AFTER your move ---", 1))
+        # A FACT BUDGET OF ONE. v41 scored Load Discipline 4 and named the cause exactly:
+        # "ply 34 carries five ideas of comparable weight (Nxc4 wins the bishop / g5
+        # undefended / e3 undefended / Kc1 was better / you skipped the check / plus a
+        # closing question) ... the three tightest turns in the transcript prove the coach
+        # can hit anchor 8 when the fact budget is one". Every recent change added facts;
+        # this one takes them away, and it is the same lever from the other side — the coach
+        # says what it is given.
+        #
+        # Three things go. The opponent's hanging pieces: on a turn spent diagnosing our own
+        # move they are a different lesson, and merging the two lists is what produced ply
+        # 34's "your pawn on g5 is undefended, and the knight on e3 is also undefended",
+        # where the second piece is BLACK's and the sentence does not say so. The threat
+        # list: at ply 34 it ran to four lines, one of which was the refutation the prompt
+        # states separately. And the standalone undefended line whenever the cause sentence
+        # already names the same piece, so the fact is stated once rather than twice.
         hanging_phrase = _our_hanging(position_after, report.fen)
-        if hanging_phrase:
-            focus_instruction = _FOCUS_SUPPLIED.format(subject=hanging_phrase)
-
     history_section = composed_history(report, history, hanging_phrase)
+    if hanging_phrase:
+        # Only if the cause sentence has not already said it.
+        if hanging_phrase not in history_section:
+            sections.append("--- Undefended AFTER your move ---\n" + hanging_phrase.capitalize() + ".")
+        focus_instruction = _FOCUS_SUPPLIED
     if history_section:
         sections.append(history_section)
 

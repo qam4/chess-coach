@@ -181,9 +181,13 @@ class TestTopicSelection:
         fen = "4k3/8/8/8/8/8/6N1/4K3 w - - 0 1"
         pos = self._position(fen, {"white": [("g2", "knight")], "black": []})
         prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "g2f4"), position_after=pos)
-        assert "--- Undefended AFTER your move ---" in prompt
         assert "WHAT MATTERS HERE" in prompt
-        assert "your knight on g2 is undefended" in prompt
+        # Stated ONCE. v41 scored Load Discipline 4 for inventory-dumping and the reviewer
+        # put the cure in one phrase: the coach "can hit anchor 8 when the fact budget is
+        # one". The cause sentence already names the piece, so the standalone undefended
+        # line stands down rather than saying it a second time.
+        assert prompt.count("your knight on g2 is undefended") == 1
+        assert "--- Undefended AFTER your move ---" not in prompt
         # Steered off the features that were previously all it had ...
         assert "not pawn structure, king repositioning or piece placement" in prompt
         # ... and forbidden from inventing a rescue. v40: "Ke2 addresses the immediate
@@ -199,10 +203,17 @@ class TestTopicSelection:
         fen = "4k3/8/8/8/8/8/6n1/4K3 w - - 0 1"
         pos = self._position(fen, {"white": [], "black": [("g2", "knight")]})
         prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "e1f2"), position_after=pos)
-        # Still shown — a free capture is worth knowing about — but it is not framed as
-        # the student's problem, because it is not.
-        assert "--- Undefended AFTER your move ---" in prompt
+        # Dropped entirely, not merely unframed. On a turn spent diagnosing the student's
+        # own move the opponent's loose pieces are a different lesson, and merging the two
+        # lists is what produced v41 ply 34: "your pawn on g5 is undefended, and the knight
+        # on e3 is also undefended" — where the second piece is BLACK's and the sentence
+        # never says so. The reviewer read it as a mislabelled piece; the engine had it
+        # right and the coach had dropped the ownership.
+        assert "Undefended AFTER your move" not in prompt
         assert "WHAT MATTERS HERE" not in prompt
+        # It may still be named as the REASON the recommended move is good ("Kf2 attacks
+        # their undefended knight on g2") — that is a different clause with its own
+        # provenance, and it is about the opportunity rather than the student's problem.
 
     def test_no_position_report_means_no_new_sections(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt
