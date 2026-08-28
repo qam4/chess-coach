@@ -2531,3 +2531,73 @@ took three rounds of discussion was mostly the harness.
 Carried over: the remaining real repetition (two near-verbatim pairs the reviewer still
 sees at Stream Behaviour 5/10); a cause field for Diagnosis, still stuck at 5 and worth
 25% of the weight; cue sharpening; endgame facts rather than endgame prose.
+
+## Measurement: the judge's scores are not an instrument (v42 test-retest)
+
+Established by test-retest, not by argument: the same v42 transcript judged three times
+returned overall **5.5 / 5.0 / 2.0**, with the fidelity gate firing on one of the three.
+Dimension-level disagreement on byte-identical input was Fidelity 5/5/4, Diagnosis 5/4/5,
+Load Discipline 5/5/4, Stream Behaviour 6/6/5. Ledger rows 88-93 carry the detail and the
+retractions.
+
+Consequence: the v37-v42 score sequence (5.4, 5.0, 5.0, 2, 5.3, 5.5) cannot be read as
+progress or regression. Do not open a session by trying to move that number.
+
+Ordered by cost, cheapest first.
+
+1. **Fix the mind-reading regression.** (ledger row 91, SMALL) Openers that invent the
+   student's intent — "I see you're trying to develop your pieces" — on turns where they
+   were doing nothing of the kind. Zero in v33-v36, one or two per game in every run since
+   v37. Flagged in three separate reviews and never acted on. It is on the judge's own
+   "what to remove" list, and `eval_hard_metrics.py` already counts it, so the fix is
+   verifiable the moment it lands. Start here.
+
+2. **Move the gate onto our own verifier.** (ledger row 88, SMALL) A gate that fires on
+   one of three identical inputs generates false alarms, and the verifier's violation
+   counts measure the same property deterministically. Gate on those instead of on the
+   judge's fidelity opinion.
+
+3. **Close the two known check gaps.** (ledger row 92, SMALL) Both confirmed against the
+   board: "winning your rook on e1" escapes `_ATTACK_TARGET_RE` because "winning" is not
+   in `_ATTACK_VERBS`; and a claimed pin with no pin on the board has no check at all.
+
+4. **Validate the pairwise judge before trusting it.** (MEDIUM) `scripts/eval_pairwise.py`,
+   `eval_move_feedback_pairwise.py` and `eval_game_coaching_pairwise.py` already exist.
+   Relative comparison is expected to be steadier than absolute scoring, but that is an
+   expectation, not a measurement — run the same pair twice and check it agrees with
+   itself first. If it does, re-measure this session's changes with it, because we still
+   do not know whether the Diagnosis work improved the coaching or only its coverage.
+
+5. **Per-turn anchor labels instead of one score per category.** (MEDIUM) The judge
+   currently compresses 18 heterogeneous turns into a single number, and that compression
+   is where the noise lives. Ask for an anchor level per coached turn as structured output
+   and aggregate here. Makes the distribution visible — "7 turns at anchor 8, 11 at
+   anchor 4" is actionable where "5/10" is not.
+
+6. **Decide what to do about `config.yaml`.** (ledger row 93, TRIVIAL but blocking
+   reproducibility) `model: qwen3:14b` and `guidance: on` are uncommitted local changes
+   that every run in the ledger used. A fresh checkout reproduces none of the numbers.
+   Needs a product decision: commit them as the declared defaults, or record them as the
+   experiment's settings somewhere that travels with the results.
+
+## Diagnosis (paused, not finished)
+
+Four runs went into this and the honest state is: **0% -> 17% of turns now name why the
+move failed** (deterministic, `eval_hard_metrics.py`), while the judge read Diagnosis 5 on
+every one of them. The next concrete step, if resumed, is the v42 prescription — which is
+the only judge prescription this session that survived contact with the board:
+
+> "the cause must be derived from the same object as the refutation — if the refutation
+> captures the bishop on c4, the named failure has to be about c4"
+
+Half of it is done (commit `02a5bb8`: name nothing rather than the wrong object). The
+missing half is a fifth pattern in `diagnosis.missed_check` for the commonest case, which
+none of the four current shapes covers: **the piece was defended, but attacked more times
+than it was defended.** That is pure counting, so it needs no piece values and stays out
+of the engine's territory. v42 ply 34 is the worked example — the bishop on c4 was defended
+by the b3 pawn and taken anyway.
+
+Caution, from four runs of evidence: every time a fact or sentence was added to this
+prompt, a new falsehood appeared and the following run was spent repairing it (v40 stale
+data, v42 wrong-object cause). Add the pattern, then check the delivered text against the
+board before believing anything.
