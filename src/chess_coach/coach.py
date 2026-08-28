@@ -810,6 +810,10 @@ class Coach:
                 lesson_times_taught=times_taught,
                 achievement_times_shown=times_shown,
                 history=self._piece_history,
+                # The hanging pieces and threats the engine already found. Fetched just
+                # above for the guidance block and, until now, thrown away for this
+                # prompt — which is why the coach diagnosed blunders from pawn structure.
+                position=pos_report,
             )
 
             if self.template_only:

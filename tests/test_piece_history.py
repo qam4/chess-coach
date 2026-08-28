@@ -196,25 +196,29 @@ class TestHistoryReachesThePrompt:
         prompt = build_rich_move_evaluation_prompt(report, history=h)
 
         assert "--- How this came about ---" in prompt
-        # This is the sentence Diagnosis was missing: cause, not just consequence.
-        assert "knight has been on g5 since move 3" in prompt
-        assert "HOW IT CAME ABOUT" in prompt
+        # The sentence Diagnosis was missing, and it has to be a CAUSE. v39 put provenance
+        # here — "your knight has been on g5 since move 3" — and the reviewer called it "a
+        # piece-history fact, not a cause". So what belongs here is the skipped check.
+        assert "The check that was skipped" in prompt
+        assert "has been on g5 since move 3" not in prompt
+        assert "THE THINKING THAT WENT WRONG" in prompt
         # And the model is fenced in, exactly as it is for the reason clause.
         assert "do not say the piece had no escape" in prompt
 
-    def test_a_piece_that_just_moved_there_gets_no_history_line(self):
+    def test_a_piece_moved_onto_a_covered_square_is_diagnosed_as_that(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt
 
         h = PieceHistory()
         board = _play(h, ["e4", "h6", "Nf3", "a6"])
-        # The knight moves to g5 and is taken immediately. "Has been on g5 since move 3"
-        # would just restate the move under discussion, so nothing is claimed.
+        # The knight walks onto g5, which the h6 pawn already covers, and is taken. The
+        # cause is not where the knight has been — it is that the square was covered
+        # before the move, which the student could have seen without calculating.
         move = board.parse_san("Ng5").uci()
         h.observe(board.fen(), move)
         report = self._report(board.fen(), move, ["hxg5"], board.parse_san("d4").uci())
         prompt = build_rich_move_evaluation_prompt(report, history=h)
-        assert "How this came about" not in prompt
-        assert "HOW IT CAME ABOUT" not in prompt
+        assert "already attacking g5 before you moved there" in prompt
+        assert "what of theirs attacks the square I am going to?" in prompt
 
     def test_a_prior_warning_about_the_same_piece_is_named(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt
@@ -301,18 +305,21 @@ class TestIncompleteRecord:
         # Silence, not a guess. This is the exact sentence v39 published.
         assert "has not moved this game" not in prompt
 
-    def test_a_complete_record_may_still_say_it(self):
+    def test_provenance_is_no_longer_published_at_all(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt
 
         from .test_piece_history import TestHistoryReachesThePrompt as E
 
         h = PieceHistory()
-        # Watched from move one, and the knight on g2 never moved within the record. A
-        # black pawn on h3 can take it — and the capture must not be a promotion, or the
-        # refutation is unparseable and the whole line drops out for the wrong reason.
+        # The record is complete and the knight genuinely never moved, so v39 would have
+        # said "has not moved this game" here. It is not said any more, by anyone: the
+        # reviewer ruled the whole class of statement out as not being a cause, and the
+        # .complete guard exists now only to stop a WRONG one being made if it returns.
         board = chess.Board("4k3/8/8/8/8/7p/P5N1/4K3 w - - 0 1")
         h.observe(board.fen(), "a2a3")
         assert h.complete is True
         report = E._report(board.fen(), "a2a3", ["hxg2"], "e1f2")
         prompt = build_rich_move_evaluation_prompt(report, history=h)
-        assert "knight on g2 has not moved this game" in prompt
+        assert "has not moved this game" not in prompt
+        # What IS said is the cause: nothing attacked g2 until the pawn was let in.
+        assert "The check that was skipped" in prompt

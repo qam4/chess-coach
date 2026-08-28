@@ -25,6 +25,7 @@ from chess_coach.coaching_phrases import (
     suppress_threats_echoing_tactics,
     uci_to_san,
 )
+from chess_coach.diagnosis import missed_check
 from chess_coach.models import (
     ComparisonReport,
     PositionReport,
@@ -441,11 +442,46 @@ of your own, and do NOT name a square, piece, file or threat that line does not 
 #: line is the answer to "what went wrong in my thinking", which is the whole of what
 #: Diagnosis asks for and the one thing the coach could not previously say.
 _HISTORY_SUPPLIED = """\
-- HOW IT CAME ABOUT: open with the "How this came about" line above, in your own \
-words, before naming the consequence. It is the only account of how this arose that \
-you have. Do NOT add to it — do not say the piece had no escape, was trapped, should \
-have moved earlier, or why it was left there.
+- THE THINKING THAT WENT WRONG: the "How this came about" line above names the check \
+that was skipped. Say it, in your own words, as the point of the turn — not as an \
+afterthought. It is the only account of the cause that you have. Do NOT add to it: do \
+not say the piece had no escape, was trapped, or should have moved earlier.
 """
+
+#: Named when the engine says something of OURS is hanging. This is topic selection, and
+#: it is the half of the Diagnosis finding that needed no new chess logic — only the
+#: facts being present. The reviewer's complaint was not that the coach explained the
+#: hanging piece badly; it was that it wrote at full length about king repositioning and
+#: an isolated pawn instead, because those were the only facts it had.
+_FOCUS_SUPPLIED = """\
+- WHAT MATTERS HERE: {subject} is undefended according to the engine. That is the \
+subject of this turn. Do NOT write about pawn structure, king repositioning or piece \
+placement instead — next to a piece that can simply be taken, those are not what \
+decided this move.
+"""
+
+
+def _our_hanging(position: PositionReport, fen: str) -> str:
+    """Our own hanging pieces, as a phrase, or '' — the opponent's are not our problem.
+
+    ``hanging_pieces`` is keyed by colour name, and which colour is ours is whose turn it
+    is in the position the move was played in.
+    """
+    board = _safe_board(fen)
+    if board is None:
+        return ""
+    side = "white" if board.turn == chess.WHITE else "black"
+    named = [
+        f"your {hp.piece} on {hp.square}"
+        for hp in position.hanging_pieces.get(side, [])
+        if getattr(hp, "piece", "") and getattr(hp, "square", "")
+    ]
+    if not named:
+        return ""
+    if len(named) == 1:
+        return named[0]
+    return ", ".join(named[:-1]) + " and " + named[-1]
+
 
 _REASON_WITHHELD = """\
 - WHY it is the better move is NOT established in the data above, so you do not \
@@ -1767,25 +1803,27 @@ def composed_history(report: ComparisonReport, history: PieceHistory) -> str:
     board = _safe_board(report.fen)
     if board is None:
         return ""
-    name = chess.square_name(square)
-    arrival = history.arrival_of(square)
-    piece = board.piece_at(square)
     parts: list[str] = []
-    if arrival is not None and arrival.move_number < board.fullmove_number:
-        parts.append(f"Your {arrival.piece_name} has been on {name} since move {arrival.move_number} ({arrival.san})")
-    elif arrival is None and piece is not None and history.complete:
-        # Never moved all game. For a piece that dies where it started, that is the more
-        # telling fact of the two — but only sayable when the record runs from move one.
-        # v39 said it about a knight that had walked to g5 on move 4, on a quiet turn the
-        # coach had not been shown. An incomplete record says nothing here.
-        parts.append(f"Your {chess.piece_name(piece.piece_type)} on {name} has not moved this game")
+    # The CAUSE, phrased as the check that was skipped. This leads, because it is the only
+    # part of this section that answers what the rubric asks for. v39 led with provenance
+    # instead — "your knight has been on g5 since move 4" — and the reviewer dismissed the
+    # idea in one line: "a piece-history fact, not a cause". It was right, so provenance is
+    # gone from here rather than merely demoted: Load Discipline penalises a second idea,
+    # and a fact that is not the cause is exactly that.
+    if report.refutation_line:
+        failure = missed_check(report.fen, report.user_move, report.refutation_line[0])
+        if failure is not None:
+            parts.append(failure.sentence)
+    # And whether we have been here before, which is what makes a repeat nameable. This is
+    # the part of the game record that survives the reviewer's objection: it is about the
+    # student's pattern, not about where a piece has travelled.
     warned = [n for n in history.warnings_for(square) if n < board.fullmove_number]
     if warned:
         moves = ", ".join(str(n) for n in sorted(set(warned)))
-        parts.append(f"and this piece already came up on move {moves}")
+        parts.append(f"This same piece already came up on move {moves}.")
     if not parts:
         return ""
-    return "--- How this came about ---\n" + ", ".join(parts) + "."
+    return "--- How this came about ---\n" + " ".join(parts)
 
 
 def composed_achievement(report: ComparisonReport, tier: str | None = None) -> tuple[str, str]:
@@ -1999,6 +2037,7 @@ def build_rich_move_evaluation_prompt(
     lesson_times_taught: int = 0,
     achievement_times_shown: int = 0,
     history: PieceHistory | None = None,
+    position: PositionReport | None = None,
 ) -> str:
     """Build a rich move evaluation prompt from a ComparisonReport.
 
@@ -2114,6 +2153,31 @@ def build_rich_move_evaluation_prompt(
     # How the refuted piece got where it is. A section rather than an instruction: it is
     # a fact about the game record, on the same footing as the placement and threat
     # blocks, and it is the only account of process the model is given.
+    # What is under attack, straight from the engine. This prompt has never carried it.
+    # Measured on the v39 transcript: of the 18 turns the coach spoke on, ZERO were told
+    # what was hanging or what was threatened — every one got piece placement, pawn
+    # structure and engine lines, and was asked to explain a blunder from that. So it
+    # wrote about pawn structure, and the reviewer scored Diagnosis 4 on those turns for
+    # going "to a secondary feature ... while the game was actually being decided by
+    # pieces left en prise". The data existed the whole time: the Coach already fetches
+    # this report for the guidance block, and `_format_hanging_pieces` and
+    # `_format_threats` already existed for the position prompt. It was never passed in.
+    #
+    # Deliberately the engine's own hanging/threat findings rather than geometry of our
+    # own. Which pieces are really at risk depends on what they are worth, and piece
+    # values are the engine's to hold (ledger row 60).
+    focus_instruction = ""
+    if position is not None:
+        hanging_section = _format_hanging_pieces(position)
+        if hanging_section:
+            sections.append(hanging_section)
+        threats_section = _format_threats(position)
+        if threats_section:
+            sections.append(threats_section)
+        ours = _our_hanging(position, report.fen)
+        if ours:
+            focus_instruction = _FOCUS_SUPPLIED.format(subject=ours)
+
     history_section = composed_history(report, history) if history is not None else ""
     if history_section:
         sections.append(history_section)
@@ -2125,6 +2189,8 @@ def build_rich_move_evaluation_prompt(
     move_instructions = _TIER_INSTRUCTIONS[tier] + (_REASON_SUPPLIED if best_move_line else _REASON_WITHHELD)
     if history_section and tier not in _OWN_MOVE_TIERS:
         move_instructions += _HISTORY_SUPPLIED
+    if focus_instruction:
+        move_instructions += focus_instruction
     word_limit = _TIER_WORD_LIMIT[tier]
     # ``lesson_times_taught`` comes from the caller's per-game memory: the coach used to
     # treat every turn as if it were the first, and taught one lesson five times.
