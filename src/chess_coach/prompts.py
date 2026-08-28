@@ -1803,11 +1803,9 @@ def composed_history(report: ComparisonReport, history: PieceHistory | None = No
     retreat, or what the student should have done instead. Those are evaluations, and
     they belong to the engine or to nobody.
     """
-    square = refuted_square(report)
     board = _safe_board(report.fen)
     if board is None:
         return ""
-    parts: list[str] = []
     # The CAUSE, phrased as the check that was skipped. First choice is the refutation-based
     # one, which is the most specific. v39 led with provenance instead — "your knight has
     # been on g5 since move 4" — and the reviewer dismissed the idea in one line: "a
