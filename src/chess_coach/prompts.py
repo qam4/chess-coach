@@ -25,7 +25,7 @@ from chess_coach.coaching_phrases import (
     suppress_threats_echoing_tactics,
     uci_to_san,
 )
-from chess_coach.diagnosis import left_hanging_check, missed_check
+from chess_coach.diagnosis import MissedCheck, left_hanging_check, missed_check
 from chess_coach.models import (
     ComparisonReport,
     PositionReport,
@@ -1817,17 +1817,37 @@ def composed_history(report: ComparisonReport, history: PieceHistory | None = No
     failure = None
     if report.refutation_line:
         failure = missed_check(report.fen, report.user_move, report.refutation_line[0])
+        # And if none of the four shapes fits, say NOTHING. The fallback below names
+        # whichever piece of ours is loose, which is a true fact about the position and
+        # the wrong answer to "why did this move fail" — v42 ply 34 said Nxc4 wins the
+        # bishop and then blamed the pawn on g5, and ply 42 said the opponent's d6 costs
+        # the centre and then blamed the pawn on c4. The reviewer's words: "right board
+        # feature, wrong or absent cause". A cause that points at the wrong piece is
+        # worse than no cause, because the student cannot tell it is wrong.
+        return _render_history(failure, report, history, board)
     # Second choice needs no refutation line, and that is the point. On the v40 game only 3
     # of 18 coached turns had one, so the sentence the reviewer called "the only genuine 8"
     # and "the best handle in the game" fired exactly once. Deriving it from what the ENGINE
     # says is undefended after the move instead reaches 8 of those 18.
-    if failure is None and hanging_phrase:
+    if hanging_phrase:
         failure = left_hanging_check(hanging_phrase)
+    return _render_history(failure, report, history, board)
+
+
+def _render_history(
+    failure: MissedCheck | None,
+    report: ComparisonReport,
+    history: PieceHistory | None,
+    board: chess.Board,
+) -> str:
+    """The "How this came about" section, or '' when we have nothing sound to put in it."""
+    parts: list[str] = []
     if failure is not None:
         parts.append(failure.sentence)
-    # And whether we have been here before, which is what makes a repeat nameable. This is
-    # the part of the game record that survives the reviewer's objection: it is about the
-    # student's pattern, not about where a piece has travelled.
+    # Whether we have been here before, which is what makes a repeat nameable. This is the
+    # part of the game record that survives the reviewer's objection to provenance: it is
+    # about the student's pattern, not about where a piece has travelled.
+    square = refuted_square(report)
     if square is not None and history is not None:
         warned = [n for n in history.warnings_for(square) if n < board.fullmove_number]
         if warned:

@@ -230,3 +230,64 @@ class TestTopicSelection:
         pos = self._position(fen, {"white": [("g2", "knight"), ("b3", "bishop")], "black": []})
         prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "g2f4"), position_after=pos)
         assert "your knight on g2 and your bishop on b3 are undefended" in prompt
+
+
+class TestTheCauseMustMatchTheRefutation:
+    """A cause that points at the wrong piece is worse than no cause.
+
+    v42 scored the best overall yet (5.5) and Diagnosis still read 5, with the failure in a
+    new shape entirely of my making: "right board feature, wrong or absent cause: ply 34
+    correctly says Nxc4 wins the bishop and then blames 'your pawn on g5'; ply 42 says the
+    opponent's d6 costs the center and then blames the c4 pawn".
+
+    The mechanism was the fallback. Where none of the four refutation-based shapes fitted,
+    the section fell back to naming whichever piece of ours was loose — a true fact about
+    the position, and the wrong answer to "why did this move fail". The student cannot tell
+    that it is wrong, which is the whole reason fidelity is gated.
+    """
+
+    def test_an_unmatched_refutation_yields_no_cause_rather_than_a_wrong_one(self):
+        from chess_coach.prompts import composed_history
+
+        from .test_diagnosis import TestTopicSelection as T
+
+        # The refutation takes a piece on a square that none of the four shapes explains,
+        # while something unrelated of ours is loose. Before this fix the loose piece was
+        # offered as the cause.
+        fen = "4k3/8/8/8/1b6/8/6P1/4K1N1 w - - 0 1"
+        report = T()._report(fen, "e1d1", "g1f3")
+        report = type(report)(**{**report.__dict__, "refutation_line": ["Bxg1"]})
+        out = composed_history(report, None, hanging_phrase="your pawn on g2 is undefended")
+        # Either a cause about the piece actually taken, or nothing. Never the g2 pawn.
+        assert "your pawn on g2" not in out
+
+    def test_the_hanging_fallback_still_works_with_no_refutation_at_all(self):
+        from chess_coach.prompts import composed_history
+
+        from .test_diagnosis import TestTopicSelection as T
+
+        # With no refutation line there is no specific victim to explain, so what is loose
+        # after the move IS the danger, and saying so is sound. This is the 8-of-18 case
+        # that gave the sentence its coverage.
+        fen = "4k3/8/8/8/8/8/6N1/4K3 w - - 0 1"
+        report = T()._report(fen, "e1d1", "g2f4")
+        out = composed_history(report, None, hanging_phrase="your knight on g2 is undefended")
+        assert "your knight on g2 is undefended" in out
+        assert "is anything of mine left where it can simply be taken?" in out
+
+    def test_a_matched_refutation_still_produces_its_specific_cause(self):
+        from chess_coach.prompts import composed_history
+
+        from .test_diagnosis import TestTopicSelection as T
+
+        # The specific shape must still win over the generic one. 1.e4 h6 2.Nf3 a6 3.Ng5
+        # walks onto a square the h6 pawn already covers.
+        board = chess.Board()
+        for san in ["e4", "h6", "Nf3", "a6"]:
+            board.push_san(san)
+        report = T()._report(board.fen(), board.parse_san("Ng5").uci(), "d2d4")
+        report = type(report)(**{**report.__dict__, "refutation_line": ["hxg5"]})
+        out = composed_history(report, None, hanging_phrase="your pawn on e4 is undefended")
+        assert "already attacking g5 before you moved there" in out
+        # And the generic fallback does not also get appended.
+        assert "your pawn on e4" not in out
