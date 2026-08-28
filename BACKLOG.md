@@ -10,6 +10,9 @@ context to pick up later. Distinct from:
 
 This file is for "real, agreed, not-yet-scheduled" follow-ups.
 
+Convention: items are ordered by IMPACT, highest first — not by how cheap they are.
+Cost is worth recording, but it decides how to do an item, not whether it comes first.
+
 ## Division of labour: the engine supplies chess knowledge, not us (2026-08-21)
 
 Agreed with the product owner, and it settles a question that kept resurfacing.
@@ -2543,42 +2546,55 @@ retractions.
 Consequence: the v37-v42 score sequence (5.4, 5.0, 5.0, 2, 5.3, 5.5) cannot be read as
 progress or regression. Do not open a session by trying to move that number.
 
-Ordered by cost, cheapest first.
+**Ordered by impact, highest first.** Cost is noted but does not decide the order.
 
-1. **Fix the mind-reading regression.** (ledger row 91, SMALL) Openers that invent the
-   student's intent — "I see you're trying to develop your pieces" — on turns where they
-   were doing nothing of the kind. Zero in v33-v36, one or two per game in every run since
-   v37. Flagged in three separate reviews and never acted on. It is on the judge's own
-   "what to remove" list, and `eval_hard_metrics.py` already counts it, so the fix is
-   verifiable the moment it lands. Start here.
+1. **Close the two known falsehood gaps.** (ledger row 92) Highest impact because this is
+   the one thing the coaching-standard audit puts above every teaching quality, as a gate
+   rather than a weighted term: "a confident falsehood is worse than silence — the student
+   cannot detect it and will apply it for months." Both gaps are confirmed against the
+   board and both reached a real transcript. v41 ply 60: "Rf4+, winning your rook on e1",
+   and a rook on f4 does not attack e1 — it escapes `_ATTACK_TARGET_RE` because "winning"
+   is not in `_ATTACK_VERBS`. v42 ply 60: a claimed pin with no pin on the board, which has
+   no check at all. `clean%` reads 100% while these get through, so the headline number is
+   overstating until they are closed. SMALL.
 
-2. **Move the gate onto our own verifier.** (ledger row 88, SMALL) A gate that fires on
-   one of three identical inputs generates false alarms, and the verifier's violation
-   counts measure the same property deterministically. Gate on those instead of on the
-   judge's fidelity opinion.
-
-3. **Close the two known check gaps.** (ledger row 92, SMALL) Both confirmed against the
-   board: "winning your rook on e1" escapes `_ATTACK_TARGET_RE` because "winning" is not
-   in `_ATTACK_VERBS`; and a claimed pin with no pin on the board has no check at all.
-
-4. **Validate the pairwise judge before trusting it.** (MEDIUM) `scripts/eval_pairwise.py`,
+2. **Get a trustworthy instrument.** (ledger row 88) Second only because it creates no
+   value by itself — but without it no future change can be shown to have helped, which is
+   how nine runs went into chasing noise. `scripts/eval_pairwise.py`,
    `eval_move_feedback_pairwise.py` and `eval_game_coaching_pairwise.py` already exist.
-   Relative comparison is expected to be steadier than absolute scoring, but that is an
-   expectation, not a measurement — run the same pair twice and check it agrees with
-   itself first. If it does, re-measure this session's changes with it, because we still
-   do not know whether the Diagnosis work improved the coaching or only its coverage.
+   Relative comparison should be steadier than absolute scoring, but that is an
+   expectation, not a measurement: run the same pair twice and check it agrees with itself
+   BEFORE relying on it. Then re-measure this session's changes, because we still do not
+   know whether the Diagnosis work improved the coaching or only its coverage. MEDIUM.
 
-5. **Per-turn anchor labels instead of one score per category.** (MEDIUM) The judge
-   currently compresses 18 heterogeneous turns into a single number, and that compression
-   is where the noise lives. Ask for an anchor level per coached turn as structured output
-   and aggregate here. Makes the distribution visible — "7 turns at anchor 8, 11 at
-   anchor 4" is actionable where "5/10" is not.
+3. **Finish Diagnosis.** (see the section below) The largest single block of teaching value
+   left on the table: 25 of the 95 rubric weight, and the hard counters show the approach
+   working — turns naming why a move failed went 0% -> 17%. The next step is written up
+   below with the worked example. MEDIUM.
 
-6. **Decide what to do about `config.yaml`.** (ledger row 93, TRIVIAL but blocking
-   reproducibility) `model: qwen3:14b` and `guidance: on` are uncommitted local changes
-   that every run in the ledger used. A fresh checkout reproduces none of the numbers.
-   Needs a product decision: commit them as the declared defaults, or record them as the
-   experiment's settings somewhere that travels with the results.
+4. **Move the gate onto our own verifier.** (ledger row 88) Impact is protective rather
+   than additive: a gate that fires on one of three identical inputs will eventually send a
+   session chasing a defect that is not there, and the verifier's violation counts measure
+   the same property deterministically. Cheap insurance against wasting a run. SMALL.
+
+5. **Fix the mind-reading regression.** (ledger row 91) Real but the mildest defect on this
+   list — inventing a motive misleads without endangering: "I see you're trying to develop
+   your pieces" on a move that did nothing of the kind. Introduced at v37, one or two per
+   game since, flagged in three separate reviews and never acted on, and on the judge's own
+   "what to remove" list. `eval_hard_metrics.py` already counts it, so the fix is
+   verifiable the moment it lands. SMALL.
+
+6. **Decide what to do about `config.yaml`.** (ledger row 93) No product impact at all, but
+   it quietly invalidates the evidence base: `model: qwen3:14b` and `guidance: on` are
+   uncommitted local changes that every run from v33 to v42 used, so a fresh checkout
+   reproduces none of the numbers in the ledger. Needs a product decision — commit them as
+   the declared defaults, or record them somewhere that travels with the results. TRIVIAL.
+
+7. **Per-turn anchor labels instead of one score per category.** (ledger row 88) Lowest,
+   and only worth doing if item 2 shows pairwise is also unreliable. The judge currently
+   compresses 18 heterogeneous turns into a single number and that compression is where the
+   noise lives; asking for an anchor level per turn and aggregating here would at least
+   make the distribution visible. MEDIUM.
 
 ## Diagnosis (paused, not finished)
 
