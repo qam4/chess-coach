@@ -2559,14 +2559,17 @@ progress or regression. Do not open a session by trying to move that number.
    positives of our own, caught by replaying nine transcripts before trusting the change,
    and both are now guarded and pinned by tests.
 
-2. **Get a trustworthy instrument.** (ledger row 88) Second only because it creates no
-   value by itself — but without it no future change can be shown to have helped, which is
-   how nine runs went into chasing noise. `scripts/eval_pairwise.py`,
-   `eval_move_feedback_pairwise.py` and `eval_game_coaching_pairwise.py` already exist.
-   Relative comparison should be steadier than absolute scoring, but that is an
-   expectation, not a measurement: run the same pair twice and check it agrees with itself
-   BEFORE relying on it. Then re-measure this session's changes, because we still do not
-   know whether the Diagnosis work improved the coaching or only its coverage. MEDIUM.
+2. ~~**Get a trustworthy instrument.**~~ **DONE** (ledger rows 97-99).
+   `scripts/eval_transcript_pairwise.py` compares two existing transcripts turn by turn,
+   blind, order-randomised, with an exact sign test. Validated before adoption: same pair,
+   same seed, twice — **94% per-ply verdict agreement**, 16/18 pairs unanimous in both runs.
+   Use it for "did this change help".
+
+   Two results that came with it. This session's coaching work is a **wash** by blind
+   comparison (v39 vs v42, p=1.000 both runs) even though the deterministic counters show
+   100% clean turns and cause-naming 0% -> 17%. And the sensitivity limit: one game leaves
+   ~11 decisive comparisons, so it can only detect a LARGE improvement. Anything smaller
+   needs 3-5 games per comparison (1-2 hours), or the counters.
 
 3. **Finish Diagnosis.** (see the section below) The largest single block of teaching value
    left on the table: 25 of the 95 rubric weight, and the hard counters show the approach
