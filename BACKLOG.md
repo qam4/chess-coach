@@ -2548,15 +2548,16 @@ progress or regression. Do not open a session by trying to move that number.
 
 **Ordered by impact, highest first.** Cost is noted but does not decide the order.
 
-1. **Close the two known falsehood gaps.** (ledger row 92) Highest impact because this is
-   the one thing the coaching-standard audit puts above every teaching quality, as a gate
-   rather than a weighted term: "a confident falsehood is worse than silence — the student
-   cannot detect it and will apply it for months." Both gaps are confirmed against the
-   board and both reached a real transcript. v41 ply 60: "Rf4+, winning your rook on e1",
-   and a rook on f4 does not attack e1 — it escapes `_ATTACK_TARGET_RE` because "winning"
-   is not in `_ATTACK_VERBS`. v42 ply 60: a claimed pin with no pin on the board, which has
-   no check at all. `clean%` reads 100% while these get through, so the headline number is
-   overstating until they are closed. SMALL.
+1. ~~**Close the two known falsehood gaps.**~~ **DONE** (ledger rows 94-96). One was real
+   and is now checked: "winning your rook on e1" needed win/take/capture added to the
+   consequence pattern, safe because it still requires "<piece> on <square>". Three real
+   falsehoods now caught that previously shipped, one of them in six consecutive runs
+   ("bxc4 wins material by capturing the undefended bishop on b4" — bxc4 takes a knight on
+   c4). The second gap was NOT a gap: the judge reported a fabricated pin at v42 ply 60 and
+   the board says both the e6 bishop and the f7 pawn really are pinned, so building that
+   check would have flagged a true statement. Widening the verbs also produced two false
+   positives of our own, caught by replaying nine transcripts before trusting the change,
+   and both are now guarded and pinned by tests.
 
 2. **Get a trustworthy instrument.** (ledger row 88) Second only because it creates no
    value by itself — but without it no future change can be shown to have helped, which is

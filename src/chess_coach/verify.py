@@ -456,7 +456,17 @@ _PLAY_VERB_RE = re.compile(
 )
 _PLAY_VERB_LOOKBACK = 24
 
-_ATTACK_VERBS = r"attack\w*|hit\w*|threaten\w*|target\w*"
+#: Verbs that assert a move's consequence against a NAMED square. "win" and "take" sit
+#: here alongside the attack verbs because of v41 ply 60: "the opponent plays Rf4+, winning
+#: your rook on e1". Rf4 is legal and it really is check, so legality passed and the
+#: check-marker test passed; the falsehood is the consequence, and it slipped through only
+#: because the sentence said "winning" where the regex wanted "attacking".
+#:
+#: Including them is safe ONLY because the pattern below also requires "<piece> on
+#: <square>". Bare material idiom — "wins a pawn", meaning a net edge rather than a
+#: specific capture — names no square and so never matches. That is the same narrowing
+#: that makes ``_OPPONENT_VICTIM_RE`` safe.
+_ATTACK_VERBS = r"attack\w*|hit\w*|threaten\w*|target\w*|winn\w*|wins|win|tak\w*|captur\w*"
 
 #: "<attack verb> ... <piece> on <square>" — the claimed CONSEQUENCE of a move.
 #: Deliberately requires the piece noun as well as the square, so "attacking the
@@ -479,6 +489,23 @@ _ATTACK_TARGET_RE = re.compile(
 #: Adjacency is what makes this safe: the claim has to follow the move, not merely
 #: appear somewhere in the message.
 _ATTACK_CLAIM_WINDOW = 90
+
+#: Phrases that mean the move did NOT do the thing the verb describes. Without this the
+#: consequence check reads "Bb2 ... misses a chance to capture the pawn on g5" as a claim
+#: that Bb2 captures on g5, and flags a sentence that is entirely true. Discovered by
+#: replaying nine transcripts through the widened verbs before trusting them — two of the
+#: four newly-flagged patterns were our own false positives, not coach falsehoods.
+_MISSED_OPPORTUNITY_RE = re.compile(
+    r"\b(?:miss\w*|could\s+have|should\s+have|would\s+have|failed\s+to|instead\s+of|"
+    r"rather\s+than|declin\w*|passed\s+up|overlook\w*|chance\s+to|opportunity\s+to)\b",
+    re.IGNORECASE,
+)
+
+#: A token that is UNAMBIGUOUSLY another move: it carries a piece letter, a capture, or is
+#: a castle. Deliberately NOT ``_SAN_RE``, which also matches a bare square — and bare
+#: squares are exactly what the claims being read here contain ("hits the h7 pawn"), so
+#: using it truncated every window at the target square and silenced the whole check.
+_NEXT_MOVE_RE = re.compile(r"\b(?:[KQRBN][a-h]?[1-8]?x?[a-h][1-8]|[a-h]x[a-h][1-8](?:=[QRBN])?|O-O(?:-O)?)\b")
 
 #: "winning control of the e-file" — the one claim about a FILE with a mechanical
 #: answer, because a move cannot take control of a file it puts no piece on. Only the
@@ -552,7 +579,19 @@ def _attack_claim_violations(
     """
     attacked = after_move.attacks(move.to_square)
     out: list[Violation] = []
-    for claim in _ATTACK_TARGET_RE.finditer(text[claim_start : claim_start + _ATTACK_CLAIM_WINDOW]):
+    window = text[claim_start : claim_start + _ATTACK_CLAIM_WINDOW]
+    # Stop at the next move named in the text. A claim that sits AFTER another move token
+    # belongs to that move, not to this one: "Kf3 ... but the stronger option was Rxh7,
+    # capturing the h7 pawn" says Rxh7 captures on h7, which is true, and reading it as a
+    # claim about Kf3 invents a falsehood of our own. The window's whole safety argument is
+    # adjacency, and an intervening move breaks adjacency.
+    nxt = _NEXT_MOVE_RE.search(window)
+    if nxt is not None:
+        window = window[: nxt.start()]
+    for claim in _ATTACK_TARGET_RE.finditer(window):
+        # "misses a chance to capture the pawn on g5" is not a claim that it captured.
+        if _MISSED_OPPORTUNITY_RE.search(window[: claim.start()]):
+            continue
         target_name = (claim.group("after") or claim.group("before")).lower()
         try:
             target = chess.parse_square(target_name)

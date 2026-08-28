@@ -1001,3 +1001,87 @@ class TestOurOwnMoveClaims:
         fen = "7k/7p/8/8/8/8/8/4R2K w - - 0 1"
         out = check_text_fidelity("Re4 is stronger — it hits the h7 pawn.", fen)
         assert [v.kind for v in gating_violations(out)] == ["move_claim"]
+
+
+class TestWinClaimsAgainstANamedSquare:
+    """ "winning your rook on e1" is a geometric claim and gets checked like one.
+
+    BACKLOG item 1, and the highest-impact thing on that list because the coaching-standard
+    audit puts a confident falsehood above every teaching quality, as a gate: the student
+    cannot detect it and will apply it for months.
+
+    v41 ply 60 shipped "the opponent plays Rf4+, winning your rook on e1". Rf4 is legal and
+    it really is check, so the legality test and the check-marker test both passed. The
+    falsehood is the consequence, and it walked past the consequence test only because the
+    sentence said "winning" where the pattern wanted "attacking".
+
+    The two guards below exist because widening the verbs was replayed over nine
+    transcripts BEFORE being trusted, and two of the four newly-flagged patterns turned out
+    to be our own false positives rather than coach falsehoods. Trading a gap for false
+    alarms would have been the worse deal: a checker that flags true sentences teaches us to
+    ignore it.
+    """
+
+    def test_a_win_claim_naming_a_square_is_checked(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # The real v41 position and sentence.
+        fen = "4r3/p1p1kpRp/1pp1b3/8/1r6/2N5/5K2/4R3 w - - 0 31"
+        out = check_text_fidelity(
+            "After your move, the opponent plays Rf4+, winning your rook on e1.",
+            fen,
+            played_uci="f2f3",
+        )
+        hits = [v for v in out if "does not attack e1" in v.detail]
+        assert hits, "Rf4 does not attack e1 and the claim must not pass"
+
+    def test_a_capture_claim_naming_the_wrong_piece_and_square(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # v26 ply 36, shipped in six consecutive runs: bxc4 takes the KNIGHT on c4, and the
+        # bishop on b4 is untouched.
+        fen = "r1b1k1r1/pppp1p1p/8/6P1/1bnP4/1P6/P1P1K2P/RN5R w q - 0 19"
+        out = check_text_fidelity("Your move, bxc4, wins material by capturing the undefended bishop on b4.", fen)
+        assert [v for v in out if "does not attack b4" in v.detail]
+
+    def test_bare_material_idiom_is_not_a_geometric_claim(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # "wins a pawn" with no square named is a statement about the balance, not about
+        # what a piece attacks. Naming a square is what makes the claim checkable, and it is
+        # the only reason the win verbs can be included at all.
+        fen = "4r3/p1p1kpRp/1pp1b3/8/1r6/2N5/5K2/4R3 w - - 0 31"
+        out = check_text_fidelity("After your move, the opponent plays Rf4+, winning a pawn.", fen, played_uci="f2f3")
+        assert not [v for v in out if "does not attack" in v.detail]
+
+    def test_a_missed_chance_is_not_a_claim_that_it_happened(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # v42 ply 22, and TRUE as written: Bb2 misses a capture on g5, it does not make one.
+        # Reading it as a claim about Bb2 invents a falsehood of our own.
+        fen = "r1b1k2r/pppp1p1p/4p1n1/6p1/1bB2P2/1P2P3/P1P3PP/RNBK3R w kq - 0 12"
+        out = check_text_fidelity(
+            "Your move, Bb2, develops a piece but misses a chance to capture the pawn on g5.", fen
+        )
+        assert not [v for v in out if "does not attack g5" in v.detail]
+
+    def test_a_claim_after_another_move_belongs_to_that_move(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # v32 ply 60, also TRUE as written: it is Rxh7 that captures on h7, not Kf3. The
+        # window's safety argument is adjacency, and an intervening move breaks adjacency.
+        fen = "4r3/p1p1kpRp/1pp1b3/8/1r6/2N5/5K2/4R3 w - - 0 31"
+        out = check_text_fidelity(
+            "Your move, Kf3, was natural, but the stronger option was Rxh7, capturing the h7 pawn.", fen
+        )
+        assert not [v for v in out if "does not attack h7" in v.detail]
+
+    def test_the_next_move_test_does_not_swallow_the_target_square(self):
+        from chess_coach.verify import check_text_fidelity
+
+        # The guard above was first written with _SAN_RE, which also matches a bare square —
+        # so "hits the h7 pawn" truncated at "h7" and the whole check went silent. Only a
+        # token with a piece letter or a capture counts as the next move.
+        fen = "7k/7p/8/8/8/8/8/4R2K w - - 0 1"
+        out = check_text_fidelity("Re4 is stronger — it hits the h7 pawn.", fen)
+        assert [v for v in out if "does not attack h7" in v.detail]
