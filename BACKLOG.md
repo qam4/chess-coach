@@ -2571,34 +2571,54 @@ progress or regression. Do not open a session by trying to move that number.
    ~11 decisive comparisons, so it can only detect a LARGE improvement. Anything smaller
    needs 3-5 games per comparison (1-2 hours), or the counters.
 
-3. **Finish Diagnosis.** (see the section below) The largest single block of teaching value
-   left on the table: 25 of the 95 rubric weight, and the hard counters show the approach
-   working — turns naming why a move failed went 0% -> 17%. The next step is written up
-   below with the worked example. MEDIUM.
+Re-ordered after items 1 and 2 landed. What changed the ranking: pairwise judging is now
+validated (94% self-agreement) and it says v39 and v42 are **equivalent** to a blind reader,
+even though the deterministic counters show truthfulness at 100% and cause-naming going
+0% -> 17%. So counter improvements are not yet demonstrated to reach the reading experience,
+which demotes more of the same and promotes finding out whether ANY of it compounds.
 
-4. **Move the gate onto our own verifier.** (ledger row 88) Impact is protective rather
-   than additive: a gate that fires on one of three identical inputs will eventually send a
-   session chasing a defect that is not there, and the verifier's violation counts measure
-   the same property deterministically. Cheap insurance against wasting a run. SMALL.
+3. **Find out whether the coach has got better at all.** (ledger rows 97-99, ~30 min)
+   Now the highest-value item on the list, because it decides whether the other work is
+   worth doing. Run the validated pairwise over the whole arc: **v33 vs v42**, which spans
+   nine runs and is turn-comparable (both spoke on 18 of 44 plies; v21-v30 spoke on all 44,
+   so they are not comparable without care).
 
-5. **Fix the mind-reading regression.** (ledger row 91) Real but the mildest defect on this
-   list — inventing a motive misleads without endangering: "I see you're trying to develop
-   your pieces" on a move that did nothing of the kind. Introduced at v37, one or two per
-   game since, flagged in three separate reviews and never acted on, and on the judge's own
-   "what to remove" list. `eval_hard_metrics.py` already counts it, so the fix is
-   verifiable the moment it lands. SMALL.
+   - If v42 clearly beats v33, the work compounds even though single steps are invisible,
+     and the counters are a usable leading indicator. Continue as we are.
+   - If v33 and v42 are a wash too, then ten runs have not improved the reading experience
+     and the approach needs rethinking rather than extending. That is worth knowing before
+     spending another day, and it is the honest version of the question asked all session:
+     "I'd just like to have a sense of how chess-coach value".
 
-6. **Decide what to do about `config.yaml`.** (ledger row 93) No product impact at all, but
-   it quietly invalidates the evidence base: `model: qwen3:14b` and `guidance: on` are
+   Cheap, decisive, and no code to write.
+
+4. **Fix the mind-reading regression.** (ledger row 91, SMALL) Promoted above Diagnosis
+   because it is a defect a READER notices — "I see you're trying to develop your pieces"
+   on a move that was doing nothing of the kind — so it is the kind of thing pairwise can
+   actually see, unlike the counter-only gains. Self-inflicted at v37, one or two per game
+   ever since, flagged in three separate reviews, on the judge's own "what to remove" list,
+   and already counted by `eval_hard_metrics.py` so the fix is verifiable the moment it
+   lands.
+
+5. **Decide what to do about `config.yaml`.** (ledger row 93, TRIVIAL) Promoted, because it
+   matters more now that there are two instruments worth trusting: their inputs have to be
+   reproducible or the results are not either. `model: qwen3:14b` and `guidance: on` are
    uncommitted local changes that every run from v33 to v42 used, so a fresh checkout
-   reproduces none of the numbers in the ledger. Needs a product decision — commit them as
-   the declared defaults, or record them somewhere that travels with the results. TRIVIAL.
+   reproduces nothing in the ledger. Needs a product decision — commit as the declared
+   defaults, or record them somewhere that travels with the results.
 
-7. **Per-turn anchor labels instead of one score per category.** (ledger row 88) Lowest,
-   and only worth doing if item 2 shows pairwise is also unreliable. The judge currently
-   compresses 18 heterogeneous turns into a single number and that compression is where the
-   noise lives; asking for an anchor level per turn and aggregating here would at least
-   make the distribution visible. MEDIUM.
+6. **Finish Diagnosis.** (see the section below, MEDIUM) **Demoted, and conditional on item
+   3.** The approach has moved the counters and not the reading experience, so extending it
+   is the least justified work on this list until item 3 says counter gains eventually show
+   up. The missing piece is written up below if it is resumed.
+
+**Dropped as obsolete** (were items 4 and 7):
+
+- *Move the gate onto our own verifier.* The judge's gate only ever affected the score, and
+  we have stopped using the score. The PRODUCT gate was always our own verifier
+  (`gating_violations`), and that one is deterministic already.
+- *Per-turn anchor labels.* This existed as a fallback if pairwise turned out unreliable. It
+  did not.
 
 ## Diagnosis (paused, not finished)
 
