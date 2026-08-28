@@ -155,27 +155,53 @@ class TestTopicSelection:
             critical_reason=None,
         )
 
+    def test_the_data_describes_the_position_after_the_move(self):
+        """The v40 gate-firing bug: right facts, wrong position.
+
+        The list came from the position the student moved IN, and the coaching describes
+        the position the move PRODUCES. On 4 of 13 turns the student had moved the very
+        piece we announced as undefended, and the reviewer read one back: "the student
+        plays c5 and is told it 'leaves your undefended pawn on c4 vulnerable' — the pawn
+        just left c4". The engine is now asked about the right board, so the two cannot
+        drift apart again.
+        """
+        from chess_coach.prompts import build_rich_move_evaluation_prompt
+
+        # White's knight sits on g2 BEFORE the move and moves away to f4. A before-move
+        # list would still name g2; the after-move list names nothing of ours.
+        fen = "4k3/8/8/8/8/8/6N1/4K3 w - - 0 1"
+        after = self._position("4k3/8/8/8/5N2/8/8/4K3 b - - 1 1", {"white": [], "black": []})
+        prompt = build_rich_move_evaluation_prompt(self._report(fen, "g2f4", "e1e2"), position_after=after)
+        assert "WHAT MATTERS HERE" not in prompt
+        assert "g2" not in prompt.split("--- Board")[0]
+
     def test_our_hanging_piece_becomes_the_subject_of_the_turn(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt
 
         fen = "4k3/8/8/8/8/8/6N1/4K3 w - - 0 1"
         pos = self._position(fen, {"white": [("g2", "knight")], "black": []})
-        prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "g2f4"), position=pos)
-        assert "--- Hanging Pieces ---" in prompt
+        prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "g2f4"), position_after=pos)
+        assert "--- Undefended AFTER your move ---" in prompt
         assert "WHAT MATTERS HERE" in prompt
         assert "your knight on g2 is undefended" in prompt
-        # And the turn is steered off the features that were previously all it had.
-        assert "Do NOT write about pawn structure, king repositioning or piece placement" in prompt
+        # Steered off the features that were previously all it had ...
+        assert "not pawn structure, king repositioning or piece placement" in prompt
+        # ... and forbidden from inventing a rescue. v40: "Ke2 addresses the immediate
+        # threat to your pawn on g2", which a king on e2 does not touch. Naming the problem
+        # and stopping is the honest option when we have not supplied the fix.
+        assert "Do NOT claim that any move defends it" in prompt
+        # The same fact also becomes the missed check, which needs no refutation line.
+        assert "is anything of mine left where it can simply be taken?" in prompt
 
     def test_the_opponents_hanging_pieces_do_not_set_our_subject(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt
 
         fen = "4k3/8/8/8/8/8/6n1/4K3 w - - 0 1"
         pos = self._position(fen, {"white": [], "black": [("g2", "knight")]})
-        prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "e1f2"), position=pos)
+        prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "e1f2"), position_after=pos)
         # Still shown — a free capture is worth knowing about — but it is not framed as
         # the student's problem, because it is not.
-        assert "--- Hanging Pieces ---" in prompt
+        assert "--- Undefended AFTER your move ---" in prompt
         assert "WHAT MATTERS HERE" not in prompt
 
     def test_no_position_report_means_no_new_sections(self):
@@ -183,7 +209,7 @@ class TestTopicSelection:
 
         fen = "4k3/8/8/8/8/8/6N1/4K3 w - - 0 1"
         prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "g2f4"))
-        assert "Hanging Pieces" not in prompt
+        assert "Undefended AFTER your move" not in prompt
         assert "WHAT MATTERS HERE" not in prompt
 
     def test_several_hanging_pieces_are_all_named(self):
@@ -191,5 +217,5 @@ class TestTopicSelection:
 
         fen = "4k3/8/8/8/8/1b6/6N1/4K3 w - - 0 1"
         pos = self._position(fen, {"white": [("g2", "knight"), ("b3", "bishop")], "black": []})
-        prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "g2f4"), position=pos)
-        assert "your knight on g2 and your bishop on b3 is undefended" in prompt
+        prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "g2f4"), position_after=pos)
+        assert "your knight on g2 and your bishop on b3 are undefended" in prompt

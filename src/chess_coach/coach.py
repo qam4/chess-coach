@@ -780,6 +780,24 @@ class Coach:
                     guidance_facts = feature_facts(pos_report)
                 except Exception as e:
                     logger.warning("evaluate_move: guidance position report failed: %s", e)
+
+            # A SECOND report, for the position the student's move produces. This is the
+            # position the coaching is about, and asking the engine about it is the v40
+            # fix. v40 used the before-move report for "what is undefended" and the model
+            # wrote "your move leaves your pawn on c4 vulnerable" about a pawn that had
+            # just moved off c4 — on 4 of 13 turns the fact was stale, and the fidelity
+            # gate fired. Filtering the old list with geometry of our own was the
+            # alternative; asking the right question is cleaner and keeps the judgment of
+            # what counts as hanging where it belongs.
+            after_report: PositionReport | None = None
+            try:
+                board_after = chess.Board(fen_before)
+                move_played = chess.Move.from_uci(user_move)
+                if move_played in board_after.legal_moves:
+                    board_after.push(move_played)
+                    after_report = self.engine.get_position_report(board_after.fen(), multipv=1)
+            except Exception as e:
+                logger.warning("evaluate_move: post-move position report failed: %s", e)
             # How often this turn's lesson has already closed a turn in this game.
             # Read before generating, recorded after — a turn the coach stays silent on
             # teaches nothing and must not count against the ladder.
@@ -810,10 +828,9 @@ class Coach:
                 lesson_times_taught=times_taught,
                 achievement_times_shown=times_shown,
                 history=self._piece_history,
-                # The hanging pieces and threats the engine already found. Fetched just
-                # above for the guidance block and, until now, thrown away for this
-                # prompt — which is why the coach diagnosed blunders from pawn structure.
-                position=pos_report,
+                # The hanging pieces and threats for the position the move PRODUCES,
+                # which is the one the coaching describes.
+                position_after=after_report,
             )
 
             if self.template_only:

@@ -42,7 +42,7 @@ from dataclasses import dataclass
 
 import chess
 
-__all__ = ["MissedCheck", "missed_check"]
+__all__ = ["MissedCheck", "missed_check", "left_hanging_check"]
 
 
 @dataclass(frozen=True)
@@ -163,3 +163,22 @@ def missed_check(fen: str, user_move_uci: str, refutation_first: str) -> MissedC
             f"The check that was skipped: after my move, what does my opponent get to play?",
         )
     return None
+
+
+def left_hanging_check(hanging_phrase: str) -> MissedCheck:
+    """The missed check when the move simply leaves something undefended.
+
+    The refutation-based :func:`missed_check` needs the engine to have supplied a
+    refutation line, and on the v40 game only 3 of 18 coached turns had one — so the
+    sentence the reviewer called "the only genuine 8" and "the best handle in the game"
+    fired exactly once. This is the same shape of statement derived from what is
+    undefended after the move instead, which is true on 8 of those 18 turns.
+
+    ``hanging_phrase`` is composed upstream from the ENGINE's list for the position after
+    the move, so nothing here decides what counts as hanging.
+    """
+    return MissedCheck(
+        "left_something_hanging",
+        f"After this move, {hanging_phrase}. The check that was skipped: before I settle on "
+        f"a move, is anything of mine left where it can simply be taken?",
+    )

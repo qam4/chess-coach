@@ -25,7 +25,7 @@ from chess_coach.coaching_phrases import (
     suppress_threats_echoing_tactics,
     uci_to_san,
 )
-from chess_coach.diagnosis import missed_check
+from chess_coach.diagnosis import left_hanging_check, missed_check
 from chess_coach.models import (
     ComparisonReport,
     PositionReport,
@@ -454,20 +454,26 @@ not say the piece had no escape, was trapped, or should have moved earlier.
 #: hanging piece badly; it was that it wrote at full length about king repositioning and
 #: an isolated pawn instead, because those were the only facts it had.
 _FOCUS_SUPPLIED = """\
-- WHAT MATTERS HERE: {subject} is undefended according to the engine. That is the \
-subject of this turn. Do NOT write about pawn structure, king repositioning or piece \
-placement instead — next to a piece that can simply be taken, those are not what \
-decided this move.
+- WHAT MATTERS HERE: after your move, {subject}. Say that plainly — it is the subject \
+of this turn, not pawn structure, king repositioning or piece placement. Do NOT claim \
+that any move defends it, saves it, or deals with the threat unless a line above says \
+so. If you do not know how it gets fixed, name the problem and stop there.
 """
 
 
-def _our_hanging(position: PositionReport, fen: str) -> str:
-    """Our own hanging pieces, as a phrase, or '' — the opponent's are not our problem.
+def _our_hanging(position: PositionReport, our_fen: str) -> str:
+    """Our own undefended pieces as a finished clause, or ''.
 
-    ``hanging_pieces`` is keyed by colour name, and which colour is ours is whose turn it
-    is in the position the move was played in.
+    ``position`` describes the board AFTER the student's move; ``our_fen`` is the position
+    they moved in, which is what identifies whose pieces are ours. Keeping those separate
+    is the whole v40 fix: the data used to come from ``our_fen`` too, so on 4 of 13 turns
+    we announced a piece as undefended on a square the student had just moved it off.
+    The reviewer read one of them back to us — "the student plays c5 and is told it
+    'leaves your undefended pawn on c4 vulnerable' — the pawn just left c4".
+
+    The verb is part of the clause because it has to agree: two pieces "are" undefended.
     """
-    board = _safe_board(fen)
+    board = _safe_board(our_fen)
     if board is None:
         return ""
     side = "white" if board.turn == chess.WHITE else "black"
@@ -479,8 +485,8 @@ def _our_hanging(position: PositionReport, fen: str) -> str:
     if not named:
         return ""
     if len(named) == 1:
-        return named[0]
-    return ", ".join(named[:-1]) + " and " + named[-1]
+        return f"{named[0]} is undefended"
+    return ", ".join(named[:-1]) + f" and {named[-1]} are undefended"
 
 
 _REASON_WITHHELD = """\
@@ -1774,7 +1780,7 @@ def refuted_square(report: ComparisonReport) -> chess.Square | None:
     return reply.to_square
 
 
-def composed_history(report: ComparisonReport, history: PieceHistory) -> str:
+def composed_history(report: ComparisonReport, history: PieceHistory | None = None, hanging_phrase: str = "") -> str:
     """How the piece the refutation takes came to be standing there. '' when we cannot say.
 
     This is the Diagnosis lever. The score sat at 5 across v33, v35, v36 and v38, and the
@@ -1798,29 +1804,35 @@ def composed_history(report: ComparisonReport, history: PieceHistory) -> str:
     they belong to the engine or to nobody.
     """
     square = refuted_square(report)
-    if square is None:
-        return ""
     board = _safe_board(report.fen)
     if board is None:
         return ""
     parts: list[str] = []
-    # The CAUSE, phrased as the check that was skipped. This leads, because it is the only
-    # part of this section that answers what the rubric asks for. v39 led with provenance
-    # instead — "your knight has been on g5 since move 4" — and the reviewer dismissed the
-    # idea in one line: "a piece-history fact, not a cause". It was right, so provenance is
-    # gone from here rather than merely demoted: Load Discipline penalises a second idea,
-    # and a fact that is not the cause is exactly that.
+    # The CAUSE, phrased as the check that was skipped. First choice is the refutation-based
+    # one, which is the most specific. v39 led with provenance instead — "your knight has
+    # been on g5 since move 4" — and the reviewer dismissed the idea in one line: "a
+    # piece-history fact, not a cause". It was right, so provenance is gone rather than
+    # demoted: Load Discipline penalises a second idea, and a fact that is not the cause is
+    # exactly that.
+    failure = None
     if report.refutation_line:
         failure = missed_check(report.fen, report.user_move, report.refutation_line[0])
-        if failure is not None:
-            parts.append(failure.sentence)
+    # Second choice needs no refutation line, and that is the point. On the v40 game only 3
+    # of 18 coached turns had one, so the sentence the reviewer called "the only genuine 8"
+    # and "the best handle in the game" fired exactly once. Deriving it from what the ENGINE
+    # says is undefended after the move instead reaches 8 of those 18.
+    if failure is None and hanging_phrase:
+        failure = left_hanging_check(hanging_phrase)
+    if failure is not None:
+        parts.append(failure.sentence)
     # And whether we have been here before, which is what makes a repeat nameable. This is
     # the part of the game record that survives the reviewer's objection: it is about the
     # student's pattern, not about where a piece has travelled.
-    warned = [n for n in history.warnings_for(square) if n < board.fullmove_number]
-    if warned:
-        moves = ", ".join(str(n) for n in sorted(set(warned)))
-        parts.append(f"This same piece already came up on move {moves}.")
+    if square is not None and history is not None:
+        warned = [n for n in history.warnings_for(square) if n < board.fullmove_number]
+        if warned:
+            moves = ", ".join(str(n) for n in sorted(set(warned)))
+            parts.append(f"This same piece already came up on move {moves}.")
     if not parts:
         return ""
     return "--- How this came about ---\n" + " ".join(parts)
@@ -2037,7 +2049,7 @@ def build_rich_move_evaluation_prompt(
     lesson_times_taught: int = 0,
     achievement_times_shown: int = 0,
     history: PieceHistory | None = None,
-    position: PositionReport | None = None,
+    position_after: PositionReport | None = None,
 ) -> str:
     """Build a rich move evaluation prompt from a ComparisonReport.
 
@@ -2167,18 +2179,22 @@ def build_rich_move_evaluation_prompt(
     # own. Which pieces are really at risk depends on what they are worth, and piece
     # values are the engine's to hold (ledger row 60).
     focus_instruction = ""
-    if position is not None:
-        hanging_section = _format_hanging_pieces(position)
-        if hanging_section:
-            sections.append(hanging_section)
-        threats_section = _format_threats(position)
-        if threats_section:
-            sections.append(threats_section)
-        ours = _our_hanging(position, report.fen)
-        if ours:
-            focus_instruction = _FOCUS_SUPPLIED.format(subject=ours)
+    hanging_phrase = ""
+    if position_after is not None:
+        hanging = _format_hanging_pieces(position_after)
+        if hanging:
+            # Relabelled so the framing cannot drift from the data again. v40 rendered a
+            # before-the-move list under a bare "Hanging Pieces" header and the model
+            # wrote "your move leaves X vulnerable" about a piece that had moved.
+            sections.append(hanging.replace("--- Hanging Pieces ---", "--- Undefended AFTER your move ---", 1))
+        threats = _format_threats(position_after)
+        if threats:
+            sections.append(threats.replace("--- Threats ---", "--- Threats AFTER your move ---", 1))
+        hanging_phrase = _our_hanging(position_after, report.fen)
+        if hanging_phrase:
+            focus_instruction = _FOCUS_SUPPLIED.format(subject=hanging_phrase)
 
-    history_section = composed_history(report, history) if history is not None else ""
+    history_section = composed_history(report, history, hanging_phrase)
     if history_section:
         sections.append(history_section)
 
