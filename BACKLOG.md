@@ -2577,20 +2577,22 @@ even though the deterministic counters show truthfulness at 100% and cause-namin
 0% -> 17%. So counter improvements are not yet demonstrated to reach the reading experience,
 which demotes more of the same and promotes finding out whether ANY of it compounds.
 
-3. **Find out whether the coach has got better at all.** (ledger rows 97-99, ~30 min)
-   Now the highest-value item on the list, because it decides whether the other work is
-   worth doing. Run the validated pairwise over the whole arc: **v33 vs v42**, which spans
-   nine runs and is turn-comparable (both spoke on 18 of 44 plies; v21-v30 spoke on all 44,
-   so they are not comparable without care).
+3. ~~**Find out whether the coach has got better at all.**~~ **DONE, and the answer is no**
+   (ledger rows 100-102). v33 vs v42, blind, 3 votes per pair: **8-7 to v33 with 3 ties,
+   p=1.000**, 16/18 unanimous. Nine runs of work, and a reader cannot tell the two apart.
+   Consistent with v39 vs v42, also a wash.
 
-   - If v42 clearly beats v33, the work compounds even though single steps are invisible,
-     and the counters are a usable leading indicator. Continue as we are.
-   - If v33 and v42 are a wash too, then ten runs have not improved the reading experience
-     and the approach needs rethinking rather than extending. That is worth knowing before
-     spending another day, and it is the honest version of the question asked all session:
-     "I'd just like to have a sense of how chess-coach value".
+   Verified over the same nine runs: falsehoods reaching the student 2-3 per game -> zero;
+   turns explaining why a move failed 0% -> 17%; facts per turn 7.5 -> 0.8. Perceived
+   quality unchanged.
 
-   Cheap, decisive, and no code to write.
+   **Read it carefully.** 15 decisive pairs need about 12-3 for significance, so this says
+   "no LARGE improvement", not "no improvement" — a change winning 60% of comparisons would
+   be invisible. And there are two readings it cannot separate: truthfulness may be
+   correctness rather than quality (necessary hygiene that no reader notices, but that
+   matters enormously to a student who would internalise a lie), or we have been optimising
+   truth and structure while a reader reacts to writing quality, specificity, insight and
+   variety — none of which we have touched.
 
 4. **Fix the mind-reading regression.** (ledger row 91, SMALL) Promoted above Diagnosis
    because it is a defect a READER notices — "I see you're trying to develop your pieces"
