@@ -2594,6 +2594,31 @@ which demotes more of the same and promotes finding out whether ANY of it compou
    truth and structure while a reader reacts to writing quality, specificity, insight and
    variety — none of which we have touched.
 
+4. **Compose the reason in the "what should I do here" path.** (product owner's suggestion,
+   MEDIUM) Promoted to the top of the remaining work because it is the only item that serves
+   VISION.md's stated moment directly, and because it closes a fabrication hole we left open
+   all session.
+
+   `build_rich_coaching_prompt` — the position path, the one that answers "I don't know what
+   to do" — composes **no effect clause at all** for the moves it recommends. It hands the
+   model a menu of sound moves plus board facts and lets it work out why each is good. That
+   is precisely the setup that produced v36's invented reasons in the MOVE path ("a3 prevents
+   the opponent from targeting g2"), and everything we built to stop it — the composed clause,
+   the bind-to-it instruction, the withheld-reason rule — applies only to move evaluation.
+
+   Two payoffs from one change:
+
+   - **The anti-fabrication work starts covering the path the vision is about.** We spent a
+     session hardening the path that fires when the student errs and left the path that fires
+     when they ask for help untouched.
+   - **It is where centre control and development would actually fire.** Measured: they fire
+     on 0 of 36 coached turns in move evaluation, because tactical effects win on priority
+     and because the coach coaches 1 of 10 opening plies. A position question has no mistake
+     to react to, so "this takes control of d4" and "this develops your last piece" are the
+     right answers rather than the leftovers.
+
+   The detectors already exist and are tested; this is wiring plus a binding instruction.
+
 4. **Fix the mind-reading regression.** (ledger row 91, SMALL) Promoted above Diagnosis
    because it is a defect a READER notices — "I see you're trying to develop your pieces"
    on a move that was doing nothing of the kind — so it is the kind of thing pairwise can
