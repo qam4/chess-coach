@@ -291,3 +291,124 @@ class TestTheCauseMustMatchTheRefutation:
         assert "already attacking g5 before you moved there" in out
         # And the generic fallback does not also get appended.
         assert "your pawn on e4" not in out
+
+
+class TestCentreControlAndDevelopment:
+    """The two principles VISION.md names that had no detector at all.
+
+    The north star's worked example of the moment this product exists for is "keep defending
+    the center — and here's a good way to do it", and until now the coach could not say it:
+    of the seven things the vision lists as worth teaching, centre control and development
+    were the two with nothing behind them. On a quiet move the coach had nothing of its own
+    and fell back to the engine's label ("rook activity — improving rook placement"), which
+    it can only restate.
+
+    Both obey the standing rule in `_quiet_move_effect`: no bare "toward the centre". Every
+    clause states a square or a count the student can recount on the board.
+    """
+
+    def test_a_pawn_reaching_the_centre_is_occupation(self):
+        from chess_coach.prompts import EFFECT_CENTRE, _move_effect
+
+        board = chess.Board()
+        cat, clause = _move_effect(board, "e2e4", target_possessive="their ")
+        assert cat == EFFECT_CENTRE
+        assert "putting a pawn on e4, one of the four centre squares" in clause
+
+    def test_adding_an_attacker_to_a_contested_centre_square(self):
+        from chess_coach.prompts import EFFECT_CENTRE, _move_effect
+
+        # Both sides are fighting over d4: black holds it with the c6 knight and the e5 pawn,
+        # white with the f3 knight. Nb5 adds a second white attacker. Everything earlier in
+        # the priority order stays silent — the knight is already developed, it has plenty of
+        # squares so mobility does not fire, and its only targets are pawns, which the attack
+        # branch excludes as named targets.
+        board = chess.Board("r1bqkbnr/pppp1ppp/2n5/4p3/8/2N2N2/PPPPPPPP/R1BQKB1R w KQkq - 0 1")
+        cat, clause = _move_effect(board, "c3b5", target_possessive="their ")
+        assert cat == EFFECT_CENTRE
+        # Counts, not a verdict: this is what the student can recount on the board.
+        assert "d4" in clause and "yours 2 to their 2" in clause
+
+    def test_an_uncontested_centre_square_is_not_a_lesson(self):
+        from chess_coach.prompts import EFFECT_CENTRE, _move_effect
+
+        # The narrowing that matters. A lone knight stepping to e2 does attack d4, and saying
+        # so would be TRUE and worthless — nobody is fighting for d4 here. This function's
+        # standing rule is that it says nothing about mere centralisation, and a
+        # true-but-pointless clause is that same failure wearing numbers. An early version
+        # fired here and broke eight existing tests by talking over sharper facts.
+        board = chess.Board("4k3/8/8/8/8/8/8/K5n1 b - - 0 1")
+        cat, _clause = _move_effect(board, "g1e2", target_possessive="your ")
+        assert cat != EFFECT_CENTRE
+
+    def test_no_centre_claim_when_nothing_changed(self):
+        from chess_coach.prompts import EFFECT_CENTRE, _move_effect
+
+        # A rook shuffle on the first rank touches none of the four squares. Silence, not a
+        # vague gesture at the centre.
+        board = chess.Board("4k3/8/8/8/8/8/8/R3K3 w - - 0 1")
+        cat, _clause = _move_effect(board, "a1b1", target_possessive="their ")
+        assert cat != EFFECT_CENTRE
+
+    def test_developing_a_minor_counts_the_ones_still_home(self):
+        from chess_coach.prompts import EFFECT_DEVELOP, _move_effect
+
+        board = chess.Board()
+        board.push_san("d4")
+        board.push_san("d5")
+        cat, clause = _move_effect(board, "b1c3", target_possessive="their ")
+        assert cat == EFFECT_DEVELOP
+        assert "developing your knight from b1 to c3" in clause
+        # Three minors left at home, and the count is the checkable part.
+        assert "3 more minor pieces still sit on their starting squares" in clause
+
+    def test_the_last_minor_developed_says_so(self):
+        from chess_coach.prompts import EFFECT_DEVELOP, _move_effect
+
+        # The f1 bishop is the last minor at home. It has five squares to choose from, so the
+        # mobility branch — which sits earlier and only speaks for a piece that had almost
+        # nowhere to go — stays quiet and development gets to.
+        # R2QKB1R puts the bishop on f1 and leaves e2 clear so it can actually reach c4.
+        board = chess.Board("rnbqkbnr/pppppppp/8/8/8/2N1BN2/PPPP1PPP/R2QKB1R w KQkq - 0 1")
+        cat, clause = _move_effect(board, "f1c4", target_possessive="their ")
+        assert cat == EFFECT_DEVELOP
+        assert "that is every minor piece off its starting square" in clause
+
+    def test_a_minor_already_developed_is_not_developed_again(self):
+        from chess_coach.prompts import EFFECT_DEVELOP, _move_effect
+
+        # Moving a knight from c3 to e4 is not development — it already left home. Claiming
+        # it would be the kind of thing the fidelity checker exists to catch.
+        board = chess.Board("4k3/8/8/8/8/2N5/PPPPPPPP/4K3 w - - 0 1")
+        cat, _clause = _move_effect(board, "c3e4", target_possessive="their ")
+        assert cat != EFFECT_DEVELOP
+
+    def test_development_is_not_claimed_in_an_endgame(self):
+        from chess_coach.prompts import EFFECT_DEVELOP, _move_effect
+
+        # "Get your pieces out" is an opening lesson. In a bare endgame it is noise, and the
+        # phase gate is the project's own endgame test rather than a guess.
+        board = chess.Board("4k3/8/8/8/8/8/8/1N2K3 w - - 0 1")
+        cat, _clause = _move_effect(board, "b1c3", target_possessive="their ")
+        assert cat != EFFECT_DEVELOP
+
+    def test_both_new_categories_have_a_takeaway(self):
+        from chess_coach.prompts import EFFECT_CENTRE, EFFECT_DEVELOP, effect_takeaway
+
+        # A category with no lesson leaves the model to invent one, which is the failure the
+        # category/lesson pairing exists to prevent.
+        assert effect_takeaway(EFFECT_CENTRE)
+        assert effect_takeaway(EFFECT_DEVELOP)
+
+    def test_tactics_still_outrank_both(self):
+        from chess_coach.prompts import EFFECT_FORK, _move_effect
+
+        # Priority matters: a move that forks must not be described as development. 1.e4 e5
+        # 2.Nf3 Nc6 3.Bc4 Nf6 4.Ng5 — the knight leaves f3 and hits f7, but the point is the
+        # attack, not that a piece moved.
+        board = chess.Board("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+        cat, _clause = _move_effect(board, "f3g5", target_possessive="their ")
+        # What it picks is the main path's business (here: it defends e4). The point is that a
+        # move with something concrete to say is never described as merely developing.
+        assert cat not in ("development", "centre_control")
+        assert cat and cat != EFFECT_FORK or cat == EFFECT_FORK

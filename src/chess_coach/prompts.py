@@ -21,6 +21,7 @@ from chess_coach.coaching_phrases import (
     describe_tactic,
     describe_threat,
     king_safety_relevant,
+    minor_is_developed,
     select_tactics,
     suppress_threats_echoing_tactics,
     uci_to_san,
@@ -1149,6 +1150,17 @@ EFFECT_OPEN_FILE = "open_file"
 EFFECT_MOBILITY = "mobility"
 EFFECT_KING_ACTIVITY = "king_activity"
 EFFECT_EXTRA_DEFENDER = "extra_defender"
+#: The two principles VISION.md names that had no detector at all. Centre control is the
+#: north star's own worked example of the moment we exist for — "keep defending the center
+#: — and here's a good way to do it" — and until now the coach could not say it. Both are
+#: rules geometry: which squares does a piece attack, and has a minor left its home square.
+EFFECT_CENTRE = "centre_control"
+EFFECT_DEVELOP = "development"
+
+#: The four squares everyone means by "the centre". Kept narrow on purpose: the coach has
+#: already been flagged for calling non-central squares central, and a claim the student
+#: cannot check is worse than no claim.
+CENTRE_SQUARES = (chess.D4, chess.E4, chess.D5, chess.E5)
 
 #: Phase-specific lessons, keyed ``(category, phase)``, consulted before the
 #: phase-agnostic table below. Only the cases where the lesson GENUINELY differs by
@@ -1210,6 +1222,10 @@ _EFFECT_TAKEAWAYS: dict[str, str] = {
     EFFECT_DEFEND: "defending what you already have before starting something new",
     EFFECT_CASTLE: "getting the king to safety before the centre opens up",
     EFFECT_OPEN_FILE: "putting a rook on a file with no pawns in its way",
+    EFFECT_CENTRE: (
+        "controlling the middle four squares — count who attacks them, and add an attacker when you are behind"
+    ),
+    EFFECT_DEVELOP: "getting every piece off its starting square before you start an attack",
     EFFECT_MOBILITY: "a piece with almost no squares is doing almost nothing — find it a better home",
     EFFECT_KING_ACTIVITY: (
         "in an endgame the king is a fighting piece, not something to hide — walk it towards the action"
@@ -1345,6 +1361,88 @@ def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move)
     return _quiet_move_effect(board, after, move)[1]
 
 
+def _minors_at_home(board: chess.Board, colour: chess.Color) -> int:
+    """How many of ``colour``'s knights and bishops are still on a starting square."""
+    return sum(
+        1
+        for sq, pc in board.piece_map().items()
+        if pc.color == colour
+        and pc.piece_type in (chess.KNIGHT, chess.BISHOP)
+        and minor_is_developed(board, chess.square_name(sq)) is False
+    )
+
+
+def _centre_control_clause(
+    board: chess.Board,
+    after: chess.Board,
+    move: chess.Move,
+    mover: chess.Color,
+) -> str:
+    """What a move does to the middle four squares, as counts; '' when nothing changed.
+
+    VISION.md's worked example of the moment this product exists for is "keep defending the
+    center — and here's a good way to do it", and until this existed the coach could not say
+    it: centre control was one of two named principles with no detector at all.
+
+    Stated as counts rather than as a verdict, for two reasons. It keeps the claim checkable
+    — the student can recount the attackers — and it keeps us out of the engine's job: we
+    are not asserting that the centre is what matters here, only describing one true thing
+    about the move the engine ALREADY chose as best. That is the bridge the vision asks for,
+    with the soundness coming from the engine and the principle from us.
+    """
+    piece = board.piece_at(move.from_square)
+    if piece is None:
+        return ""
+    # The KING is excluded. Its walk toward the centre already has a branch of its own with
+    # carefully chosen suppression — it fires only in an endgame and only when it beats the
+    # move the student actually played, because an early Ke2 is usually forced rather than an
+    # improvement. Letting a generic attacker count speak for king moves undid that: in an
+    # endgame where the king walk was deliberately silenced for not distinguishing itself,
+    # this branch piped up with "taking control of e4" instead. Two existing tests caught it.
+    if piece.piece_type == chess.KING:
+        return ""
+
+    # Not in an endgame. By then the four squares are not the battleground — a pawn reaching
+    # e4 is a passed-pawn question and a knight covering d4 is covering a square nobody wants.
+    if phase_of_board(board) == PHASE_ENDGAME:
+        return ""
+
+    # Occupying the centre with a pawn is the version a beginner meets first, and it is a
+    # different fact from attacking it, so it is reported separately.
+    if move.to_square in CENTRE_SQUARES:
+        if piece.piece_type == chess.PAWN:
+            return f", putting a pawn on {chess.square_name(move.to_square)}, one of the four centre squares"
+
+    # Only where the centre is actually CONTESTED. An attacker count that goes up is true
+    # of an enormous range of moves and means nothing on its own — a lone knight stepping to
+    # e2 in a bare endgame "takes control of d4" only in the sense that no one else wants it.
+    # This function's standing rule is that it says nothing about mere centralisation, and a
+    # true-but-worthless clause is the same failure wearing numbers. So the opponent has to be
+    # fighting for the square, and it has to be a phase where the centre is the battleground.
+    gained: list[str] = []
+    added: list[str] = []
+    for sq in CENTRE_SQUARES:
+        ours_before = len(board.attackers(mover, sq))
+        ours_after = len(after.attackers(mover, sq))
+        if ours_after <= ours_before:
+            continue
+        theirs_after = len(after.attackers(not mover, sq))
+        occupant = after.piece_at(sq)
+        contested = theirs_after > 0 or (occupant is not None and occupant.color != mover)
+        if not contested:
+            continue
+        name = chess.square_name(sq)
+        if ours_before <= len(board.attackers(not mover, sq)) and ours_after > theirs_after:
+            gained.append(f"{name} (yours {ours_after} to their {theirs_after})")
+        else:
+            added.append(f"{name} (yours {ours_after} to their {theirs_after})")
+    if gained:
+        return f", taking control of {' and '.join(gained)} in the centre"
+    if added:
+        return f", adding an attacker to {' and '.join(added)} in the centre"
+    return ""
+
+
 def _quiet_move_effect(
     board: chess.Board,
     after: chess.Board,
@@ -1456,6 +1554,48 @@ def _quiet_move_effect(
                 EFFECT_EXTRA_DEFENDER,
                 f", adding a defender to your {name} on {chess.square_name(sq)}",
             )
+    # Development and centre control are the two principles VISION.md names as worth teaching
+    # that had no detector at all — the north star's own worked example is "keep defending the
+    # center", and the coach could not say it. Both sit at the END of this function on
+    # purpose: they ADD coverage where nothing fired before rather than overriding the
+    # existing effects, each of which is a deliberate and separately tested decision. Placed
+    # earlier, development displaced mobility and the extra-defender clause and centre control
+    # swallowed several more; eight existing tests caught it.
+    #
+    # Whether development SHOULD outrank mobility in the opening is a real question —
+    # "you have two minors still at home" may teach a 1200 more than "this knight covers five
+    # squares instead of two" — but that is a product decision, not one to slip in as a
+    # side effect of adding a detector.
+    #
+    # Both obey this function's standing rule: no bare "toward the centre". Every clause
+    # states a square or a count the student can recount on the board.
+    if piece.piece_type in (chess.KNIGHT, chess.BISHOP) and phase_of_board(board) != PHASE_ENDGAME:
+        # minor_is_developed is the codebase's single definition of "off its home square",
+        # shared with the placement block and the fidelity checker. Reused rather than
+        # restated so the three cannot drift apart.
+        if minor_is_developed(board, from_name) is False and minor_is_developed(after, to_name) is True:
+            home = _minors_at_home(after, mover)
+            if home == 0:
+                tail = "that is every minor piece off its starting square"
+            elif home == 1:
+                tail = "one more minor piece still sits on its starting square"
+            else:
+                tail = f"{home} more minor pieces still sit on their starting squares"
+            return (
+                EFFECT_DEVELOP,
+                f", developing your {chess.piece_name(piece.piece_type)} from {from_name} to {to_name} — {tail}",
+            )
+
+    # Centre control comes LAST of the quiet effects, on purpose. "Did the attacker count on
+    # one of four squares change" matches an enormous range of moves, so placed any earlier it
+    # simply swallowed mobility, king activity and the extra-defender clause — eight existing
+    # tests caught it doing exactly that. The rule this function already followed is that the
+    # more specific and checkable the fact, the earlier it speaks; this is the broadest fact
+    # here, so it speaks only when nothing sharper applies.
+    centre = _centre_control_clause(board, after, move, mover)
+    if centre:
+        return (EFFECT_CENTRE, centre)
+
     return ("", "")
 
 
