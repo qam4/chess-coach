@@ -34,8 +34,12 @@ class TestTheFiveClasses:
             board.push_san(san)
         out = diagnose(board.fen(), board.parse_san("Ng5").uci())
         assert out and out[0].kind == KIND_LEFT_UNDEFENDED
-        assert "knight on g5 has no defender" in out[0].fact
+        # No "your <piece> on <square>": this class names the move's destination, which is empty
+        # in the position the fidelity checker verifies against, and the old wording made our own
+        # gate flag the fallback text.
+        assert "nothing of yours defends g5" in out[0].fact
         assert "h6 attacks it" in out[0].fact
+        assert "knight on g5" not in out[0].fact
         # The habit, keyed to the error rather than to the engine's move.
         assert "is the piece I am moving attacked on the square I am moving it to?" in out[0].missed_check
 

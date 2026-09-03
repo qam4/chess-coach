@@ -219,7 +219,7 @@ class TestHistoryReachesThePrompt:
         prompt = build_rich_move_evaluation_prompt(report, history=h)
         # The differential diagnosis now leads, and says it more directly: the piece it moved
         # is the one with no defender, named with its attacker.
-        assert "your knight on g5 has no defender, and h6 attacks it" in prompt
+        assert "nothing of yours defends g5, and h6 attacks it" in prompt
         assert "is the piece I am moving attacked on the square I am moving it to?" in prompt
 
     def test_a_prior_warning_about_the_same_piece_is_named(self):

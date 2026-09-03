@@ -291,7 +291,7 @@ class TestTheCauseMustMatchTheRefutation:
         # The differential diagnosis outranks both the refutation-gated check and the generic
         # hanging fallback: it is computed from the student's move rather than gated on the
         # engine supplying a line, which took coverage from 3 of 18 turns to 8 of 18.
-        assert "knight on g5 has no defender" in out
+        assert "nothing of yours defends g5" in out
         assert "your pawn on e4" not in out
 
 

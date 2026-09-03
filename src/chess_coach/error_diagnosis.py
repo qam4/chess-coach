@@ -139,7 +139,13 @@ def diagnose(fen: str, user_move_uci: str, best_move_uci: str = "") -> list[Erro
                 KIND_LEFT_UNDEFENDED,
                 to_name,
                 name,
-                f"after {board.san(played)} your {name} on {to_name} has no defender, "
+                # Phrased WITHOUT "your <piece> on <square>". This class names the move's
+                # DESTINATION, which is empty in the position the checker verifies against, so
+                # "your pawn on c6" read as a present-tense placement claim and our own fidelity
+                # gate flagged the fallback text — the one message with nothing behind it if it
+                # fails. True as written, wrong shape. The other four classes name squares that
+                # are already occupied, so only this one needed rewording.
+                f"after {board.san(played)} nothing of yours defends {to_name}, "
                 f"and {'/'.join(attackers)} attacks it",
             )
         )
