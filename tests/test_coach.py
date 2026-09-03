@@ -553,8 +553,6 @@ class TestAchievementClauseMemory:
             assert "the position facts above" not in later, times
 
     def test_a_different_clause_is_not_suppressed(self):
-        # NOTE: the achievement clause now stands down entirely on a turn that has a composed
-        # DIAGNOSIS, so this exercises the no-diagnosis path. See prompts.py for the measurement.
         # Keyed on the rendered clause, not the effect category: attacking a bishop on
         # b4 and attacking something else are different sentences, and the second is
         # news to the student even though the category matches.
@@ -570,16 +568,8 @@ class TestAchievementClauseMemory:
 
         coach.engine.get_comparison_report.return_value = other
         prompts = _prompts_from(coach, 1)
-        # The KEYS are what this test is about — that a different clause is not suppressed by the
-        # ladder. Whether the clause is then RENDERED depends on the diagnosis: on a turn with a
-        # This test is about the KEYS: a different clause must not be suppressed by the ladder.
-        # Whether it is then rendered is a separate precedence question — on a turn with a composed
-        # cause the achievement clause stands down, because the better move is justified as what
-        # the student's move failed to do rather than by a second reason of its own.
-        assert key_other != key_b4
-        # The clause reaches the prompt only when no composed cause has displaced it. Both routes
-        # keep the student informed about the better move; they differ in what justifies it.
-        assert (clause_other in prompts[0]) or ("How this came about" in prompts[0])
+        assert "does this:" in prompts[0]
+        assert clause_other in prompts[0]
 
 
 def test_composed_fallback_honours_the_lesson_ladder():

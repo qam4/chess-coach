@@ -175,30 +175,27 @@ class TestTopicSelection:
         assert "WHAT MATTERS HERE" not in prompt
         assert "g2" not in prompt.split("--- Board")[0]
 
-    def test_exactly_one_thing_owns_the_turn(self):
+    def test_our_hanging_piece_becomes_the_subject_of_the_turn(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt
 
-        # v43 is why this test now checks precedence rather than presence. 13 of 18 prompts carried
-        # a composed cause and only 8 reached the output; the five that dropped it are exactly the
-        # five the reviewer scored at anchor 4 for "no account of what went wrong", and Load
-        # Discipline fell to 4 in the same run. One mechanism: the diagnosis, the achievement
-        # clause, the undefended line and the takeaway all competed inside a 40-120 word budget,
-        # so the model either crammed all four or dropped one — and what it dropped was the cause.
-        #
-        # So the danger fact is stated once, by exactly one owner, and the diagnosis wins when
-        # there is one.
         fen = "4k3/8/8/8/8/8/6N1/4K3 w - - 0 1"
         pos = self._position(fen, {"white": [("g2", "knight")], "black": []})
         prompt = build_rich_move_evaluation_prompt(self._report(fen, "e1d1", "g2f4"), position_after=pos)
-
-        owners = [
-            "not pawn structure, king repositioning or piece placement",  # the focus block
-            "THE THINKING THAT WENT WRONG",  # the diagnosis
-        ]
-        assert sum(1 for o in owners if o in prompt) == 1, "exactly one owner, never both"
-        assert prompt.count("your knight on g2 is undefended") <= 1
-        # And whichever owns it, the undefended piece is the subject rather than pawn structure.
-        assert ("How this came about" in prompt) or ("WHAT MATTERS HERE" in prompt)
+        assert "WHAT MATTERS HERE" in prompt
+        # Stated ONCE. v41 scored Load Discipline 4 for inventory-dumping and the reviewer
+        # put the cure in one phrase: the coach "can hit anchor 8 when the fact budget is
+        # one". The cause sentence already names the piece, so the standalone undefended
+        # line stands down rather than saying it a second time.
+        assert prompt.count("your knight on g2 is undefended") == 1
+        assert "--- Undefended AFTER your move ---" not in prompt
+        # Steered off the features that were previously all it had ...
+        assert "not pawn structure, king repositioning or piece placement" in prompt
+        # ... and forbidden from inventing a rescue. v40: "Ke2 addresses the immediate
+        # threat to your pawn on g2", which a king on e2 does not touch. Naming the problem
+        # and stopping is the honest option when we have not supplied the fix.
+        assert "Do NOT claim that any move defends it" in prompt
+        # The same fact also becomes the missed check, which needs no refutation line.
+        assert "is anything of mine left where it can simply be taken?" in prompt
 
     def test_the_opponents_hanging_pieces_do_not_set_our_subject(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt

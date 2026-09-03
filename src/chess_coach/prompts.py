@@ -2387,16 +2387,10 @@ def build_rich_move_evaluation_prompt(
         # already names the same piece, so the fact is stated once rather than twice.
         hanging_phrase = _our_hanging(position_after, report.fen)
     history_section = composed_history(report, history, hanging_phrase)
-    # When there IS a diagnosis, it displaces the other danger facts instead of joining them.
-    # v43 measured why: 13 of 18 prompts carried the cause and only 8 reached the output, and the
-    # five that dropped it are exactly the five the reviewer scored at anchor 4 for having "no
-    # account of what went wrong". Load Discipline fell to 4 in the same run. The mechanism is
-    # one thing: the diagnosis, the achievement clause, the undefended line and the takeaway all
-    # competed inside a 40-120 word budget, so the model either crammed all four or dropped one,
-    # and what it dropped was the cause. Adding a fact source without removing one is the same
-    # mistake the fact budget was introduced to fix.
-    if hanging_phrase and not history_section:
-        sections.append("--- Undefended AFTER your move ---\n" + hanging_phrase.capitalize() + ".")
+    if hanging_phrase:
+        # Only if the cause sentence has not already said it.
+        if hanging_phrase not in history_section:
+            sections.append("--- Undefended AFTER your move ---\n" + hanging_phrase.capitalize() + ".")
         focus_instruction = _FOCUS_SUPPLIED
     if history_section:
         sections.append(history_section)
@@ -2405,11 +2399,6 @@ def build_rich_move_evaluation_prompt(
     # Authorship of the "why" follows the data: voice our clause when we have one, give
     # no reason at all when we do not. The tier blocks no longer ask for a reason
     # themselves, so this is the only thing in the prompt that permits one.
-    if history_section and tier not in _OWN_MOVE_TIERS:
-        # The reviewer's Change B in one line: "the recommended move is justified as what your
-        # move failed to do". So the achievement clause does not also run — two justifications
-        # for one move is exactly the load that pushed the cause out of the output.
-        best_move_line = ""
     move_instructions = _TIER_INSTRUCTIONS[tier] + (_REASON_SUPPLIED if best_move_line else _REASON_WITHHELD)
     if history_section and tier not in _OWN_MOVE_TIERS:
         move_instructions += _HISTORY_SUPPLIED
