@@ -27,7 +27,7 @@ llm:
   # Provider: "ollama" or "openai_compat"
   provider: "ollama"
   # Model name (as known by the provider)
-  model: "qwen3:8b"
+  model: "qwen3:14b"
   # Base URL for the LLM API
   base_url: "http://localhost:11435"
   # Max tokens for the coaching response
@@ -45,7 +45,7 @@ coaching:
   # Inject pedagogy guidance (named principles/plans) into coaching prompts.
   # Helps capable reasoning models; profiler-recommended PER MODEL. Default off
   # = no change. (YAML: on/off load as booleans.)
-  guidance: off
+  guidance: on
   # Max guidance entries injected per position.
   guidance_max: 3
   # Skip the LLM and use deterministic templates — recommended for models the

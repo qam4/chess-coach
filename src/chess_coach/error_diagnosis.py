@@ -145,8 +145,7 @@ def diagnose(fen: str, user_move_uci: str, best_move_uci: str = "") -> list[Erro
                 # gate flagged the fallback text — the one message with nothing behind it if it
                 # fails. True as written, wrong shape. The other four classes name squares that
                 # are already occupied, so only this one needed rewording.
-                f"after {board.san(played)} nothing of yours defends {to_name}, "
-                f"and {'/'.join(attackers)} attacks it",
+                f"after {board.san(played)} nothing of yours defends {to_name}, and {'/'.join(attackers)} attacks it",
             )
         )
 
