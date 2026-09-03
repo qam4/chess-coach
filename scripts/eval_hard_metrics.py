@@ -52,6 +52,30 @@ MIND_READING = (
 MAGNITUDE = ("centipawn", "cp)", " cp ", "+0.", "-0.", "eval of", "score of")
 
 
+#: The habit-phrasings the diagnosis emits, matched on their distinctive middles so a
+#: paraphrase still counts. Keying on the literal word "check" was wrong twice over: it
+#: under-counted paraphrase, and it missed the composed fallback entirely, which renders the
+#: same habit as "Worth remembering: before I commit, ..." with no "check" in it. That error
+#: made a working fix read as 0 of 4 — the counter, not the coaching.
+_CAUSE_PHRASES = (
+    "attacked on the square",
+    "only thing guarding",
+    "something of theirs i can just take",
+    "still defended",
+    "open a line",
+    "check that was skipped",
+    "thinking that went wrong",
+    "has no defender",
+    "was the only piece guarding",
+    "not attacked before",
+)
+
+
+def _names_a_cause(low: str) -> bool:
+    """Does this turn tell the student WHY the move failed, however it is phrased?"""
+    return any(p in low for p in _CAUSE_PHRASES)
+
+
 @dataclass
 class Metrics:
     """One transcript's counters. Every field is either a rule of chess or arithmetic."""
@@ -120,11 +144,7 @@ def measure(path: Path) -> Metrics:
         # Does the turn account for the failure, or only report it? The composed cause
         # sentences are the only source of this phrasing, so matching them is exact
         # rather than a guess at the model's prose.
-        # Widened past the exact composed phrases: the model paraphrases them, and the strict
-        # match under-counted v42 at 17% where the same turns read as 33% once paraphrase was
-        # allowed. What is being counted is "does this turn name a check the student skipped",
-        # which is the teaching property, not "did the model copy our wording".
-        if "check" in low and ("skipped" in low or "before" in low or "ask" in low):
+        if _names_a_cause(low):
             m.turns_with_cause += 1
         if any(p in low for p in MIND_READING):
             m.mind_reading += 1
@@ -175,9 +195,11 @@ def main(argv: list[str]) -> int:
     if len(rows) > 1:
         first, last = rows[0], rows[-1]
         print()
-        print(f"trend {first.name} -> {last.name}:  clean {first.clean_rate:.0f}% -> {last.clean_rate:.0f}%"
-              f"   cause {first.cause_rate:.0f}% -> {last.cause_rate:.0f}%"
-              f"   words {first.words_per_turn:.0f} -> {last.words_per_turn:.0f}")
+        print(
+            f"trend {first.name} -> {last.name}:  clean {first.clean_rate:.0f}% -> {last.clean_rate:.0f}%"
+            f"   cause {first.cause_rate:.0f}% -> {last.cause_rate:.0f}%"
+            f"   words {first.words_per_turn:.0f} -> {last.words_per_turn:.0f}"
+        )
 
     worst = [m for m in rows if m.magnitude]
     if worst:

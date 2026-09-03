@@ -1880,13 +1880,31 @@ def compose_safe_move_feedback(report: ComparisonReport, lesson_times_taught: in
             parts.append("There was a stronger move here.")
     if tier in _OWN_MOVE_TIERS and clause:
         parts.append(f"Your move is {clause.removeprefix(', ').strip()}.")
+    # The CAUSE, on the one path that most needs it. Measured on v43: 13 of 18 turns carried a
+    # composed cause into the prompt and only 8 reached the student — and the five that lost it
+    # were not the model being terse, they were THIS function. Every LLM attempt on plies 40, 46,
+    # 52 and 60 contradicted the board, the gate blocked them, and the fallback shipped without
+    # the cause. So the safety net was quietly costing 5 of 13 cause deliveries.
+    #
+    # This is also BACKLOG's "make the fallback our best sentence, not our worst", recorded and
+    # carried over unbuilt. It now has a number attached.
+    if tier not in _OWN_MOVE_TIERS:
+        found = diagnose(report.fen, report.user_move, report.best_move)
+        if found:
+            lead = found[0]
+            parts.append(lead.fact[0].upper() + lead.fact[1:] + ".")
 
     # The takeaway is on the same ladder as the LLM path's. This function was outside it
     # and the omission shipped: at v34 ply 46 the fidelity gate fired, this text was
     # sent, and it closed on "going after a piece that has too few defenders" — the
     # FIFTH telling of a lesson the prompt builder had already retired. The safety net
     # cannot be the one path that ignores the rule.
-    lesson = effect_takeaway(category, phase_of_board(board))
+    # composed_lesson already prefers the diagnosis's check over the effect-derived lesson, so
+    # going through it keeps this path and the prompt path on the same takeaway — they used to
+    # diverge, which is how a retired lesson shipped here at v34 ply 46.
+    _lesson_key, lesson = composed_lesson(report, tier)
+    if not lesson:
+        lesson = effect_takeaway(category, phase_of_board(board))
     if lesson and lesson_times_taught < LESSON_RETIRE_AFTER:
         if lesson_times_taught > 0:
             # Composed rather than generated, so it can be exact: name the recurrence
