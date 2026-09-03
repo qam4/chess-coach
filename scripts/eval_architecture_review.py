@@ -127,6 +127,14 @@ def main() -> None:
     p.add_argument("--judge-model", default="claude-opus-5")
     p.add_argument("--judge-command", default=None)
     p.add_argument("--judge-base-url", default="http://localhost:11434")
+    p.add_argument(
+        "--judge-timeout",
+        type=float,
+        default=1200.0,
+        help="Seconds to wait for the review. The provider default of 300 is not enough here: "
+        "this prompt carries the whole transcript plus the lever log (~300KB together), and a "
+        "run timed out mid-generation at 300s with nothing written.",
+    )
     args = p.parse_args()
 
     for stream in (sys.stdout, sys.stderr):
@@ -175,6 +183,7 @@ def main() -> None:
         base_url=args.judge_base_url,
         api_key="",
         command=shlex.split(args.judge_command or f"kiro-cli chat --no-interactive --model {args.judge_model}"),
+        timeout=args.judge_timeout,
     )
     print(f"Requesting architecture review ({len(prompt)} chars of context)...")
     review = judge.generate(prompt, max_tokens=4096, temperature=0.0)

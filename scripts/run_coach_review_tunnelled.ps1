@@ -8,7 +8,7 @@ param(
     # Which driver to run once the tunnel is confirmed. Defaults to the report card;
     # any script taking --model/--base-url/--out works (e.g. eval_check_breadth.py).
     [string]$Script = "scripts/eval_coach_review.py",
-    # Extra flags for a non-default driver, as ONE string: "--only queens-gambit".
+    # Extra flags for the driver, as ONE string: "--config config.template_only.yaml".
     # Deliberately not string[]: passed as separate tokens, PowerShell reads a
     # leading "--flag" as a parameter name and silently binds the value that follows
     # to the next positional parameter — which set $Model to "queens-gambit" and made
@@ -56,14 +56,19 @@ while (-not (Test-ModelReady -Url $BaseUrl -Want $Model)) {
 Write-Host "$Model ready - starting run"
 
 try {
+    # $ScriptArgLine is honoured on BOTH branches. It used to be applied only to the
+    # "other drivers" branch, so passing -ScriptArgLine alongside the default driver was
+    # silently dropped: a template-only run launched with "--config config.template_only.yaml"
+    # quietly produced another LLM run, and the only reason it was caught is that the output
+    # was 11/18 byte-identical to the run it was supposed to be compared against.
+    $extra = if ($ScriptArgLine) { $ScriptArgLine -split '\s+' } else { @() }
     if ($Script -eq "scripts/eval_coach_review.py") {
         uv run python $Script `
             --model $Model --base-url $BaseUrl `
             --student-elo $StudentElo --opponent-elo $OpponentElo `
-            --ply-cap $PlyCap --seed $Seed --out $Out
+            --ply-cap $PlyCap --seed $Seed --out $Out @extra
     } else {
         # Other drivers take the common flags plus whatever they need.
-        $extra = if ($ScriptArgLine) { $ScriptArgLine -split '\s+' } else { @() }
         uv run python $Script --model $Model --base-url $BaseUrl --out $Out @extra
     }
     $code = $LASTEXITCODE
