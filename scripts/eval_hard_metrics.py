@@ -120,7 +120,11 @@ def measure(path: Path) -> Metrics:
         # Does the turn account for the failure, or only report it? The composed cause
         # sentences are the only source of this phrasing, so matching them is exact
         # rather than a guess at the model's prose.
-        if "check that was skipped" in low or "thinking that went wrong" in low:
+        # Widened past the exact composed phrases: the model paraphrases them, and the strict
+        # match under-counted v42 at 17% where the same turns read as 33% once paraphrase was
+        # allowed. What is being counted is "does this turn name a check the student skipped",
+        # which is the teaching property, not "did the model copy our wording".
+        if "check" in low and ("skipped" in low or "before" in low or "ask" in low):
             m.turns_with_cause += 1
         if any(p in low for p in MIND_READING):
             m.mind_reading += 1
@@ -168,6 +172,13 @@ def main(argv: list[str]) -> int:
     print("mind-rd     turns inventing the student's intent")
     print("magn        turns leaking an evaluation number (must stay 0)")
     print("top-closer% share of turns ending on the single most-repeated idea (lower is better)")
+    if len(rows) > 1:
+        first, last = rows[0], rows[-1]
+        print()
+        print(f"trend {first.name} -> {last.name}:  clean {first.clean_rate:.0f}% -> {last.clean_rate:.0f}%"
+              f"   cause {first.cause_rate:.0f}% -> {last.cause_rate:.0f}%"
+              f"   words {first.words_per_turn:.0f} -> {last.words_per_turn:.0f}")
+
     worst = [m for m in rows if m.magnitude]
     if worst:
         print(f"\nWARNING: evaluation numbers reached the student in: {', '.join(m.name for m in worst)}")
