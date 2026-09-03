@@ -53,6 +53,31 @@ from chess_coach.verify import check_coaching_fidelity  # noqa: E402
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+#: Opening positions the seed selects between, so different seeds play DIFFERENT games.
+#:
+#: This exists because `--seed` was decorative. `play_game` accepted it, recorded it in
+#: metadata, and used it nowhere; the moves come from `move_fn`, a deterministic engine call at
+#: fixed depth and Elo. So every report card ever run played the identical game, and passing
+#: four different seeds produced four byte-identical transcripts — 23 minutes of engine time for
+#: four copies of the game we already had. Every number in the ledger rests on that one game.
+#:
+#: Seed 7 keeps the standard start, so the whole v1-v43 series stays comparable. Other seeds
+#: open from a few moves of mainline theory, which gives genuinely different middlegames without
+#: making either player random — the engine stays deterministic, which is what keeps a rerun
+#: reproducible.
+SEED_OPENINGS: dict[int, tuple[str, str]] = {
+    7: ("standard start", START_FEN),
+    11: ("Italian", "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 5 4"),
+    13: ("Queen's Gambit", "rnbqkbnr/ppp2ppp/8/3pp3/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3"),
+    17: ("Sicilian", "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"),
+    23: ("French", "rnbqkbnr/pppp1ppp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 0 2"),
+}
+
+
+def _start_for_seed(seed: int) -> tuple[str, str]:
+    """``(label, fen)`` for this seed, falling back to the standard start."""
+    return SEED_OPENINGS.get(seed, ("standard start", START_FEN))
+
 # Curated positions to guarantee endgame (and one middlegame tactic) coverage so
 # the reviewer can assess phase-appropriateness even if the game stalls earlier.
 # (fen, student_move_uci). Ground truth is still engine-derived at eval time.
@@ -232,8 +257,10 @@ def main() -> None:
     turns: list[ReviewTurn] = []
     try:
         print(f"Playing 1 game: student {args.student_elo} vs opponent {args.opponent_elo} Elo")
+        opening_label, start_fen = _start_for_seed(args.seed)
+        print(f"  seed {args.seed}: {opening_label}")
         traj = play_game(
-            start_fen=START_FEN,
+            start_fen=start_fen,
             student_elo=args.student_elo,
             opponent_elo=args.opponent_elo,
             student_is_white=True,
