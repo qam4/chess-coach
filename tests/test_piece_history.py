@@ -217,8 +217,10 @@ class TestHistoryReachesThePrompt:
         h.observe(board.fen(), move)
         report = self._report(board.fen(), move, ["hxg5"], board.parse_san("d4").uci())
         prompt = build_rich_move_evaluation_prompt(report, history=h)
-        assert "already attacking g5 before you moved there" in prompt
-        assert "what of theirs attacks the square I am going to?" in prompt
+        # The differential diagnosis now leads, and says it more directly: the piece it moved
+        # is the one with no defender, named with its attacker.
+        assert "your knight on g5 has no defender, and h6 attacks it" in prompt
+        assert "is the piece I am moving attacked on the square I am moving it to?" in prompt
 
     def test_a_prior_warning_about_the_same_piece_is_named(self):
         from chess_coach.prompts import build_rich_move_evaluation_prompt

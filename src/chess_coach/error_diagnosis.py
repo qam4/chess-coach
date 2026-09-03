@@ -38,7 +38,7 @@ from dataclasses import dataclass
 
 import chess
 
-__all__ = ["ErrorDiagnosis", "diagnose"]
+__all__ = ["ErrorDiagnosis", "STRONG_KINDS", "diagnose"]
 
 #: Diagnosis classes, ordered by how instructive they are to a 1200. The order matters:
 #: where a move exhibits several, the first is the subject of the turn.
@@ -238,3 +238,17 @@ def diagnose(fen: str, user_move_uci: str, best_move_uci: str = "") -> list[Erro
     }
     out.sort(key=lambda d: (order.get(d.kind, 9), d.square))
     return out
+
+
+#: The classes strong enough to become the SUBJECT of a turn and to own its takeaway.
+#:
+#: The two omitted ones are true but weak. "You stopped defending something" does not mean the
+#: piece is now loose, and "your move opened a line" may be irrelevant if nothing comes of it.
+#: Letting them own the takeaway measurably cost real teaching: on an endgame position with a
+#: rook and a passed pawn, `stopped_defending` displaced "put your rook behind your passed
+#: pawn" with "is everything I was defending still defended?" — a generic check beating a
+#: phase-specific technique, which is the opposite of what this whole change is for.
+#:
+#: They still get computed and can still be stated as facts; they just do not outrank a
+#: composed lesson.
+STRONG_KINDS = frozenset({KIND_LEFT_UNDEFENDED, KIND_MOVED_ONLY_DEFENDER, KIND_MISSED_CAPTURE})

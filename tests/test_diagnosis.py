@@ -288,8 +288,10 @@ class TestTheCauseMustMatchTheRefutation:
         report = T()._report(board.fen(), board.parse_san("Ng5").uci(), "d2d4")
         report = type(report)(**{**report.__dict__, "refutation_line": ["hxg5"]})
         out = composed_history(report, None, hanging_phrase="your pawn on e4 is undefended")
-        assert "already attacking g5 before you moved there" in out
-        # And the generic fallback does not also get appended.
+        # The differential diagnosis outranks both the refutation-gated check and the generic
+        # hanging fallback: it is computed from the student's move rather than gated on the
+        # engine supplying a line, which took coverage from 3 of 18 turns to 8 of 18.
+        assert "knight on g5 has no defender" in out
         assert "your pawn on e4" not in out
 
 

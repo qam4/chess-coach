@@ -27,6 +27,7 @@ from chess_coach.coaching_phrases import (
     uci_to_san,
 )
 from chess_coach.diagnosis import MissedCheck, left_hanging_check, missed_check
+from chess_coach.error_diagnosis import STRONG_KINDS, diagnose
 from chess_coach.models import (
     ComparisonReport,
     PositionReport,
@@ -1634,6 +1635,22 @@ def composed_lesson(report: ComparisonReport, tier: str | None = None) -> tuple[
     history does not need the tier machinery — which is private to this module — just
     to ask what a turn would teach.
     """
+    # A STRONG diagnosis of the student's error owns the takeaway, and it comes through here
+    # rather than short-circuiting the caller so the existing repetition ladder covers it. A
+    # first attempt bypassed this function entirely, which silently un-laddered the new check
+    # and reintroduced the repetition problem the ladder was built for.
+    #
+    # Keyed on the diagnosis class, which is the granularity that matters: the error class
+    # varies where the best move does not, and that is the whole reason this outranks the
+    # effect-derived lesson. Only the strong classes qualify — see STRONG_KINDS for why a
+    # generic "still defended?" must not displace a phase-specific endgame technique.
+    if tier is None:
+        tier = _move_feedback_tier(report)
+    if tier not in _OWN_MOVE_TIERS:
+        found = diagnose(report.fen, report.user_move, report.best_move)
+        if found and found[0].kind in STRONG_KINDS:
+            return (f"diagnosis:{found[0].kind}", found[0].missed_check)
+
     if tier is None:
         tier = _move_feedback_tier(report)
     board = _safe_board(report.fen)
@@ -1952,8 +1969,19 @@ def composed_history(report: ComparisonReport, history: PieceHistory | None = No
     # piece-history fact, not a cause". It was right, so provenance is gone rather than
     # demoted: Load Discipline penalises a second idea, and a fact that is not the cause is
     # exactly that.
-    failure = None
-    if report.refutation_line:
+    # The differential diagnosis leads. It is computed from what the student's move DID to the
+    # attack maps rather than from what the engine's move is good for, which is the whole point:
+    # the pipeline's primary object becomes "what did you fail to do" instead of "what is good
+    # about a3". Measured 8 of 18 coached turns against 3 of 18 for the refutation-gated check
+    # below, which is why that one is now the fallback rather than the spine.
+    failure: MissedCheck | None = None
+    found = diagnose(report.fen, report.user_move, report.best_move)
+    if found:
+        lead = found[0]
+        # .capitalize() would lowercase the rest, turning the SAN "Ng5" into "ng5".
+        opening = lead.fact[0].upper() + lead.fact[1:]
+        failure = MissedCheck(lead.kind, f"{opening}. The check that was skipped: {lead.missed_check}")
+    if failure is None and report.refutation_line:
         failure = missed_check(report.fen, report.user_move, report.refutation_line[0])
         # And if none of the four shapes fits, say NOTHING. The fallback below names
         # whichever piece of ours is loose, which is a true fact about the position and
@@ -1967,7 +1995,10 @@ def composed_history(report: ComparisonReport, history: PieceHistory | None = No
     # of 18 coached turns had one, so the sentence the reviewer called "the only genuine 8"
     # and "the best handle in the game" fired exactly once. Deriving it from what the ENGINE
     # says is undefended after the move instead reaches 8 of those 18.
-    if hanging_phrase:
+    # Last resort only. This used to assign unconditionally, which clobbered the differential
+    # diagnosis above with a vaguer statement about a different piece — the specific cause
+    # losing to the generic one, which is the failure mode this whole change exists to end.
+    if failure is None and hanging_phrase:
         failure = left_hanging_check(hanging_phrase)
     return _render_history(failure, report, history, board)
 
