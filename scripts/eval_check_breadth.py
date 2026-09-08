@@ -175,7 +175,21 @@ def main() -> None:
                 )
                 coached += 1
 
-                def _on_violation(attempt: int, _b: int, bad: list, _ply: int = ply) -> None:  # type: ignore[type-arg]
+                # Every attempt's FULL text, so a violation can be read in the sentence it
+                # came from. The captured fragment alone cannot settle the question this
+                # harness exists to ask: "Be2 ... take your pawn on g5" with "Be2 does not
+                # attack g5" is a coach error if the coach said Be2 takes the pawn, and a
+                # checker error if the sentence was "Be2 was stronger; the opponent could
+                # then take your pawn on g5" — and the fragment reads identically either way.
+                # We spent a run unable to tell (v45, 24 violations of these two kinds).
+                attempt_texts: list[str] = []
+
+                def _generate(_p: str = prompt, _c=comparison, _t=attempt_texts) -> str:  # type: ignore[no-untyped-def]
+                    out = model.generate(_p, max_tokens=move_feedback_max_tokens(_c), temperature=0.0)
+                    _t.append(out)
+                    return out
+
+                def _on_violation(attempt: int, _b: int, bad: list, _ply: int = ply, _t=attempt_texts) -> None:  # type: ignore[type-arg,no-untyped-def]
                     for v in bad:
                         fired[v.kind] += 1
                         # The count alone cannot answer the only question that
@@ -189,11 +203,12 @@ def main() -> None:
                                 "text": " ".join(v.text.split()),
                                 "detail": v.detail,
                                 "fen": fen_before,
+                                "said": " ".join(_t[attempt - 1].split()) if attempt <= len(_t) else "",
                             }
                         )
 
                 text = generate_verified(
-                    lambda: model.generate(prompt, max_tokens=move_feedback_max_tokens(comparison), temperature=0.0),
+                    _generate,
                     fen_before,
                     lambda: (
                         compose_safe_move_feedback(comparison) or generate_move_coaching(comparison, level=args.level)
@@ -272,6 +287,8 @@ def main() -> None:
             print(f"    ply {x['ply']:>3} attempt {x['attempt']} {x['kind']}: {x['text']!r}")
             print(f"        {x['detail']}")
             print(f"        {x['fen']}")
+            if x.get("said"):
+                print(f"        said: {x['said']}")
     print(f"\nSaved: {out_dir / 'breadth.json'}")
 
 

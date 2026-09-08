@@ -249,7 +249,50 @@ def _is_piece_reference(token: str, board: chess.Board) -> bool:
     return occupant is not None and occupant.piece_type == piece_type
 
 
-def _attributed_to_opponent(text: str, start: int, board: chess.Board) -> bool:
+#: How far back an attribution cue may sit. The cap stops a run-on sentence from carrying
+#: one arbitrarily far.
+_ATTRIBUTION_FLOOR = 240
+
+
+def _sentence_window(text: str, start: int) -> str:
+    """Lowercased text from the start of the current sentence up to ``start``.
+
+    Backward-looking by design, and that is load-bearing: a cue AFTER the move belongs to
+    a later clause. "The better move is a3, which stops the opponent from taking on g5"
+    must leave a3 on our side, and it does because "opponent" is never in a3's window.
+    """
+    before = text[:start]
+    floor = max(0, start - _ATTRIBUTION_FLOOR)
+    sentence_start = max(before.rfind(ch, floor) for ch in ".!?\n")
+    return before[max(sentence_start + 1, floor) :].lower()
+
+
+def _recommended_tokens(text: str) -> frozenset[str]:
+    """SAN tokens the coach presents as OUR move: "the better move is Nf3".
+
+    Resolved text-wide, and it OVERRIDES attribution at the call sites, because
+    attribution is judged one occurrence at a time and a later mention inherits whatever
+    cue sits beside it. "The better move was Qb6+, which gives check … The opponent's
+    reply to Qb6+ is Kd7" put the second Qb6 in front of the word "opponent" and it was
+    reported as a reply the opponent cannot play. It is our move; the coach's error there
+    is describing a reply to the move we RECOMMEND rather than to the move played, which
+    is a coaching defect, not a false statement about the board.
+
+    A sentence carrying an opponent cue does not contribute, or the comparative in "the
+    opponent's STRONGEST reply after your move is bxa6" would claim their move for us —
+    which is how this rule first went wrong.
+    """
+    out: set[str] = set()
+    for m in _SAN_RE.finditer(text):
+        window = _sentence_window(text, m.start())
+        if "opponent" in window or "after your move" in window or "in reply" in window:
+            continue
+        if _OUR_MOVE_CUE_RE.search(window):
+            out.add(m.group(1))
+    return frozenset(out)
+
+
+def _attributed_to_opponent(text: str, start: int, board: chess.Board, played_uci: str = "") -> bool:
     """True if the move at ``start`` is framed as the OPPONENT's reply.
 
     The fidelity checker validates named moves against the position as given —
@@ -261,6 +304,11 @@ def _attributed_to_opponent(text: str, start: int, board: chess.Board) -> bool:
     play. Precision-first: recall is bounded (a fabricated opponent move is not
     caught here — the judge remains the backstop), but we stop punishing correct
     "the opponent plays X" coaching.
+
+    This is a ROUTING decision, not an exemption: a move attributed to the opponent
+    goes to :func:`_check_opponent_reply`, which validates it against the position
+    after the student's move — legality, the check marker, what it attacks and what it
+    captures. Sending it to the wrong checker is what produces a falsehood of our own.
     """
     before = text[:start]
     # Standard notation first: "..." immediately before a move means it is the
@@ -279,13 +327,58 @@ def _attributed_to_opponent(text: str, start: int, board: chess.Board) -> bool:
     # and flagged a false `illegal_move` on correct coaching. Attribution applies
     # to the clause it appears in, so a sentence is the right unit; the cap stops
     # a run-on sentence from carrying a cue arbitrarily far.
-    floor = max(0, start - 240)
-    sentence_start = max(before.rfind(ch, floor) for ch in ".!?\n")
-    window = before[max(sentence_start + 1, floor) :].lower()
+    window = _sentence_window(text, start)
     if "opponent" in window or "after your move" in window or "in reply" in window:
         return True
     opp = "black" if board.turn == chess.WHITE else "white"
-    return any(f"{opp} {verb}" in window for verb in _REPLY_VERBS)
+    if any(f"{opp} {verb}" in window for verb in _REPLY_VERBS):
+        return True
+
+    # Wording is not the only evidence, and on its own it has never been enough. The cue
+    # list requires the colour and the verb to be ADJACENT, so every grammatical variant
+    # the coach actually writes walks past it — "lets Black capture your bishop on d4
+    # with exd4", "which Black immediately exploits with bxa6", "allowing Black to
+    # recapture with Rdxc8", "allowed White to defend your pawn on h2 with Nf3", "letting
+    # them capture your pawn on g5 with Qxg5+". All five were flagged `illegal_move` in
+    # the v45 breadth sweep and all five were verified LEGAL on the board after the
+    # student's move: seven turns, fourteen firings, every one a falsehood of ours, and
+    # eight of the run's eleven fallbacks replaced coaching that was correct.
+    #
+    # So ask the board instead of the grammar. After the student's move it is the
+    # OPPONENT to play, so a token that parses there and does not parse in the position
+    # as given can only be their reply — whatever sentence the coach wrapped it in. This
+    # adds no cue words, which is deliberate: two earlier rounds of widening the wording
+    # (ledger rows 27 and 95) each produced false positives of their own.
+    #
+    # The one thing it could cost is an illegal move the coach RECOMMENDED that happens to
+    # be legal for the opponent — and the recommendation cue above has already returned for
+    # that case, before any of this runs.
+    if not played_uci:
+        return False
+    token_match = _SAN_RE.match(text, start)
+    if token_match is None:
+        return False
+    try:
+        played = chess.Move.from_uci(played_uci)
+    except ValueError:
+        return False
+    if played not in board.legal_moves:
+        return False
+    token = token_match.group(1)
+    if _legal_san(board, token):
+        return False  # legal for the student too, so the board cannot settle it
+    after = board.copy(stack=False)
+    after.push(played)
+    return _legal_san(after, token)
+
+
+def _legal_san(board: chess.Board, token: str) -> bool:
+    """Does ``token`` name a legal move in ``board``? Never raises."""
+    try:
+        board.parse_san(token)
+    except (chess.IllegalMoveError, chess.InvalidMoveError, chess.AmbiguousMoveError, ValueError):
+        return False
+    return True
 
 
 @dataclasses.dataclass(frozen=True)
@@ -357,6 +450,7 @@ def _check_named_moves(
     text: str,
     board: chess.Board,
     by_uci: dict[str, MenuMove],
+    played_uci: str = "",
 ) -> list[Violation]:
     """Flag named moves that are illegal or that the coach may not recommend.
 
@@ -371,7 +465,7 @@ def _check_named_moves(
 
     # Coordinate form is unambiguously a move.
     for m in _COORD_RE.finditer(text):
-        if _attributed_to_opponent(text, m.start(), board):
+        if _attributed_to_opponent(text, m.start(), board, played_uci):
             continue  # the opponent's reply, not a student move — validated against the wrong side
         frm, to = m.group(1).lower(), m.group(2).lower()
         try:
@@ -391,8 +485,12 @@ def _check_named_moves(
 
     # SAN form — only judge tokens that are unmistakably a move (a bare pawn
     # token like "e5" may be a square reference, so it is left alone).
+    ours = _recommended_tokens(text)
     for m in _SAN_RE.finditer(text):
-        if _attributed_to_opponent(text, m.start(), board):
+        # A move the coach recommended stays on our side wherever it is mentioned again,
+        # and the opponent-reply checker skips the same set — so the two halves agree and
+        # no token is dropped by both.
+        if m.group(1) not in ours and _attributed_to_opponent(text, m.start(), board, played_uci):
             continue  # the opponent's reply, not a student move — validated against the wrong side
         token = m.group(1)
         if _is_piece_reference(token, board):
@@ -490,6 +588,39 @@ _ATTACK_TARGET_RE = re.compile(
 #: appear somewhere in the message.
 _ATTACK_CLAIM_WINDOW = 90
 
+#: An opponent noun used as the SUBJECT of the consequence — "lets the opponent take your
+#: pawn on g5", "letting them capture on g5", "lets Black capture your bishop on d4",
+#: "After your move, they capture your pawn on b2". In every one of those the move named
+#: just before is OURS and the consequence is THEIRS, and charging it to our move invents
+#: a falsehood: five turns in the v45 sweep, all five verified true on the board, and the
+#: gate replaced the whole turn with template text.
+#:
+#: The negative lookahead is the entire distinction and it is what keeps the check alive.
+#: The possessive form names one of their PIECES — "Bc3 attacks Black's undefended bishop
+#: on b4" — and that is a claim about our own move, of exactly the shape this check exists
+#: to verify. It caught a falsehood that shipped in six consecutive runs (ledger row 94).
+#: The colour word is side-aware, supplied by the caller: reading the STUDENT's own colour
+#: as an opponent cue would silence the check on any message that names it.
+_OPPONENT_SUBJECT_RE = re.compile(
+    r"\b(?:opponent|after\s+your\s+move|in\s+reply)\b|\b(?:them|they)\b(?!['\u2019])",
+    re.IGNORECASE,
+)
+
+
+def _claim_belongs_to_opponent(span: str, opponent_word: str) -> bool:
+    """Is the consequence in ``span`` something the OPPONENT does, not our named move?
+
+    Opt-in: ``opponent_word`` empty means the caller does not want this guard. The
+    opponent-reply checker is exactly that caller — there the named move IS theirs, so a
+    clause about what they do is the claim under test, not a reason to skip it.
+    """
+    if not opponent_word:
+        return False
+    if _OPPONENT_SUBJECT_RE.search(span):
+        return True
+    return re.search(rf"\b{opponent_word}\b(?!['\u2019])", span, re.IGNORECASE) is not None
+
+
 #: Phrases that mean the move did NOT do the thing the verb describes. Without this the
 #: consequence check reads "Bb2 ... misses a chance to capture the pawn on g5" as a claim
 #: that Bb2 captures on g5, and flags a sentence that is entirely true. Discovered by
@@ -524,6 +655,17 @@ _RECOMMEND_CUE_RE = re.compile(
     re.IGNORECASE,
 )
 _RECOMMEND_CUE_WINDOW = 60
+
+#: The comparative that marks a move as OURS, used to keep it on our side of the
+#: opponent/student routing. Deliberately NARROWER than ``_RECOMMEND_CUE_RE``: that one
+#: also contains "instead", and "instead" points at the move the student PLAYED —
+#: "Instead, your move g4 lets them reply with exd4" — so reusing it here held the
+#: opponent's reply on our side and reinstated the false ``illegal_move`` on two of the
+#: seven turns this routing exists to clear.
+_OUR_MOVE_CUE_RE = re.compile(
+    r"\b(?:stronger|strongest|better|best|preferable|improvement)\b",
+    re.IGNORECASE,
+)
 
 # "<defence verb> ... <piece> on <square>" — the CLAIM. The defender is resolved
 # separately, by looking back for the nearest named piece-and-square, because the
@@ -566,6 +708,7 @@ def _attack_claim_violations(
     move: chess.Move,
     text: str,
     claim_start: int,
+    opponent_word: str = "",
 ) -> list[Violation]:
     """Check "<move> ... attacking the <piece> on <square>" against the pushed board.
 
@@ -588,9 +731,24 @@ def _attack_claim_violations(
     nxt = _NEXT_MOVE_RE.search(window)
     if nxt is not None:
         window = window[: nxt.start()]
+    # And stop at the end of the SENTENCE, for the same reason and against a case the
+    # move-token cut cannot catch. "…with fxg5. The better move is a3, which attacks their
+    # undefended bishop on b4" charged a3's claim to fxg5, because a bare pawn push is
+    # deliberately not in _NEXT_MOVE_RE, so nothing stopped the window crossing the full
+    # stop. Adjacency is this check's whole safety argument and a claim in the next
+    # sentence is not adjacent. Every falsehood it has ever caught was in-sentence.
+    stop = min((i for i in (window.find(ch) for ch in ".!?") if i != -1), default=-1)
+    if stop != -1:
+        window = window[:stop]
     for claim in _ATTACK_TARGET_RE.finditer(window):
         # "misses a chance to capture the pawn on g5" is not a claim that it captured.
         if _MISSED_OPPORTUNITY_RE.search(window[: claim.start()]):
+            continue
+        # "Your move, Be2, lets the opponent take your pawn on g5" is a claim about what
+        # THEY get to do, not about what Be2 attacks. Same guard as the missed-opportunity
+        # one and for the same reason: a checker that flags true sentences is worse than
+        # the gap it closes, because it teaches us to ignore it (ledger row 95).
+        if _claim_belongs_to_opponent(window[: claim.start()], opponent_word):
             continue
         target_name = (claim.group("after") or claim.group("before")).lower()
         try:
@@ -745,9 +903,18 @@ def _check_opponent_reply(text: str, board: chess.Board, played_uci: str) -> lis
 
     out: list[Violation] = []
     seen: set[str] = set()
+    # A move the coach RECOMMENDED cannot also be the opponent's reply. The SAME set the
+    # illegal-move check uses to hold such a token on our side, so the split is exhaustive:
+    # every token goes to exactly one of the two checks.
+    ours = _recommended_tokens(text)
     for m in _SAN_RE.finditer(text):
         token = m.group(1)
-        if token in seen or not _attributed_to_opponent(text, m.start(), board):
+        if token in ours:
+            continue
+        # The SAME predicate, with the SAME arguments, as the illegal-move check. This is
+        # a routing split and the two halves must agree exactly: a token one side skips
+        # has to be picked up by the other, or a fabricated opponent move goes unchecked.
+        if token in seen or not _attributed_to_opponent(text, m.start(), board, played_uci):
             continue
         if _is_piece_reference(token, after):
             continue  # "Be6" naming a piece that stands there, not a move
@@ -832,7 +999,7 @@ def _check_opponent_reply(text: str, board: chess.Board, played_uci: str) -> lis
     return out
 
 
-def _check_our_move_claims(text: str, board: chess.Board) -> list[Violation]:
+def _check_our_move_claims(text: str, board: chess.Board, played_uci: str = "") -> list[Violation]:
     """Verify what the coach says OUR OWN named move achieves.
 
     The v36 report card put every surviving falsehood in one slot, and the judge named
@@ -855,9 +1022,10 @@ def _check_our_move_claims(text: str, board: chess.Board) -> list[Violation]:
     """
     out: list[Violation] = []
     seen: set[str] = set()
+    ours = _recommended_tokens(text)
     for m in _SAN_RE.finditer(text):
         token = m.group(1)
-        if token in seen or _attributed_to_opponent(text, m.start(), board):
+        if token in seen or (token not in ours and _attributed_to_opponent(text, m.start(), board, played_uci)):
             continue
         if _is_piece_reference(token, board):
             continue  # "Re4" naming a rook already standing there, not a move
@@ -877,7 +1045,8 @@ def _check_our_move_claims(text: str, board: chess.Board) -> list[Violation]:
             continue  # legality of our own moves is _check_named_moves' job
         after_move = board.copy(stack=False)
         after_move.push(move)
-        out.extend(_attack_claim_violations("move_claim", token, after_move, move, text, m.end()))
+        opponent_word = "black" if board.turn == chess.WHITE else "white"
+        out.extend(_attack_claim_violations("move_claim", token, after_move, move, text, m.end(), opponent_word))
         out.extend(_file_control_violations("move_claim", token, move, text, m.end()))
     return out
 
@@ -1176,7 +1345,17 @@ def _check_capture_piece_type(text: str, board: chess.Board) -> list[Violation]:
         # different capture entirely, so the derived type does not apply to it.
         # Without this, "the better move is Rxh7" (a pawn) made "your opponent can
         # capture your knight on c3" a piece-type error.
-        if _attributed_to_opponent(text, m.start(), board):
+        #
+        # Judged by the claim guard rather than by move attribution, because this position
+        # holds a CLAIM PHRASE, not a move token — the same shape the attack-claim check
+        # reads, and the pronoun matters: "letting them capture your pawn on g5" was
+        # charged against a knight our own recommended move takes. Move attribution cannot
+        # take the pronoun (it would route our recommendations to the opponent's checker);
+        # a claim guard can, because widening it only ever costs recall.
+        opponent_word = "black" if board.turn == chess.WHITE else "white"
+        if _attributed_to_opponent(text, m.start(), board) or _claim_belongs_to_opponent(
+            text[max(0, m.start() - _ATTACK_CLAIM_WINDOW) : m.start()], opponent_word
+        ):
             continue
         claimed = m.group(1).lower()
         if claimed == actual or claimed in seen:
@@ -1257,14 +1436,14 @@ def _run_fidelity_checks(
     """
     by_uci = _menu_by_uci(menu)
     violations: list[Violation] = []
-    violations.extend(_check_named_moves(text, board, by_uci))
+    violations.extend(_check_named_moves(text, board, by_uci, played_uci))
     violations.extend(_check_placement(text, board))
     violations.extend(_check_ownership(text, board))
     violations.extend(_check_defence_relation(text, board))
     violations.extend(_check_terminal_label(text, board, played_uci))
     violations.extend(_check_intent_attribution(text, board, played_uci))
     violations.extend(_check_opponent_reply(text, board, played_uci))
-    violations.extend(_check_our_move_claims(text, board))
+    violations.extend(_check_our_move_claims(text, board, played_uci))
     violations.extend(_check_development(text, board))
     violations.extend(_check_empty_source(text, board))
     violations.extend(_check_capture_piece_type(text, board))

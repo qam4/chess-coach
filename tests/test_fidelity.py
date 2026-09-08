@@ -389,6 +389,97 @@ def test_attribution_does_not_leak_across_sentences() -> None:
     assert not _attributed_to_opponent(text, hit.start(), board)
 
 
+#: Real coach sentences from the v45 breadth sweep, with the position and the move the
+#: student actually played. Every one was rejected by the gate, every one was then verified
+#: LEGAL and TRUE on the board, and between them they caused 8 of the run's 11 fallbacks —
+#: correct coaching replaced by template text. Kept verbatim rather than paraphrased,
+#: because the grammar IS the defect: each names the opponent in a form the adjacency-based
+#: cue list did not recognise.
+_V45_FALSE_POSITIVES: list[tuple[str, str, str]] = [
+    # "lets Black capture ... with exd4" — colour and verb not adjacent.
+    (
+        "r1b1k1r1/pppp1p1p/8/4p1P1/1b1B4/1P2P3/P1P1B1nP/RN1K3R w q - 0 16",
+        "e2c4",
+        "Your move, Bc4, lets Black capture your bishop on d4 with exd4, winning material.",
+    ),
+    # "which Black immediately exploits with bxa6" — an adverb between the two.
+    (
+        "1rb1k1nr/pp3ppp/n1p5/3qp3/Q2P4/2P5/P2BPPPP/1R2KBNR w Kk - 2 9",
+        "a4a6",
+        "Your move Qxa6 left your queen undefended on a6, which Black immediately exploits with bxa6.",
+    ),
+    # "lets them reply with exd4" — a pronoun, which the colour list cannot hold.
+    (
+        "3k1r2/p4ppp/p1p2n2/4p3/2PP4/5P2/4PKPP/2q2BNR w - - 1 17",
+        "g2g4",
+        "Instead, your move g4 lets them reply with exd4, capturing your pawn on d4.",
+    ),
+]
+
+
+def test_opponent_reply_is_recognised_however_it_is_phrased() -> None:
+    # The board settles the routing where the grammar cannot: after the student's move it
+    # is the OPPONENT to play, so a token that parses there and not in the position as
+    # given can only be their reply. No new cue words — two earlier rounds of widening the
+    # wording each produced false positives of their own (ledger rows 27 and 95).
+    for fen, played_uci, text in _V45_FALSE_POSITIVES:
+        kinds = _kinds(check_text_fidelity(text, fen, played_uci=played_uci))
+        assert "illegal_move" not in kinds, text
+        assert "move_claim" not in kinds, text
+
+
+def test_consequence_belonging_to_the_opponent_is_not_charged_to_our_move() -> None:
+    # "Your move, Be2, lets the opponent take your pawn on g5" is a claim about what THEY
+    # get to do. Verified on the board: after Be2 the opponent really can play Rxg5.
+    fen = "r1b1k1r1/pppp1p1p/4p3/6P1/1bBB4/1P2P3/P1P3nP/RN1K3R w q - 0 15"
+    text = "Your move, Be2, lets the opponent take your pawn on g5 without consequence."
+    assert "move_claim" not in _kinds(check_text_fidelity(text, fen, played_uci="c4e2"))
+
+
+def test_our_own_consequence_claim_is_still_checked() -> None:
+    # The guard must not swallow the check it lives in. The possessive form names one of
+    # THEIR pieces and is a claim about OUR move — the shape that caught a falsehood which
+    # shipped in six consecutive runs (ledger row 94). Verified: after Bd2 the bishop does
+    # not attack h7, and a black pawn stands there.
+    fen = "r1bqk2r/pppp1ppp/2n5/4p3/1bBPP3/2N5/PPP2PPP/R1BQK2R w KQkq - 0 7"
+    text = "The better move is Bd2, which attacks Black's undefended bishop on h7."
+    assert "move_claim" in _kinds(check_text_fidelity(text, fen))
+
+
+def test_attack_claim_does_not_cross_a_sentence_boundary() -> None:
+    # v45 control ply 20: "...with fxg5. The better move is a3, which attacks their
+    # undefended bishop on b4" charged a3's claim to fxg5. A bare pawn push is deliberately
+    # absent from the next-move guard, so only the full stop can stop the window.
+    fen = "r1b1k2r/pppp1p1p/4ppn1/6N1/1bB2P2/1P2P3/P1P1K1PP/RNB4R w kq - 0 11"
+    text = (
+        "Your move, Kd1, lets your opponent capture your knight on g5 with fxg5. "
+        "The better move is a3, which attacks their undefended bishop on b4."
+    )
+    assert not [x for x in check_text_fidelity(text, fen, played_uci="e2d1") if x.kind == "opponent_reply"]
+
+
+def test_a_recommended_move_is_never_read_as_the_opponents_reply() -> None:
+    # v45 french ply 33. Attribution is judged one occurrence at a time, so the second
+    # mention of Qb6+ sat in front of the word "opponent" and was reported as a reply the
+    # opponent cannot play. It is our move, named as such earlier in the same message.
+    fen = "2bk3r/1p4p1/B1n1p2n/p1Q1p2p/3Pp3/8/PP3PPP/1R1K2NR w - - 0 19"
+    text = (
+        "The better move was Qb6+, which gives check. The opponent's reply to Qb6+ is Kd7, "
+        "which allows you to take on b7."
+    )
+    assert "opponent_reply" not in _kinds(check_text_fidelity(text, fen, played_uci="g1f3"))
+
+
+def test_their_strongest_reply_is_still_their_move() -> None:
+    # The comparative that marks OUR move also appears in "the opponent's STRONGEST reply
+    # after your move is bxa6". Reading that as a recommendation put their move on our side
+    # and reinstated the false illegal_move — which is why the recommended-move set ignores
+    # any sentence carrying an opponent cue. bxa6 is illegal here and legal after Qxa6.
+    fen = "1rb1k1nr/pp3ppp/n1p5/3qp3/Q2P4/2P5/P2BPPPP/1R2KBNR w Kk - 2 9"
+    text = "Your queen is loose. The opponent's strongest reply after your move is bxa6, winning your queen."
+    assert "illegal_move" not in _kinds(check_text_fidelity(text, fen, played_uci="a4a6"))
+
+
 def test_adherence_kinds_do_not_gate_the_send_path() -> None:
     # off_menu and unsound_move measure adherence to OUR "only name sound moves"
     # rule, not truth about the board, and the warn-context guard protecting them
