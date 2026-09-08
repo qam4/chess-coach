@@ -507,7 +507,7 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
         # in what they lead with, and in word limit.
         assert "there was a stronger move here" in prompt_lower
     else:
-        assert "lead with the consequence" in prompt_lower
+        assert "lead with what went wrong" in prompt_lower
 
     if not played_best and report.eval_drop_cp > SOUND_MAX_DROP_CP:
         assert "do not grade the move" in prompt_lower
@@ -608,8 +608,11 @@ def test_critical_moment_prompt_content(report: PositionReport) -> None:
         # on nothing. Real reasons are sentences ("eval spread between best and
         # 3rd-best line is 107cp"), so only those are meaningful to look for here.
         # test_no_magnitude_leak asserts the exact realistic string.
+        # The length guard alone was not enough: hypothesis found "000000000000", exactly 12
+        # characters, which also occurs inside a generated PV theme — so the substring test fired
+        # on a coincidence, not a leak. A real reason is a sentence and contains letters.
         reason = (report.critical_reason or "").strip()
-        if len(reason) >= 12:
+        if len(reason) >= 12 and any(c.isalpha() for c in reason):
             assert reason.lower() not in prompt_lower, (
                 "The engine's critical_reason is eval bookkeeping and must not reach the prompt"
             )

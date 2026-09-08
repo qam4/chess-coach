@@ -394,9 +394,8 @@ placements, tactics, or "and then..." continuations.
 _MOVE_EVAL_INSTRUCTIONS_SERIOUS = """\
 COACHING INSTRUCTIONS:
 - This move let something concrete happen. Do NOT open with praise or "great \
-job". Lead with the consequence: if an "Opponent's reply" is shown, name that \
-single reply ("after your move, the opponent plays X") and what it wins, using \
-the threats shown. Do NOT list a longer sequence of moves.
+job". Lead with what went wrong, using only what is given above. Do NOT list a \
+sequence of moves.
 - Then name the concrete better move. Be direct, not generic. No motivational \
 sign-off.
 - Do NOT grade the move or say how much it cost. Do not call it an \
@@ -427,6 +426,32 @@ placements, tactics, or "and then..." continuations.
 # So the demand becomes conditional on whether we can meet it. This is the same
 # withhold-don't-instruct shape as the `equal` tier (ledger row 28): the model cannot
 # report a reason we never gave it, and asking it not to invent one has never worked.
+#: What to say about the opponent's answer — and it is only ever offered when we HAVE one.
+#:
+#: The old wording carried the worked example on every turn: 'if an "Opponent's reply" is shown,
+#: name that single reply ("after your move, the opponent plays X")'. Conditional in words, an
+#: invitation in practice. The breadth sweep measured the result across five games: 36 rejected
+#: claims of the form "the opponent cannot play X after your move", and on the control game 0 of
+#: the 5 rejected turns had a refutation line supplied at all. The model was handed a sentence
+#: pattern with no move to put in it, so it supplied one, and the gate then replaced the whole
+#: turn with template text — a third of all coached turns.
+#:
+#: Same fix as the reason clause in v37: offer the pattern only when the data is there, and say
+#: plainly that there is nothing to name when it is not. The withheld half is a negative
+#: instruction and those do not hold on their own, which is why the gate stays — but not
+#: provoking the invention is cheaper than catching it.
+_REPLY_SUPPLIED = """\
+- THE OPPONENT'S ANSWER: name the single reply shown above ("after your move, the \
+opponent plays X") and what it wins, using the threats shown. Do NOT continue past \
+that one move.
+"""
+
+_REPLY_WITHHELD = """\
+- THE OPPONENT'S ANSWER is NOT given above, so you do not know it. Do NOT name a \
+move for the opponent, do not write "the opponent plays ...", and do not work one out \
+from the position. Lead with what is above instead.
+"""
+
 _REASON_SUPPLIED = """\
 - WHY it is the better move: the one line above describing what that move does is \
 the ONLY reason you may give. Put it in your own words. Do NOT add a second reason \
@@ -2418,6 +2443,8 @@ def build_rich_move_evaluation_prompt(
     # no reason at all when we do not. The tier blocks no longer ask for a reason
     # themselves, so this is the only thing in the prompt that permits one.
     move_instructions = _TIER_INSTRUCTIONS[tier] + (_REASON_SUPPLIED if best_move_line else _REASON_WITHHELD)
+    if tier not in _OWN_MOVE_TIERS:
+        move_instructions += _REPLY_SUPPLIED if refutation_section else _REPLY_WITHHELD
     if history_section and tier not in _OWN_MOVE_TIERS:
         move_instructions += _HISTORY_SUPPLIED
     if focus_instruction:

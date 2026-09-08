@@ -308,7 +308,9 @@ class TestPlayedBestMove:
         # what it wins — a board fact — rather than from calling the move a mistake.
         report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-        assert "Lead with the consequence" in prompt
+        # The reply template is no longer offered unconditionally — see _REPLY_SUPPLIED /
+        # _REPLY_WITHHELD. The tier still leads with the failure rather than a grade.
+        assert "Lead with what went wrong" in prompt
         assert "serious mistake" not in prompt
         assert "Do NOT grade the move" in prompt
         assert "No motivational sign-off" in prompt
@@ -338,7 +340,7 @@ def test_refutation_renders_only_first_reply() -> None:
     prompt = build_rich_move_evaluation_prompt(report, "intermediate")
     assert "Opponent's reply" in prompt
     assert "strongest reply is Qh4" in prompt  # single move rendered
-    assert "name that single reply" in prompt  # serious tier voices one reply
+    assert "name the single reply shown above" in prompt  # serious tier voices one reply
 
 
 def test_move_eval_prompt_requires_named_principle_and_hook() -> None:
