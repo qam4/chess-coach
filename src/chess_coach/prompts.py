@@ -430,11 +430,12 @@ placements, tactics, or "and then..." continuations.
 #:
 #: The old wording carried the worked example on every turn: 'if an "Opponent's reply" is shown,
 #: name that single reply ("after your move, the opponent plays X")'. Conditional in words, an
-#: invitation in practice. The breadth sweep measured the result across five games: 36 rejected
-#: claims of the form "the opponent cannot play X after your move", and on the control game 0 of
-#: the 5 rejected turns had a refutation line supplied at all. The model was handed a sentence
-#: pattern with no move to put in it, so it supplied one, and the gate then replaced the whole
-#: turn with template text — a third of all coached turns.
+#: invitation in practice. The breadth sweep measured the result across five games: 44 rejected
+#: claims of the form "the opponent cannot play X after your move", spread over 20 distinct turns
+#: — every one of which failed twice and so fell back to template text. That is 20 of the 24
+#: fallbacks in the run, a third of all coached turns, from this one instruction. And on 18 of
+#: those 20 turns no refutation line was rendered at all: the model was handed a sentence pattern
+#: with no move to put in it, so it supplied one.
 #:
 #: Same fix as the reason clause in v37: offer the pattern only when the data is there, and say
 #: plainly that there is nothing to name when it is not. The withheld half is a negative

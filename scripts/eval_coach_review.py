@@ -78,6 +78,7 @@ def _start_for_seed(seed: int) -> tuple[str, str]:
     """``(label, fen)`` for this seed, falling back to the standard start."""
     return SEED_OPENINGS.get(seed, ("standard start", START_FEN))
 
+
 # Curated positions to guarantee endgame (and one middlegame tactic) coverage so
 # the reviewer can assess phase-appropriateness even if the game stalls earlier.
 # (fen, student_move_uci). Ground truth is still engine-derived at eval time.

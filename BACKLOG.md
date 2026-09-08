@@ -406,8 +406,15 @@ shrink with depth.
 ### OPEN — Re-run the breadth sweep against the reference engine
 
 Check the 45% disagreement is not a property of this one game. The five fixed games
-already exist in `scripts/eval_check_breadth.py`; the reference harness now exists
-too. Moderate cost.
+already exist in `scripts/eval_check_breadth.py`, and `scripts/eval_prompt_coverage.py`
+now replays them engine-only in ~80 seconds, which is the shape this measurement wants
+— no LLM, no judge, just two engines over the same positions.
+
+**Blocked on a binary, not on design: there is no Stockfish on this machine**, and no
+committed harness that uses one (the original numbers came from an ad-hoc script in a
+Blunder-side session). Reinstating this needs Stockfish installed as a *measurement*
+reference — which is a smaller decision than the runtime dependency the option above
+describes, and worth separating from it.
 
 ### Closed by measurement, do not reopen
 
