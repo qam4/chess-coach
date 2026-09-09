@@ -51,6 +51,58 @@ the LLM produced is true. That stays.
 When those land, `engine_trust.capability_gaps()` is the list to re-measure, and
 each entry already names what would make us believe it again.
 
+## TOP — three items from the first non-wash A/B (2026-09-09, ledger rows 118-120)
+
+v43 vs v48 came back 11-6 to v48, the first blind comparison in the project that is not
+a coin flip. These are the six pairs it LOST, each with a verified cause. Ordered by
+impact, and all three are ours rather than the engine's or the model's.
+
+### OPEN — Supply the opponent's reply on every turn that has one
+
+On plies 28 and 34 no refutation line was supplied, v43's model invented one, and both
+inventions were TRUE and checkable ("the opponent plays Rxg5, winning your undefended
+pawn on g5"). v48 obeys the withhold and says nothing concrete, and the judge was
+unanimous for v43 on both, naming the missing refutation as the reason.
+
+So the withhold is right and the DATA GAP is what needs closing: ask the engine for the
+best move in the position after the student's move whenever `refutation_line` is empty.
+That is the engine answering "which move is best", which is its job — no chess logic
+moves into this repo. Costs one extra engine call on the turns that currently have none.
+
+Measure with the same pairwise harness on plies 28 and 34 specifically, not on the
+aggregate: 18 pairs cannot resolve a two-turn change (row 101).
+
+### OPEN — One subject per turn, chosen rather than left to survive
+
+Verified instance of the systemic filtering problem (row 103). On ply 34 the prompt
+carried two competing subjects on different squares — "Undefended AFTER your move: your
+pawn on g5" and "How this came about: your king was the only piece guarding c2" — plus
+an instruction reading "the undefended piece named above is the subject of this turn".
+Nothing chooses. v43's model kept them apart, v48's merged them into a false sentence,
+from a byte-identical prompt.
+
+The cause should win when the two disagree, because the cause is what the turn teaches.
+
+### OPEN — Say whether the move CAUSED the piece to be undefended
+
+The header "--- Undefended AFTER your move ---" describes a STATE and reads as
+causation, and the model duly wrote "you allowed your pawn on c2 to become undefended"
+about a pawn that was already undefended before the move (ply 40, verified). We already
+diff the attacker sets in `error_diagnosis.py`, so we know which it is and can say so
+instead of leaving it to be inferred. Cheap.
+
+Note this class is invisible to the fidelity gate, which checks moves, captures,
+attacks, placement and ownership but nothing about causation — so it ships. Both
+falsehoods came from the judge's prose, not from any counter we have.
+
+### OPEN — Restore the reply's prominence in `_REPLY_SUPPLIED`
+
+Self-inflicted in v48. Tightening the instruction to "the line it appears on is the ONLY
+description you may give" cost the consequence at ply 20 ("omits the cost") and produced
+a duplicated "The opponent's reply after your move is exd4" at ply 30 that the judge
+marked down. The reply and what it wins should LEAD, as the old wording had it, with the
+composed clause as the only permitted source.
+
 ## TOP — the engine's numbers are not the truth (2026-08-20)
 
 Measured, not suspected. Blunder at depth 8 (our shipping config) disagrees with

@@ -206,9 +206,12 @@ def main() -> int:
         ),
         encoding="utf-8",
     )
-    split = sum(
-        1 for r in records if len(set(r["votes"].values())) > 1 or max(r["votes"].values()) < args.judge_repeats
-    )
+    # Unanimous means every vote went the same way, i.e. one option holds all of them. The
+    # first version tested `len(set(votes.values())) > 1`, which is true of ANY tally
+    # containing a zero — so a clean 3-0 counted as a split and the v43-vs-v48 run reported
+    # "18/18 pairs were not unanimous" when 15 of 18 were unanimous. That line is what tells
+    # us whether the instrument is behaving, so a bug in it hides the thing it exists to show.
+    split = sum(1 for r in records if max(r["votes"].values()) < args.judge_repeats)
     print("\n" + render_pairwise(summary))
     print(f"\nper-pair judge disagreement: {split}/{len(records)} pairs were not unanimous")
     print(f"Results: {out / 'pairwise.json'}")
