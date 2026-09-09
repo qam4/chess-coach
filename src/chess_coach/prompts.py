@@ -460,14 +460,22 @@ placements, tactics, or "and then..." continuations.
 #: unanimous. Naming the reply is not a disclaimer to append — it IS the consequence, and it
 #: is what makes the severity checkable by the student rather than asserted by us.
 #:
-#: So: lead with it, say what it wins, say it once, and take the wording from the composed
-#: line and nowhere else.
+#: So: lead with it, say once what the composed line says it does, and take the wording from
+#: that line and nowhere else.
+#:
+#: "and what it WINS" was the first attempt and it repeated the mistake it was fixing. Most
+#: replies win nothing — the composed clause says "attacking your bishop on d4" or names a
+#: quiet effect — so demanding a win produced one: at ply 28 the coach turned our "attacking
+#: your bishop on d4" into "winning your bishop on d4", and the judge marked it down as an
+#: unsupported tactical claim. Same shape as the threats reference this file already records:
+#: ask for a claim we have not supplied and the model supplies it.
 _REPLY_SUPPLIED = """\
 - THE OPPONENT'S ANSWER: lead with it. In ONE sentence, name the single reply shown above \
-and what it wins ("after your move, the opponent plays X, winning your Y on Z"). The line \
-it appears on is the ONLY source for what that reply does — do NOT add a threat, a capture, \
-a piece or a square that line does not name. State the reply ONCE, do not repeat it as a \
-separate sentence, and do NOT continue past that one move.
+and what the line above says it does ("after your move, the opponent plays X, capturing your \
+Y on Z"). That line is the ONLY source — do NOT upgrade what it says (if it says the reply \
+ATTACKS something, do not write that it wins it), and do NOT add a threat, capture, piece or \
+square it does not name. State the reply ONCE, not again as a separate sentence, and do NOT \
+continue past that one move.
 """
 
 _REPLY_WITHHELD = """\
@@ -1984,7 +1992,12 @@ def compose_safe_move_feedback(report: ComparisonReport, lesson_times_taught: in
             # without re-teaching, which is what the LLM path is asked to do.
             parts.append("Same idea as earlier in this game.")
         else:
-            parts.append(f"Worth remembering: {lesson}.")
+            # Several lessons are phrased as the question the student should ask, so they
+            # already end in "?" and adding a full stop produced "…can I just take?." — which
+            # a blind judge called a garbled sentence and marked the turn down for. Our text,
+            # our punctuation.
+            tail = "" if lesson.endswith(("?", "!", ".")) else "."
+            parts.append(f"Worth remembering: {lesson}{tail}")
     return " ".join(parts)
 
 

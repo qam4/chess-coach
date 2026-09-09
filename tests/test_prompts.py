@@ -348,12 +348,13 @@ def test_refutation_renders_only_first_reply() -> None:
     assert "using the threats shown" not in prompt
     assert "--- Threats ---" not in prompt
     # The composed line is the only source for what the reply does, and the reply LEADS.
-    # Both halves matter: a blind A/B lost ply 20 for omitting the cost and ply 30 for
-    # repeating the reply as a separate sentence, so the instruction names all three
-    # constraints — lead with it, say what it wins, say it once.
-    assert "ONLY source for what that reply does" in prompt
+    # Three constraints, each earned by a lost pair in a blind A/B: lead with it (ply 20 was
+    # lost for burying it), say it once (ply 30 repeated it), and do not upgrade what the line
+    # says (ply 28 turned our "attacking your bishop on d4" into "winning" it).
+    assert "That line is the ONLY source" in prompt
     assert "lead with it" in prompt
     assert "State the reply ONCE" in prompt
+    assert "do not write that it wins it" in prompt
 
 
 def test_move_eval_prompt_requires_named_principle_and_hook() -> None:
