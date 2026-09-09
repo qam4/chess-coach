@@ -155,6 +155,12 @@ def main() -> None:
                 move_number = int(fen_before.split()[-1]) if fen_before.split() else 1
                 if (move_number <= 6 and comparison.eval_drop_cp <= 150) or comparison.eval_drop_cp <= 50:
                     return TurnRecord(ply, fen_before, student_move, "", 0, 0, 0, "good", [], "")
+                # Name the opponent's answer where the engine gave none, exactly as the
+                # shipping Coach now does. Without this the sweep would measure a coach that
+                # withholds the reply on ~30 of 70 turns while the product names it, and the
+                # fidelity numbers would not describe anything we ship. No `after_report` to
+                # hand over here, so this pays for one extra evaluation per coached turn.
+                comparison = oracle.with_refutation(comparison, depth=depth)
                 pos_report = oracle.get_position_report(fen_before, multipv=args.multipv, depth=depth)
                 facts = feature_facts(pos_report)
                 preferred = (

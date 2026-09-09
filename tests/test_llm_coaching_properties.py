@@ -262,6 +262,9 @@ def test_coaching_path_routing(llm_available: bool, template_only: bool) -> None
     mock_engine = MagicMock(spec=CoachingEngine)
     mock_engine.coaching_available = True
     mock_engine.is_ready.return_value = True
+    # Identity: this fixture supplies its own comparison report, and a bare MagicMock return
+    # would replace it with one whose eval_drop_cp is not a number.
+    mock_engine.with_refutation.side_effect = lambda report, *a, **kw: report
 
     minimal_report = PositionReport(
         fen=STARTING_FEN,

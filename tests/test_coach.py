@@ -162,6 +162,10 @@ def _mock_coaching_engine():
     engine.coaching_available = True
     engine.is_ready.return_value = True
     engine.get_position_report.return_value = _coaching_report()
+    # The real method returns the report, filling `refutation_line` from the engine when it is
+    # empty. A bare MagicMock would return a MagicMock and every downstream field read would
+    # silently pass, so mirror the identity case: these fixtures supply their own reports.
+    engine.with_refutation.side_effect = lambda report, *a, **kw: report
     return engine
 
 

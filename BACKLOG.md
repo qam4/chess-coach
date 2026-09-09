@@ -57,6 +57,24 @@ v43 vs v48 came back 11-6 to v48, the first blind comparison in the project that
 a coin flip. These are the six pairs it LOST, each with a verified cause. Ordered by
 impact, and all three are ours rather than the engine's or the model's.
 
+### OPEN — The breadth sweep builds its own prompt and omits `position_after`
+
+Found while wiring the refutation fill. `scripts/eval_check_breadth.py` calls
+`build_rich_move_evaluation_prompt` directly and never passes `position_after`, so its
+prompts carry no "Undefended AFTER your move" section and no focus instruction — while
+the shipping Coach supplies both. Every fallback number in the ledger from v44 onward was
+measured on that slightly thinner prompt.
+
+It does not invalidate those numbers in the pessimistic direction (fewer facts means fewer
+chances to make a false claim, so the sweep understates rather than overstates the gate),
+but it is the same hand-mirroring that the report card was rewritten to escape — see the
+`_coach_turn` docstring in `scripts/eval_coach_review.py`, which records three separate
+drifts before it was pointed at `Coach.evaluate_move`.
+
+Deliberately NOT fixed in the same change as the refutation fill: adding a fact section
+alters the prompt on most turns, and folding it into the same run would leave us unable to
+say which change moved the number.
+
 ### OPEN — Supply the opponent's reply on every turn that has one
 
 On plies 28 and 34 no refutation line was supplied, v43's model invented one, and both

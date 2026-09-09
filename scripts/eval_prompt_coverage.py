@@ -113,6 +113,9 @@ def main() -> None:
                 move_number = int(fen_before.split()[-1]) if fen_before.split() else 1
                 if (move_number <= 6 and comparison.eval_drop_cp <= 150) or comparison.eval_drop_cp <= 50:
                     return TurnRecord(ply, fen_before, student_move, "", 0, 0, 0, "good", [], "")
+                # Same fill the shipping Coach applies, or this would report the reply as
+                # withheld on turns where the product names it.
+                comparison = oracle.with_refutation(comparison, depth=depth)
                 prompt = build_rich_move_evaluation_prompt(comparison, level=args.level)
                 found = diagnose(fen_before, student_move, comparison.best_move)
                 turns.append(

@@ -62,6 +62,9 @@ class TestTemplateOnlyCoach:
         mock_engine = MagicMock()
         mock_engine.coaching_available = True
         mock_engine.__class__ = type("CoachingEngine", (), {})
+        # Identity: the report below is the one under test, so it must survive the
+        # refutation fill rather than being replaced by a MagicMock.
+        mock_engine.with_refutation.side_effect = lambda report, *a, **kw: report
 
         mock_llm = MagicMock(spec=NullProvider)
 

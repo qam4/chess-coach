@@ -739,6 +739,72 @@ class CoachingEngine(EngineProtocol):
         data = self._send_coaching_command(cmd)
         return validate_comparison_report(data)
 
+    def with_refutation(
+        self,
+        report: "ComparisonReport",
+        depth: int | None = None,
+        after_report: "PositionReport | None" = None,
+    ) -> "ComparisonReport":
+        """``report`` with ``refutation_line`` filled from a second search, if it was empty.
+
+        Closes a data gap the blind A/B found (ledger row 119). The engine returns no
+        refutation on 30 of 70 coached turns, and on those the prompt tells the coach it does
+        not know the opponent's answer — correctly, because we never asked. v43's model
+        invented one anyway on plies 28 and 34 ("the opponent plays Rxg5, winning your
+        undefended pawn on g5"); both were TRUE, both passed the gate, and a blind judge
+        preferred them unanimously to the vaguer text that replaced them. Withholding the
+        pattern stopped the false inventions and the true ones together.
+
+        So ask instead of forbidding. After the student's move it is the opponent to play, and
+        "what is the best move here" is the engine's own question — this adds a search, not
+        chess knowledge of ours.
+
+        Usually it adds no search at all. Pass ``after_report`` when the caller already has the
+        post-move evaluation, which the shipping Coach does: it fetches exactly this report to
+        answer "what is undefended now". Then the reply is already paid for and this is a field
+        read. Callers without one pay for a single evaluation, and should call this AFTER the
+        skip rules so a turn the coach stays silent on costs nothing.
+
+        Returns the report unchanged when a refutation is already present, when the move cannot
+        be applied, when the game has ended (there is no reply to name), or when the engine
+        offers no line. Never raises: a missing reply is the status quo, and a coaching turn
+        should not fail because a second opinion was unavailable.
+        """
+        # Imported here rather than at module scope, following this file's convention: the
+        # protocol layer keeps its import surface thin and pulls in models/board helpers per
+        # method.
+        import dataclasses
+
+        import chess
+
+        if report.refutation_line:
+            return report
+        try:
+            board = chess.Board(report.fen)
+            board.push(chess.Move.from_uci(report.user_move))
+        except (ValueError, AssertionError, chess.IllegalMoveError, chess.InvalidMoveError):
+            return report
+        if board.is_game_over():
+            return report
+        after = after_report
+        if after is None:
+            try:
+                after = self.get_position_report(board.fen(), multipv=1, depth=depth)
+            except Exception:  # noqa: BLE001 — see docstring: never fail a turn for this
+                logger.info("with_refutation: second search unavailable, leaving the reply unnamed")
+                return report
+        if not after.top_lines or not after.top_lines[0].moves:
+            return report
+        reply = after.top_lines[0].moves[0]
+        # Verified legal before it is handed on, so the field keeps the board-verifiable
+        # property `engine_trust` records for it.
+        try:
+            if chess.Move.from_uci(reply) not in board.legal_moves:
+                return report
+        except ValueError:
+            return report
+        return dataclasses.replace(report, refutation_line=[reply])
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

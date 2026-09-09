@@ -320,3 +320,118 @@ class TestXboardEngineTimeout:
 
         # Should return relatively quickly (within timeout + margin)
         assert elapsed < 1.0
+
+
+# ---------------------------------------------------------------------------
+# CoachingEngine.with_refutation — filling the opponent's reply
+# ---------------------------------------------------------------------------
+
+
+def _comparison(fen: str, user_move: str, refutation: list[str] | None):
+    from chess_coach.models import ComparisonReport
+
+    return ComparisonReport(
+        fen=fen,
+        user_move=user_move,
+        user_eval_cp=-150,
+        best_move=user_move,
+        best_eval_cp=0,
+        eval_drop_cp=150,
+        classification="mistake",
+        nag="?",
+        best_move_idea="",
+        refutation_line=refutation,
+        missed_tactics=[],
+        top_lines=[],
+        critical_moment=False,
+        critical_reason=None,
+    )
+
+
+def _position_with_best(uci: str):
+    """A PositionReport whose only content is the best line — all this method reads."""
+    from chess_coach.models import (
+        EvalBreakdown,
+        KingSafety,
+        PawnFeatures,
+        PositionReport,
+        PVLine,
+    )
+
+    return PositionReport(
+        fen="8/8/8/8/8/8/8/8 w - - 0 1",
+        eval_cp=0,
+        eval_breakdown=EvalBreakdown(material=0, mobility=0, king_safety=0, pawn_structure=0),
+        hanging_pieces={"white": [], "black": []},
+        threats={"white": [], "black": []},
+        pawn_structure={"white": PawnFeatures([], [], []), "black": PawnFeatures([], [], [])},
+        king_safety={"white": KingSafety(0, "safe"), "black": KingSafety(0, "safe")},
+        top_lines=[PVLine(depth=10, eval_cp=0, moves=[uci] if uci else [], theme="")],
+        tactics=[],
+        threat_map=[],
+        threat_map_summary=None,
+        critical_moment=False,
+        critical_reason=None,
+    )
+
+
+def _fill(report, after):
+    """Call the method with a dummy ``self``.
+
+    Legitimate here because supplying ``after_report`` is the path that never touches the
+    instance — that is the whole point of the parameter, and it is the path the shipping Coach
+    takes, since it already has this report for its own hanging-piece section.
+    """
+    from chess_coach.engine import CoachingEngine
+
+    return CoachingEngine.with_refutation(object(), report, after_report=after)  # type: ignore[arg-type]
+
+
+class TestWithRefutation:
+    """The engine returns no reply on ~30 of 70 coached turns; this fills it (ledger row 119).
+
+    Asserts on ROUTING, not on chess quality: which move is best is the engine's judgement, and
+    what matters here is whether we ask for it, verify it is playable, and pass it through
+    without disturbing anything else on the report.
+    """
+
+    START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+    def test_existing_refutation_is_left_alone(self):
+        report = _comparison(self.START, "e2e4", ["e7e5"])
+        out = _fill(report, _position_with_best("g8f6"))
+        assert out.refutation_line == ["e7e5"]
+        assert out is report  # untouched, not rebuilt
+
+    def test_empty_refutation_is_filled_from_the_engines_best_line(self):
+        report = _comparison(self.START, "e2e4", None)
+        out = _fill(report, _position_with_best("e7e5"))
+        assert out.refutation_line == ["e7e5"]
+        # Nothing else may change: this is one field, not a re-derivation.
+        assert out.fen == report.fen
+        assert out.user_move == report.user_move
+        assert out.eval_drop_cp == report.eval_drop_cp
+
+    def test_a_reply_that_is_not_legal_is_refused(self):
+        # Keeps the board-verifiable property `engine_trust` records for this field: a garbled
+        # line must leave the coach saying nothing rather than naming an impossible move.
+        report = _comparison(self.START, "e2e4", None)
+        out = _fill(report, _position_with_best("e2e4"))  # White's move, not Black's reply
+        assert out.refutation_line is None
+
+    def test_an_empty_line_leaves_the_reply_unnamed(self):
+        report = _comparison(self.START, "e2e4", None)
+        assert _fill(report, _position_with_best("")).refutation_line is None
+
+    def test_an_unplayable_student_move_is_refused(self):
+        report = _comparison(self.START, "e7e5", None)  # Black's move, White to play
+        assert _fill(report, _position_with_best("e7e5")).refutation_line is None
+
+    def test_a_finished_game_has_no_reply_to_name(self):
+        # Verified: 1.f3 e5 2.g4 and Black's Qh4 is mate, so after the student's move there is
+        # no reply to name. The student DELIVERING mate is a coached turn (a move that ends the
+        # game always gets a word), so this branch is reachable, not theoretical.
+        before_mate = "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2"
+        report = _comparison(before_mate, "d8h4", None)
+        out = _fill(report, _position_with_best("e1f2"))
+        assert out.refutation_line is None

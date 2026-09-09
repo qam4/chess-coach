@@ -798,6 +798,17 @@ class Coach:
                     after_report = self.engine.get_position_report(board_after.fen(), multipv=1)
             except Exception as e:
                 logger.warning("evaluate_move: post-move position report failed: %s", e)
+            # Name the opponent's answer whenever there is one. The engine returns no
+            # refutation on roughly 30 of 70 coached turns, and on those the prompt correctly
+            # told the coach it did not know the reply — because we had never asked. A blind
+            # A/B preferred the older, chattier version unanimously on exactly those turns
+            # (ledger row 119), so the gap is worth closing rather than instructing around.
+            #
+            # `after_report` is the search we already did, so this costs nothing here. It has
+            # to happen BEFORE the lesson and clause keys are read: both consult
+            # `refutation_line`, and computing them from the un-filled report would key the
+            # repetition ladder on a different turn from the one the prompt describes.
+            report = self.engine.with_refutation(report, depth=self.coaching_depth, after_report=after_report)
             # How often this turn's lesson has already closed a turn in this game.
             # Read before generating, recorded after — a turn the coach stays silent on
             # teaches nothing and must not count against the ladder.

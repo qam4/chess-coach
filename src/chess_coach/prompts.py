@@ -453,11 +453,21 @@ placements, tactics, or "and then..." continuations.
 #: moved anything: the composed line beside the reply is the ONLY description permitted. It
 #: is correct whether or not that line carries a clause — with none, it names just the move,
 #: and "do not add a threat it does not name" is exactly the instruction wanted.
+#: The authorship half was right and the framing was not. Tightening this to "the line it
+#: appears on is the ONLY description you may give" (v48) held the truth but lost the point:
+#: a blind A/B gave ply 20 to the older wording for "omits the cost", and ply 30 for
+#: repeating "The opponent's reply after your move is exd4" as a separate sentence. Both
+#: unanimous. Naming the reply is not a disclaimer to append — it IS the consequence, and it
+#: is what makes the severity checkable by the student rather than asserted by us.
+#:
+#: So: lead with it, say what it wins, say it once, and take the wording from the composed
+#: line and nowhere else.
 _REPLY_SUPPLIED = """\
-- THE OPPONENT'S ANSWER: name the single reply shown above ("after your move, the \
-opponent plays X"). The line it appears on is the ONLY description of what that reply \
-does that you may give — do NOT add a threat, a capture, a piece or a square that line \
-does not name, and do NOT continue past that one move.
+- THE OPPONENT'S ANSWER: lead with it. In ONE sentence, name the single reply shown above \
+and what it wins ("after your move, the opponent plays X, winning your Y on Z"). The line \
+it appears on is the ONLY source for what that reply does — do NOT add a threat, a capture, \
+a piece or a square that line does not name. State the reply ONCE, do not repeat it as a \
+separate sentence, and do NOT continue past that one move.
 """
 
 _REPLY_WITHHELD = """\
