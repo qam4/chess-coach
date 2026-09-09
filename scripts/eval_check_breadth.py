@@ -241,10 +241,32 @@ def main() -> None:
             )
             # Anything left in the SHIPPED text is a check that should have fired and
             # did not; anything in `fired` is a check that did.
+            #
+            # ``played_uci`` is passed for the same reason the gate passes it, and its
+            # absence here was a real defect: the gate decides whether a named move is the
+            # opponent's reply by pushing the student's move, so without it this ran a
+            # DIFFERENT checker and reported six leaks on a run whose shipped text was
+            # clean. A leak counter that does not match the gate measures nothing.
             leaked = 0
+            leaked_detail: list[dict] = []  # type: ignore[type-arg]
             for t in traj.turns:
-                if t.coach_feedback.strip():
-                    leaked += len(gating_violations(check_text_fidelity(t.coach_feedback, t.fen_before)))
+                if not t.coach_feedback.strip():
+                    continue
+                bad = gating_violations(check_text_fidelity(t.coach_feedback, t.fen_before, played_uci=t.student_move))
+                leaked += len(bad)
+                for v in bad:
+                    # Counted AND kept: a leak is the one failure here that reaches a
+                    # student, so it must be readable without a re-run.
+                    leaked_detail.append(
+                        {
+                            "ply": t.ply,
+                            "kind": v.kind,
+                            "text": " ".join(v.text.split()),
+                            "detail": v.detail,
+                            "fen": t.fen_before,
+                            "said": " ".join(t.coach_feedback.split()),
+                        }
+                    )
             row = {
                 "game": name,
                 "result": traj.result,
@@ -256,6 +278,7 @@ def main() -> None:
                 "fallback_plies": fallback_plies,
                 "rejected": rejected,
                 "leaked_after_gate": leaked,
+                "leaked_detail": leaked_detail,
                 "seconds": round(time.monotonic() - t_game, 1),
             }
             rows.append(row)
