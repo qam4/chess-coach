@@ -441,10 +441,23 @@ placements, tactics, or "and then..." continuations.
 #: plainly that there is nothing to name when it is not. The withheld half is a negative
 #: instruction and those do not hold on their own, which is why the gate stays — but not
 #: provoking the invention is cheaper than catching it.
+#: "using the threats shown" pointed at a section this prompt has NEVER contained:
+#: ``_format_threats`` is wired into the position prompt and the Socratic prompt only. So on
+#: every serious-tier turn the model was told to describe what the reply wins from data that
+#: was not there, and it obliged — v47's last remaining fallback is "Rf7, threatening their
+#: pawn on g6", where g6 is a black pawn taken from the placement block and a rook on f7 does
+#: not attack it. Third instance of one pattern in this sweep: ask for a claim we have not
+#: supplied and the model supplies it.
+#:
+#: Replaced by the authorship rule from v37 (report card row 79), the only lever that has
+#: moved anything: the composed line beside the reply is the ONLY description permitted. It
+#: is correct whether or not that line carries a clause — with none, it names just the move,
+#: and "do not add a threat it does not name" is exactly the instruction wanted.
 _REPLY_SUPPLIED = """\
 - THE OPPONENT'S ANSWER: name the single reply shown above ("after your move, the \
-opponent plays X") and what it wins, using the threats shown. Do NOT continue past \
-that one move.
+opponent plays X"). The line it appears on is the ONLY description of what that reply \
+does that you may give — do NOT add a threat, a capture, a piece or a square that line \
+does not name, and do NOT continue past that one move.
 """
 
 _REPLY_WITHHELD = """\
@@ -1277,9 +1290,11 @@ def effect_takeaway(category: str, phase: str = "") -> str:
     return _EFFECT_TAKEAWAYS.get(category, "")
 
 
-def _move_effect_clause(board: chess.Board | None, uci: str, *, target_possessive: str) -> str:
+def _move_effect_clause(
+    board: chess.Board | None, uci: str, *, target_possessive: str, mover_possessive: str = "your "
+) -> str:
     """The clause half of :func:`_move_effect` — see there for the detail."""
-    return _move_effect(board, uci, target_possessive=target_possessive)[1]
+    return _move_effect(board, uci, target_possessive=target_possessive, mover_possessive=mover_possessive)[1]
 
 
 def _move_effect(
@@ -1287,6 +1302,7 @@ def _move_effect(
     uci: str,
     *,
     target_possessive: str,
+    mover_possessive: str = "your ",
     rival_uci: str = "",
 ) -> tuple[str, str]:
     """``(category, clause)`` for what a move DOES; ``("", "")`` if nothing is certain.
@@ -1300,10 +1316,22 @@ def _move_effect(
 
     Everything is computed from ``board`` (the position the move is played in),
     so the result is a fact the model only has to voice — never an inference it
-    has to make. ``target_possessive`` is the wording for the pieces the move
-    acts against (``"your "`` when the opponent is moving, ``"their "`` when the
-    student is). Priority: capture, then fork, then check/attack, then escaping
-    an attack, then defending an attacked piece.
+    has to make.
+
+    TWO possessives, because a clause can name a piece on either side.
+    ``target_possessive`` is for the pieces the move acts AGAINST (``"your "`` when
+    the opponent is moving, ``"their "`` when the student is). ``mover_possessive``
+    is for the moving side's OWN pieces — the piece that escapes, the piece it
+    defends, the rook it activates. That one used to be hardcoded "your", which is
+    right for the student and wrong for every clause describing the opponent's
+    reply, and it put two falsehoods into the prompt in one breadth sweep:
+    "the opponent's strongest reply is Nf3, defending your pawn on h2" (h2 is
+    THEIR pawn, the student is Black) and "Rf7, moving your rook to f7" (theirs).
+    The model voiced both faithfully and the gate then replaced the whole turn —
+    the only two fallbacks left in that run, and both were our sentence, not its.
+
+    Priority: capture, then fork, then check/attack, then escaping an attack, then
+    defending an attacked piece.
 
     Pawns and the king are excluded as *named targets*: an early version turned
     a real check into a pawn inventory ("giving check and hitting your pawn on
@@ -1371,7 +1399,7 @@ def _move_effect(
         name = chess.piece_name(moved.piece_type)
         return (
             EFFECT_ESCAPE,
-            f", moving your {name} off {chess.square_name(move.from_square)} where it was attacked",
+            f", moving {mover_possessive}{name} off {chess.square_name(move.from_square)} where it was attacked",
         )
     for sq in after.attacks(move.to_square):
         piece = after.piece_at(sq)
@@ -1379,8 +1407,8 @@ def _move_effect(
             continue
         if after.attackers(not mover, sq) and len(after.attackers(mover, sq)) == 1:
             name = chess.piece_name(piece.piece_type)
-            return (EFFECT_DEFEND, f", defending your {name} on {chess.square_name(sq)}")
-    return _quiet_move_effect(board, after, move, rival_uci=rival_uci)
+            return (EFFECT_DEFEND, f", defending {mover_possessive}{name} on {chess.square_name(sq)}")
+    return _quiet_move_effect(board, after, move, rival_uci=rival_uci, mover_possessive=mover_possessive)
 
 
 def _quiet_move_clause(board: chess.Board, after: chess.Board, move: chess.Move) -> str:
@@ -1404,6 +1432,7 @@ def _centre_control_clause(
     after: chess.Board,
     move: chess.Move,
     mover: chess.Color,
+    mover_possessive: str = "your ",
 ) -> str:
     """What a move does to the middle four squares, as counts; '' when nothing changed.
 
@@ -1446,6 +1475,9 @@ def _centre_control_clause(
     # This function's standing rule is that it says nothing about mere centralisation, and a
     # true-but-worthless clause is the same failure wearing numbers. So the opponent has to be
     # fighting for the square, and it has to be a phase where the centre is the battleground.
+    # This clause names BOTH sides, so the wording is a swap rather than a substitution:
+    # when the opponent is the mover, their count is "theirs" and the student's is "your".
+    mine, yours = ("theirs", "your") if mover_possessive.strip() == "their" else ("yours", "their")
     gained: list[str] = []
     added: list[str] = []
     for sq in CENTRE_SQUARES:
@@ -1460,9 +1492,9 @@ def _centre_control_clause(
             continue
         name = chess.square_name(sq)
         if ours_before <= len(board.attackers(not mover, sq)) and ours_after > theirs_after:
-            gained.append(f"{name} (yours {ours_after} to their {theirs_after})")
+            gained.append(f"{name} ({mine} {ours_after} to {yours} {theirs_after})")
         else:
-            added.append(f"{name} (yours {ours_after} to their {theirs_after})")
+            added.append(f"{name} ({mine} {ours_after} to {yours} {theirs_after})")
     if gained:
         return f", taking control of {' and '.join(gained)} in the centre"
     if added:
@@ -1476,6 +1508,7 @@ def _quiet_move_effect(
     move: chess.Move,
     *,
     rival_uci: str = "",
+    mover_possessive: str = "your ",
 ) -> tuple[str, str]:
     """Describe a move that captures, attacks and defends nothing.
 
@@ -1503,7 +1536,7 @@ def _quiet_move_effect(
         side = "short" if chess.square_file(move.to_square) > chess.square_file(move.from_square) else "long"
         return (
             EFFECT_CASTLE,
-            f", castling {side} to tuck your king onto {to_name} and connect your rooks",
+            f", castling {side} to tuck {mover_possessive}king onto {to_name} and connect {mover_possessive}rooks",
         )
 
     # A rook or queen reaching a file with no pawns in the way.
@@ -1515,11 +1548,14 @@ def _quiet_move_effect(
         file_name = chess.FILE_NAMES[file_index]
         name = chess.piece_name(piece.piece_type)
         if not own_pawns and not their_pawns:
-            return (EFFECT_OPEN_FILE, f", moving your {name} to {to_name} on the open {file_name}-file")
+            return (
+                EFFECT_OPEN_FILE,
+                f", moving {mover_possessive}{name} to {to_name} on the open {file_name}-file",
+            )
         if not own_pawns:
             return (
                 EFFECT_OPEN_FILE,
-                f", moving your {name} to {to_name} on the half-open {file_name}-file",
+                f", moving {mover_possessive}{name} to {to_name} on the half-open {file_name}-file",
             )
 
     # A piece that had almost nowhere to go and now has somewhere. The counts are
@@ -1539,7 +1575,7 @@ def _quiet_move_effect(
             name = chess.piece_name(piece.piece_type)
             return (
                 EFFECT_MOBILITY,
-                f", moving your {name} from {from_name} to {to_name}, where it covers "
+                f", moving {mover_possessive}{name} from {from_name} to {to_name}, where it covers "
                 f"{after_squares} squares instead of {before_squares}",
             )
 
@@ -1566,7 +1602,7 @@ def _quiet_move_effect(
         if after_dist < before_dist and not rival_is_at_least_as_central:
             return (
                 EFFECT_KING_ACTIVITY,
-                f", walking your king from {from_name} to {to_name}, closer to the centre",
+                f", walking {mover_possessive}king from {from_name} to {to_name}, closer to the centre",
             )
 
     # Adding a defender to something already under attack. Weaker than the
@@ -1579,7 +1615,7 @@ def _quiet_move_effect(
             name = chess.piece_name(defended.piece_type)
             return (
                 EFFECT_EXTRA_DEFENDER,
-                f", adding a defender to your {name} on {chess.square_name(sq)}",
+                f", adding a defender to {mover_possessive}{name} on {chess.square_name(sq)}",
             )
     # Development and centre control are the two principles VISION.md names as worth teaching
     # that had no detector at all — the north star's own worked example is "keep defending the
@@ -1610,7 +1646,8 @@ def _quiet_move_effect(
                 tail = f"{home} more minor pieces still sit on their starting squares"
             return (
                 EFFECT_DEVELOP,
-                f", developing your {chess.piece_name(piece.piece_type)} from {from_name} to {to_name} — {tail}",
+                f", developing {mover_possessive}{chess.piece_name(piece.piece_type)} "
+                f"from {from_name} to {to_name} — {tail}",
             )
 
     # Centre control comes LAST of the quiet effects, on purpose. "Did the attacker count on
@@ -1619,7 +1656,7 @@ def _quiet_move_effect(
     # tests caught it doing exactly that. The rule this function already followed is that the
     # more specific and checkable the fact, the earlier it speaks; this is the broadest fact
     # here, so it speaks only when nothing sharper applies.
-    centre = _centre_control_clause(board, after, move, mover)
+    centre = _centre_control_clause(board, after, move, mover, mover_possessive)
     if centre:
         return (EFFECT_CENTRE, centre)
 
@@ -2188,8 +2225,14 @@ def _refutation_capture_clause(board: chess.Board | None, first_uci: str) -> str
 
     Thin wrapper over :func:`_move_effect_clause` so the opponent's reply and
     the engine's best move share one verified implementation (no drift).
+
+    BOTH possessives are flipped, because the mover here is the opponent: what the reply
+    acts against is the student's ("capturing your knight on g5"), and what it moves or
+    protects is the opponent's own ("defending their pawn on h2"). Only the first was
+    flipped before, so every clause naming the moving side's own piece came out as "your"
+    and was false — see :func:`_move_effect`.
     """
-    return _move_effect_clause(board, first_uci, target_possessive="your ")
+    return _move_effect_clause(board, first_uci, target_possessive="your ", mover_possessive="their ")
 
 
 def _line_base_fen(report: ComparisonReport, moves: list[str]) -> str | None:

@@ -341,6 +341,13 @@ def test_refutation_renders_only_first_reply() -> None:
     assert "Opponent's reply" in prompt
     assert "strongest reply is Qh4" in prompt  # single move rendered
     assert "name the single reply shown above" in prompt  # serious tier voices one reply
+    # And it must not send the model to data this prompt does not carry. "using the threats
+    # shown" pointed at a section wired only into the position and Socratic prompts, so the
+    # instruction asked for a consequence from nothing — which is how "Rf7, threatening their
+    # pawn on g6" got written about a rook that does not attack g6.
+    assert "using the threats shown" not in prompt
+    assert "--- Threats ---" not in prompt
+    assert "ONLY description of what that reply does" in prompt
 
 
 def test_move_eval_prompt_requires_named_principle_and_hook() -> None:
@@ -809,6 +816,47 @@ def test_refutation_clause_describes_non_captures() -> None:
     # Captures still take precedence and keep their wording.
     cap = chess.Board("4k3/8/5p2/6N1/8/8/8/4K3 b - - 0 1")
     assert _refutation_capture_clause(cap, "f6g5") == ", capturing your knight on g5"
+
+
+def test_refutation_clause_owns_the_opponents_pieces_correctly() -> None:
+    """A clause about the reply's OWN piece must say "their", not "your".
+
+    Two possessives live in this clause and only one was flipped for the opponent's reply.
+    What the reply acts against is the student's — "capturing your knight on g5", checked
+    above. What it MOVES or PROTECTS is the opponent's, and that came out as "your": the
+    v46 sweep put "the opponent's strongest reply is Nf3, defending your pawn on h2" into
+    the prompt with the student playing Black and h2 holding a White pawn, and "Rf7, moving
+    your rook to f7" for a black rook. The model voiced both, the gate caught both, and the
+    student got template text — the only two fallbacks left in that run, both our sentence.
+
+    Measured over the five breadth games: 11 of 70 coached prompts carried a clause of this
+    kind, so it was a 16% defect that surfaced as 2 turns because the ownership check only
+    fires on some phrasings.
+
+    Both positions are the real ones from the run.
+    """
+    import chess
+
+    from chess_coach.prompts import _refutation_capture_clause
+
+    # Student is Black; White replies Nf3, defending White's own h2 pawn.
+    defend = chess.Board("4k3/p1pp3p/4p3/4N3/2pP4/4P3/4KP1P/2B4q w - - 3 32")
+    assert _refutation_capture_clause(defend, "e5f3") == ", defending their pawn on h2"
+
+    # Student is White; Black replies Rf7 along the half-open f-file with its own rook.
+    activate = chess.Board("6k1/1p5p/4B1pQ/3p1r2/P2P1P2/5PK1/1r5P/7R b - - 8 37")
+    assert _refutation_capture_clause(activate, "f5f7") == ", moving their rook to f7 on the half-open f-file"
+
+
+def test_our_own_move_clause_still_says_your() -> None:
+    # The other side of the same change: describing the STUDENT's move, the moving side is
+    # the student, so "your" is right and must not have been flipped for everyone.
+    import chess
+
+    from chess_coach.prompts import _move_effect_clause
+
+    board = chess.Board("4k3/p1pp3p/4p3/4N3/2pP4/4P3/4KP1P/2B4q w - - 3 32")
+    assert _move_effect_clause(board, "e5f3", target_possessive="their ") == ", defending your pawn on h2"
 
 
 def test_move_eval_word_limit_scales_with_severity() -> None:
