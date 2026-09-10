@@ -57,6 +57,30 @@ v43 vs v48 came back 11-6 to v48, the first blind comparison in the project that
 a coin flip. These are the six pairs it LOST, each with a verified cause. Ordered by
 impact, and all three are ours rather than the engine's or the model's.
 
+### DONE — Multi-seed A/B harness, and what it costs to use
+
+Recipe, because it took some setting up and the next comparison should not rediscover it.
+The old arm runs from a git worktree so the current tree is never touched:
+
+```
+git worktree add ../chess-coach-<tag> <commit>
+copy config.yaml into it        # uncommitted, so the worktree has none
+cd ../chess-coach-<tag> && uv run python -c "import chess_coach, pathlib; print(pathlib.Path(chess_coach.__file__).parent)"
+```
+
+That last line matters: verify it prints the WORKTREE's `src`, or the comparison is the new
+code wearing an old label. Then run `scripts/run_coach_review_tunnelled.ps1 -Seed N` in each
+tree and `scripts/eval_transcript_pairwise.py` per seed. Sequential, not parallel — all runs
+share one SSM tunnel and one ollama server.
+
+Five seeds (7, 11, 13, 17, 23) is about 95 minutes end to end: nine report cards and five
+judge passes.
+
+**Sensitivity, computed (ledger row 126).** At a 58% win rate, p&lt;0.05 needs about 200 pairs,
+so roughly twelve games per arm. Five games gave 48 decisive pairs and p=0.312. Plan
+accordingly: this instrument settles large effects, suggests moderate ones, and cannot see
+small ones. Changes that touch most coached turns are the only ones it can resolve.
+
 ### OPEN — The breadth sweep builds its own prompt and omits `position_after`
 
 Found while wiring the refutation fill. `scripts/eval_check_breadth.py` calls
