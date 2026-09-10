@@ -436,6 +436,66 @@ def test_consequence_belonging_to_the_opponent_is_not_charged_to_our_move() -> N
     assert "move_claim" not in _kinds(check_text_fidelity(text, fen, played_uci="c4e2"))
 
 
+def test_placement_is_judged_against_the_position_the_turn_describes() -> None:
+    # Third check to need this, after the illegal-move and consequence checks: a turn spent
+    # explaining a mistake talks about what the move PRODUCED. Once naming the opponent's reply
+    # became routine, this fired 14 times over 7 turns in one five-game sweep and every one was
+    # true of the post-move board. All three positions and moves are from that run.
+    cases = [
+        # After Qxa6 takes the knight there, the queen IS on a6 — and bxa6 then takes it.
+        (
+            "1rb1k1nr/pp3ppp/n1p5/3qp3/Q2P4/2P5/P2BPPPP/1R2KBNR w Kk - 2 9",
+            "a4a6",
+            "By taking the queen to a6, you left it undefended. After your move the opponent "
+            "plays bxa6, capturing your queen on a6.",
+        ),
+        # After Rxc8 takes the bishop there, the rook IS on c8.
+        (
+            "r1br2k1/1p1p3p/5ppQ/p1R5/P7/3PBP2/1P4PP/5BKR w - - 1 22",
+            "c5c8",
+            "By moving Rxc8 you left your rook undefended, allowing Rdxc8, capturing your rook on c8.",
+        ),
+        # After d5 the pawn IS on d5.
+        (
+            "8/3p2k1/2q1p2p/B7/1K2PP2/3p4/7P/8 b - - 1 49",
+            "d7d5",
+            "Your move, d5, left your queen on c6 undefended. The reply exd5 captures your pawn on d5.",
+        ),
+    ]
+    for fen, played, text in cases:
+        assert "placement" not in _kinds(check_text_fidelity(text, fen, played_uci=played)), text
+
+
+def test_placement_lie_is_still_caught_with_a_played_move() -> None:
+    # The looser test must not blind the check: a square empty in BOTH positions is still a lie.
+    fen = "1rb1k1nr/pp3ppp/n1p5/3qp3/Q2P4/2P5/P2BPPPP/1R2KBNR w Kk - 2 9"
+    assert "placement" in _kinds(check_text_fidelity("Your rook on h4 is loose.", fen, played_uci="a4a6"))
+
+
+def test_a_defence_claim_is_not_charged_to_an_earlier_move() -> None:
+    # v50 queens-gambit ply 21. The claim belongs to e3, which is invisible to the defender
+    # search because a bare pawn move carries no piece letter, so the two-sentence lookback
+    # walked back to Qc2 and reported that a queen on c2 can never defend d4.
+    fen = "3k2nr/p4ppp/p1p5/4p3/3P4/2P5/q2BPPPP/4KBNR w K - 0 13"
+    text = (
+        "By moving Bc1, you left your pawn on c3 undefended, which the opponent immediately "
+        "exploits with Qc2, attacking your bishop on c1. The better move was e3, which "
+        "strengthens your pawn structure by adding a defender to your pawn on d4."
+    )
+    assert "relation" not in _kinds(check_text_fidelity(text, fen, played_uci="d2c1"))
+
+
+def test_a_reply_is_not_charged_with_the_next_sentences_material_win() -> None:
+    # v50 queens-gambit ply 37. Forty characters after Qxg5 reached into the following
+    # sentence and charged exf6's "wins a knight" to the reply, which takes a pawn.
+    fen = "3k2r1/p4pp1/p1p2n2/4P1Pp/7q/5P2/4P1KP/5BNR w - - 3 21"
+    text = (
+        "You moved e3 instead of exf6, letting your opponent capture your undefended pawn on g5 "
+        "with Qxg5+. The best move, exf6, wins a knight and improves your position."
+    )
+    assert "opponent_reply" not in _kinds(check_text_fidelity(text, fen, played_uci="e2e3"))
+
+
 def test_our_own_consequence_claim_is_still_checked() -> None:
     # The guard must not swallow the check it lives in. The possessive form names one of
     # THEIR pieces and is a claim about OUR move — the shape that caught a falsehood which

@@ -984,7 +984,15 @@ def _check_opponent_reply(text: str, board: chess.Board, played_uci: str) -> lis
         # the general capture check where "win" is excluded as a material idiom ("wins a
         # pawn" can mean a net edge). The narrowing that makes it safe is adjacency: the
         # phrase has to sit right after this move token, not anywhere in the message.
+        #
+        # Which means it must not cross a full stop. Forty characters was enough to reach the
+        # NEXT sentence's claim: "…capture your undefended pawn on g5 with Qxg5+. The best
+        # move, exf6, wins a knight" charged exf6's material win to Qxg5. Adjacency is the
+        # whole argument for this window, and a claim in the following sentence is not adjacent.
         window = text[m.end() : m.end() + 40]
+        stop = min((i for i in (window.find(ch) for ch in ".!?") if i != -1), default=-1)
+        if stop != -1:
+            window = window[:stop]
         for claim in _OPPONENT_VICTIM_RE.finditer(window):
             claimed = claim.group(1).lower()
             if claimed != victim:
@@ -1125,6 +1133,15 @@ def _check_defence_relation(text: str, board: chess.Board) -> list[Violation]:
         if not defenders:
             continue  # no named defender to check the claim against
         nearest = defenders[-1]
+        # A RECOMMENDATION between the candidate defender and the claim means the claim
+        # belongs to the recommended move, not to this one. The two-sentence lookback is
+        # deliberate (the defender and the claim are routinely in different sentences), but it
+        # reached across "…exploits with Qc2, attacking your bishop on c1. The better move was
+        # e3, which … adds a defender to your pawn on d4" and charged e3's claim to Qc2 —
+        # e3 being invisible here because a bare pawn move carries no piece letter. Cue-based
+        # rather than sentence-based, so the intended cross-sentence pairing still works.
+        if _OUR_MOVE_CUE_RE.search(window[nearest.end() :]):
+            continue
         letter, frm_name = nearest.group(1).upper(), nearest.group(2).lower()
         if frm_name == to_name:
             continue
@@ -1183,8 +1200,34 @@ def _check_ownership(text: str, board: chess.Board) -> list[Violation]:
     return out
 
 
-def _check_placement(text: str, board: chess.Board) -> list[Violation]:
-    """Flag 'piece on square' claims the board denies (piece kind or emptiness)."""
+def _check_placement(text: str, board: chess.Board, played_uci: str = "") -> list[Violation]:
+    """Flag 'piece on square' claims the board denies (piece kind or emptiness).
+
+    Judged against the position as given AND the position after the student's move, because
+    a coaching turn describes both and the claim is true if it holds in either. This is the
+    third check to need it, after the illegal-move and consequence checks: a turn spent
+    explaining a mistake talks about what the move PRODUCED, and testing that against the
+    board before the move flags true sentences.
+
+    Measured, once naming the opponent's reply became routine: 14 firings over 7 turns in one
+    five-game sweep, and every one verified true of the post-move board — "bxa6, capturing
+    your queen on a6" after Qxa6 took the knight there, "Rdxc8, capturing your rook on c8"
+    after Rxc8, the pawns on a5 and d5 after those pushes. All would have replaced correct
+    coaching with template text.
+
+    The looser test costs one thing worth naming: a piece the move moved AWAY from still
+    passes, since it was there before. That hole is pre-existing — this check has always
+    accepted the before-position — and it is the stale-fact defect the post-move position
+    report was added to address on the prompt side.
+    """
+    boards = [board]
+    if played_uci:
+        try:
+            after = board.copy(stack=False)
+            after.push(chess.Move.from_uci(played_uci))
+            boards.append(after)
+        except (ValueError, AssertionError, chess.IllegalMoveError, chess.InvalidMoveError):
+            pass
     out: list[Violation] = []
     lower = text.lower()
     assessment_spans = [(a.start(), a.end()) for a in _SQUARE_ASSESSMENT_RE.finditer(lower)]
@@ -1199,11 +1242,13 @@ def _check_placement(text: str, board: chess.Board) -> list[Violation]:
             sq = chess.parse_square(square)
         except ValueError:
             continue
-        actual = board.piece_at(sq)
         expected = _PIECE_NAME_TO_TYPE[name]
+        if any((p := b.piece_at(sq)) is not None and p.piece_type == expected for b in boards):
+            continue  # true of one of the positions this turn is about
+        actual = board.piece_at(sq)
         if actual is None:
             out.append(Violation("placement", m.group(0), f"{square} is empty"))
-        elif actual.piece_type != expected:
+        else:
             out.append(Violation("placement", m.group(0), f"{square} holds a {chess.piece_name(actual.piece_type)}"))
     return out
 
@@ -1437,7 +1482,7 @@ def _run_fidelity_checks(
     by_uci = _menu_by_uci(menu)
     violations: list[Violation] = []
     violations.extend(_check_named_moves(text, board, by_uci, played_uci))
-    violations.extend(_check_placement(text, board))
+    violations.extend(_check_placement(text, board, played_uci))
     violations.extend(_check_ownership(text, board))
     violations.extend(_check_defence_relation(text, board))
     violations.extend(_check_terminal_label(text, board, played_uci))
