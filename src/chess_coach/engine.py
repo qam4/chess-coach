@@ -21,6 +21,29 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _reply_punishes(before_reply: "chess.Board", reply: "chess.Move") -> bool:  # type: ignore[name-defined] # noqa: F821
+    """Does the opponent's ``reply`` do something the student needs to hear about?
+
+    A capture or a check, and nothing else. A retreat, a developing move or a quiet push is a
+    move rather than a consequence, and presenting it as the answer to a mistake teaches
+    nothing — "they play b6, preparing to develop their pieces" was called filler narration by
+    a blind judge, and "they play Rg8, moving their rook off h8 where it was attacked" opened a
+    turn that was about a missed capture.
+
+    Deliberately NOT "attacks something of ours that is undefended". That was the first
+    version and it let the narration straight back through: in a middlegame position almost
+    any move happens to point at some loose piece, so it admitted 19 of the 30 turns that had
+    no refutation, which is how the field became noise. Every reply the judge rewarded naming
+    was a capture ("Rxg5", "Nxc4 winning the bishop"); every one it marked down was a quiet
+    move. A narrower test that is right is worth more here than a wide one that is usually
+    right, because this field is what the coach LEADS with.
+
+    Rules geometry only, so it stays on our side of the line with Blunder: no piece values, no
+    judgement of whether the punishment is worth anything.
+    """
+    return bool(before_reply.is_capture(reply) or before_reply.gives_check(reply))
+
+
 @dataclass
 class AnalysisLine:
     """A single line of engine analysis (one PV)."""
@@ -799,9 +822,24 @@ class CoachingEngine(EngineProtocol):
         # Verified legal before it is handed on, so the field keeps the board-verifiable
         # property `engine_trust` records for it.
         try:
-            if chess.Move.from_uci(reply) not in board.legal_moves:
-                return report
+            move = chess.Move.from_uci(reply)
         except ValueError:
+            return report
+        if move not in board.legal_moves:
+            return report
+        # And it has to PUNISH something, or the field is the wrong field. `refutation_line`
+        # means "the move that makes the student's move bad", and the prompt tells the coach to
+        # lead with it. The engine's best move in an ordinary position is just a good move: a
+        # first version filled the field unconditionally and a blind judge marked down five
+        # turns for it — "The opponent's answer: they play Rg8, moving their rook off h8 where
+        # it was attacked" opening a turn that was about a missed capture, called "an
+        # irrelevant reply", and "they play b6, preparing to develop" called "filler
+        # narration". Leading with a non-event buries the lesson.
+        #
+        # Punishment means a capture, a check, or an attack on something of ours that nothing
+        # defends. Pure rules geometry, which is ours to compute; whether the move is BEST is
+        # the engine's answer and we take it as given.
+        if not _reply_punishes(board, move):
             return report
         return dataclasses.replace(report, refutation_line=[reply])
 

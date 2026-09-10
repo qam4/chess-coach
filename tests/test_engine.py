@@ -403,14 +403,27 @@ class TestWithRefutation:
         assert out.refutation_line == ["e7e5"]
         assert out is report  # untouched, not rebuilt
 
-    def test_empty_refutation_is_filled_from_the_engines_best_line(self):
-        report = _comparison(self.START, "e2e4", None)
-        out = _fill(report, _position_with_best("e7e5"))
-        assert out.refutation_line == ["e7e5"]
+    #: Verified: after Qxa6 takes the knight on a6, bxa6 recaptures the queen.
+    QUEEN_GRAB = "1rb1k1nr/pp3ppp/n1p5/3qp3/Q2P4/2P5/P2BPPPP/1R2KBNR w Kk - 2 9"
+
+    def test_empty_refutation_is_filled_when_the_reply_punishes(self):
+        report = _comparison(self.QUEEN_GRAB, "a4a6", None)
+        out = _fill(report, _position_with_best("b7a6"))
+        assert out.refutation_line == ["b7a6"]
         # Nothing else may change: this is one field, not a re-derivation.
         assert out.fen == report.fen
         assert out.user_move == report.user_move
         assert out.eval_drop_cp == report.eval_drop_cp
+
+    def test_a_reply_that_punishes_nothing_is_not_supplied(self):
+        # `refutation_line` means "the move that makes the student's move bad", and the prompt
+        # leads with it. The engine's best move in an ordinary position is just a good move:
+        # filling the field unconditionally put "they play Rg8, moving their rook off h8 where
+        # it was attacked" at the head of a turn about a missed capture, and a blind judge
+        # marked down five such turns as irrelevant narration. 1.e4 e5 is the same shape — a
+        # sound reply that punishes nothing.
+        report = _comparison(self.START, "e2e4", None)
+        assert _fill(report, _position_with_best("e7e5")).refutation_line is None
 
     def test_a_reply_that_is_not_legal_is_refused(self):
         # Keeps the board-verifiable property `engine_trust` records for this field: a garbled

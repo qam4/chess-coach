@@ -1603,6 +1603,7 @@ def check_coaching_fidelity(
     coaching_text: str,
     report: PositionReport,
     menu: list[MenuMove],
+    played_uci: str = "",
 ) -> list[Violation]:
     """Scan coaching text for claims contradicting the board / rules / menu.
 
@@ -1611,12 +1612,19 @@ def check_coaching_fidelity(
     candidate menu (from :func:`coaching_phrases.build_move_menu`); an empty
     menu simply disables the ``unsound_move`` check while the legality and
     placement checks still run.
+
+    Pass ``played_uci`` whenever the caller knows the move under discussion. Several checks
+    need it to judge a claim against the position the coaching describes rather than the one
+    before the move, and omitting it makes this a DIFFERENT and stricter checker than the one
+    the coach gated on. That gap has now produced three separate phantom findings — the
+    breadth sweep's leak counter, and the report card reporting a placement error on "Kxe5,
+    capturing your pawn on e5" after the student pushed e4-e5, on text the gate had passed.
     """
     try:
         board = chess.Board(report.fen)
     except ValueError:
         return []
-    return _run_fidelity_checks(coaching_text, board, menu)
+    return _run_fidelity_checks(coaching_text, board, menu, played_uci)
 
 
 def check_text_fidelity(

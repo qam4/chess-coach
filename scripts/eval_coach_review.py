@@ -134,7 +134,12 @@ def _coach_turn(coach, ply, fen, move):  # type: ignore[no-untyped-def]
     fid: Counter[str] = Counter()
     if text.strip() and pos_report is not None:
         menu = build_move_menu(pos_report)
-        fid = Counter(v.kind for v in check_coaching_fidelity(text, pos_report, menu))
+        # The played move goes in, for the same reason the coach's own gate passes it: several
+        # checks judge a claim against the position the coaching DESCRIBES, and without it this
+        # count is a stricter checker than the one the text already passed. It reported a
+        # placement error on "Kxe5, capturing your pawn on e5" after the student pushed e4-e5 —
+        # a phantom finding on text the gate had cleared.
+        fid = Counter(v.kind for v in check_coaching_fidelity(text, pos_report, menu, played_uci=move))
     return ReviewTurn(
         ply=ply,
         phase=phase_of_board(chess.Board(fen)),
