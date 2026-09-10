@@ -95,6 +95,43 @@ def _positions() -> list[tuple[str, str]]:
     return out
 
 
+def _row_for(src: str, ply: str, fen: str, move_uci: str, rival_uci: str) -> tuple[str, ...]:
+    """Recompute one row from its inputs, so a row can be re-derived from the snapshot itself."""
+    possessive = "their " if rival_uci else "your "
+    try:
+        board = chess.Board(fen)
+        category, clause = _move_effect(board, move_uci, target_possessive=possessive, rival_uci=rival_uci)
+    except Exception as exc:  # a crash is behaviour worth snapshotting too
+        category, clause = "ERROR", f"{type(exc).__name__}: {exc}"
+    return (src, ply, fen, move_uci, rival_uci, category or "-", clause.strip().lstrip(",").strip() or "-")
+
+
+def _rows_from_snapshot(path: Path) -> list[tuple[str, ...]]:
+    """Recompute every row of ``path`` from the inputs recorded IN it.
+
+    This is what ``--check`` uses, and the distinction matters. Discovering positions means
+    globbing ``output/coach_review_*/transcript.json``, and ``output/`` is gitignored — so on
+    a clean checkout there are no transcripts, the position list is a fraction of the local
+    one, and every missing row reads as REMOVED. That is exactly what happened: the test went
+    red in CI the day it was added and stayed red for a week of pushes while passing locally,
+    because the two machines were snapshotting different inputs.
+
+    Re-deriving from the file removes the dependency on local artefacts and makes the check
+    stricter as well as portable: it pins the function's output for a fixed, checked-in set of
+    inputs, which is what the test claims to do. Discovery still belongs to ``--out``, where
+    new positions SHOULD be picked up.
+    """
+    rows: list[tuple[str, ...]] = []
+    for line in path.read_text(encoding="utf-8").splitlines()[1:]:
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        if len(parts) < 5:
+            continue
+        rows.append(_row_for(*parts[:5]))
+    return rows
+
+
 def _rows() -> list[tuple[str, ...]]:
     """One row per (position, legal move) pair.
 
@@ -115,22 +152,7 @@ def _rows() -> list[tuple[str, ...]]:
         for move_uci in legal:
             rival = next((m for m in legal if m != move_uci), "")
             for rival_uci in (rival, ""):
-                possessive = "their " if rival_uci else "your "
-                try:
-                    category, clause = _move_effect(board, move_uci, target_possessive=possessive, rival_uci=rival_uci)
-                except Exception as exc:  # a crash is behaviour worth snapshotting too
-                    category, clause = "ERROR", f"{type(exc).__name__}: {exc}"
-                out.append(
-                    (
-                        src,
-                        "",
-                        fen,
-                        move_uci,
-                        rival_uci,
-                        category or "-",
-                        clause.strip().lstrip(",").strip() or "-",
-                    )
-                )
+                out.append(_row_for(src, "", fen, move_uci, rival_uci))
     return out
 
 
@@ -173,17 +195,19 @@ def main() -> int:
     ap.add_argument("--summary-only", action="store_true")
     args = ap.parse_args()
 
-    rows = _rows()
-    if not rows:
-        print("No transcripts found under output/coach_review_*/ — nothing to snapshot.")
-        return 1
-    rendered = _render(rows)
-
     if args.check:
         existing = Path(args.check)
         if not existing.exists():
             print(f"{existing} does not exist — run without --check first.")
             return 1
+        # Inputs come from the snapshot, not from whatever transcripts this machine happens to
+        # have. See _rows_from_snapshot: the discovery version passed locally and failed in CI
+        # for a week because the two machines were snapshotting different position sets.
+        rows = _rows_from_snapshot(existing)
+        if not rows:
+            print(f"{existing} has no rows to check.")
+            return 1
+        rendered = _render(rows)
         old = existing.read_text(encoding="utf-8").splitlines()
         new = rendered.splitlines()
         old_map = {tuple(line.split("\t")[:5]): line for line in old[1:]}
@@ -206,10 +230,16 @@ def main() -> int:
         print("\nEvery line above is a behaviour change. Approve each one deliberately, or fix it.")
         return 1
 
+    # Writing DISCOVERS positions, so new games are picked up here and nowhere else.
+    rows = _rows()
+    if not rows:
+        print("No transcripts found under output/coach_review_*/ — nothing to snapshot.")
+        return 1
+    rendered = _render(rows)
     if not args.summary_only:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(rendered, encoding="utf-8")
+        out.write_text(rendered, encoding="utf-8", newline="\n")
         print(f"Wrote {out} ({len(rows)} positions)\n")
     print(_summarise(rows))
     return 0
