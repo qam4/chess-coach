@@ -5,6 +5,11 @@ description: How to monitor GitHub Actions CI after pushing
 
 # CI Monitoring
 
+> This file is `inclusion: manual`, which means it only loads when someone asks for it — and
+> that is why it did not help: CI ran red for a week of pushes with this guidance sitting
+> here unread. The one step that must happen every time now lives in `commit-checklist.md`,
+> which is auto-included. This remains the fuller reference.
+
 After `git push`, check CI status with `gh`:
 
 ```bash
