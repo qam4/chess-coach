@@ -825,6 +825,80 @@ def test_refutation_clause_describes_non_captures() -> None:
     assert _refutation_capture_clause(cap, "f6g5") == ", capturing your knight on g5"
 
 
+def test_one_subject_per_turn_when_the_cause_and_the_loose_piece_differ() -> None:
+    """The cause owns the turn; another loose piece is background, not a rival subject.
+
+    Report-card ply 34, the real position. The student's king steps off d1 and c2 loses its
+    only defender; a pawn on g5 has been loose since before the move. Verified on the board:
+    c2 defenders before ['d1'] / after [], g5 [] / [].
+
+    The prompt used to state both and then assert that the LOOSE one was "the subject of this
+    turn" while the cause section named the other. Three runs on that identical prompt gave
+    "you left your pawn on g5 undefended, which was the only piece guarding it" (g5 guarded
+    nothing), then the correct c2 sentence, then "you left g5 undefended. The opponent captures
+    it with Nxc2" (Nxc2 takes c2). Two of three wrong, and the contradiction was ours.
+
+    Background is kept rather than deleted: v44 removed fact sources on diagnosis turns and mean
+    words fell 53 to 33 with every dimension down. The fix is to stop two facts competing for
+    the subject, not to say less.
+    """
+    import chess
+
+    from chess_coach.models import HangingPiece, KingSafety, PawnFeatures, PositionReport
+
+    fen = "r1b1k1r1/pppp1p1p/8/6P1/1bBP4/1P2n3/P1P4P/RN1K3R w q - 1 18"
+    board = chess.Board(fen)
+    assert board.san(chess.Move.from_uci("d1e2")) == "Ke2"
+    assert [chess.square_name(s) for s in board.attackers(chess.WHITE, chess.C2)] == ["d1"]
+    assert not board.attackers(chess.WHITE, chess.G5)
+
+    report = dataclasses.replace(
+        _move_eval_report(fen, "d1e2", "d1c1"),
+        eval_drop_cp=300,
+        classification="blunder",
+    )
+    after = board.copy()
+    after.push_uci("d1e2")
+    position_after = PositionReport(
+        fen=after.fen(),
+        eval_cp=0,
+        eval_breakdown=EvalBreakdown(material=0, mobility=0, king_safety=0, pawn_structure=0),
+        # The engine's view: our g5 pawn is hanging. c2 is NOT on this list, so the loose piece
+        # and the cause are genuinely different squares — which is the case under test.
+        hanging_pieces={"white": [HangingPiece(square="g5", piece="pawn", color="white")], "black": []},
+        threats={"white": [], "black": []},
+        pawn_structure={"white": PawnFeatures([], [], []), "black": PawnFeatures([], [], [])},
+        king_safety={"white": KingSafety(0, "safe"), "black": KingSafety(0, "safe")},
+        top_lines=[],
+        tactics=[],
+        threat_map=[],
+        threat_map_summary=None,
+        critical_moment=False,
+        critical_reason=None,
+    )
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate", position_after=position_after)
+
+    assert "Background (NOT the cause)" in prompt
+    assert "the cause named above is the subject of this turn" in prompt
+    # And the old instruction, which pointed at the loose piece, must be gone from this turn.
+    assert "the undefended piece named above is the subject of this turn" not in prompt
+
+
+def test_the_loose_piece_is_still_the_subject_when_there_is_no_cause() -> None:
+    # The original behaviour has to survive: with no cause to compete with, the hanging piece IS
+    # the subject, and the header says whether the move caused it rather than implying it with
+    # "AFTER your move" — which is how "you allowed your pawn on c2 to become undefended" got
+    # written about a pawn that was already loose.
+    from chess_coach.prompts import _hanging_header
+
+    fen = "r1b1k1r1/pppp1p1p/8/6P1/1bBP4/1P2n3/P1P4P/RN1K3R w q - 1 18"
+    report = dataclasses.replace(_move_eval_report(fen, "d1e2", "d1c1"), eval_drop_cp=300)
+    # c2 loses its only defender to this move.
+    assert _hanging_header(report, frozenset({"c2"})) == "--- Your move left this undefended ---"
+    # g5 was loose beforehand, so the move did not cause it and the header must not imply it did.
+    assert "did not cause this" in _hanging_header(report, frozenset({"g5"}))
+
+
 def test_refutation_clause_owns_the_opponents_pieces_correctly() -> None:
     """A clause about the reply's OWN piece must say "their", not "your".
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import chess
 
@@ -518,6 +519,62 @@ not pawn structure, king repositioning or piece placement. Do NOT claim that any
 defends it, saves it, or deals with the threat unless a line above says so. If you do \
 not know how it gets fixed, name the problem and stop there.
 """
+
+#: Used when the CAUSE names a different piece from the loose one. Then the two facts are on
+#: different squares and the prompt used to assert that the loose one was the subject, while
+#: the cause section named the other — a contradiction we wrote, not an ambiguity the model
+#: invented. The student's king steps off d1 and c2 loses its only defender, while a pawn on g5
+#: has been loose since before the move: the same prompt produced "you left your pawn on g5
+#: undefended, which was the only piece guarding it" (g5 guarded nothing), then the correct c2
+#: sentence, then "you left g5 undefended. The opponent captures it with Nxc2" (Nxc2 takes c2)
+#: on three runs. Two of three wrong, from identical input.
+#:
+#: The cause wins, because it is what the move DID and therefore what the turn teaches. The
+#: loose piece is kept as background rather than deleted — v44 removed fact sources on
+#: diagnosis turns and mean words fell 53 to 33 with every dimension down, so the lesson there
+#: was to stop competing for the subject, not to say less.
+_FOCUS_CAUSE = """\
+- WHAT MATTERS HERE: the cause named above is the subject of this turn — what your move \
+did, not any other loose piece on the board. Anything listed as background is context you \
+may use in passing; it is NOT what went wrong. Do NOT claim that any move fixes the cause \
+unless a line above says so.
+"""
+
+
+_SQUARE_RE = re.compile(r"\b([a-h][1-8])\b")
+
+
+def _squares_named(text: str) -> frozenset[str]:
+    """Every board square named in ``text``. Used to ask whether two facts are about one piece."""
+    return frozenset(m.group(1) for m in _SQUARE_RE.finditer(text.lower()))
+
+
+def _hanging_header(report: ComparisonReport, loose: frozenset[str]) -> str:
+    """Header for the loose-piece section, saying whether the MOVE caused it.
+
+    "--- Undefended AFTER your move ---" describes a state and reads as causation, and the coach
+    duly wrote "you allowed your pawn on c2 to become undefended" about a pawn that was already
+    undefended before the move. We diff the defenders anyway, so we can say which it is instead
+    of leaving it to be inferred from a preposition.
+    """
+    board = _safe_board(report.fen)
+    if board is None or not loose:
+        return "--- Undefended after your move ---"
+    try:
+        after = board.copy(stack=False)
+        after.push(chess.Move.from_uci(report.user_move))
+    except (ValueError, AssertionError, chess.IllegalMoveError, chess.InvalidMoveError):
+        return "--- Undefended after your move ---"
+    student = board.turn
+    for name in sorted(loose):
+        try:
+            square = chess.parse_square(name)
+        except ValueError:
+            continue
+        # Defended before and not after: the move is what did it.
+        if board.attackers(student, square) and not after.attackers(student, square):
+            return "--- Your move left this undefended ---"
+    return "--- Already undefended before your move (your move did not cause this) ---"
 
 
 def _our_hanging(position: PositionReport, our_fen: str) -> str:
@@ -2498,10 +2555,23 @@ def build_rich_move_evaluation_prompt(
         hanging_phrase = _our_hanging(position_after, report.fen)
     history_section = composed_history(report, history, hanging_phrase)
     if hanging_phrase:
-        # Only if the cause sentence has not already said it.
-        if hanging_phrase not in history_section:
-            sections.append("--- Undefended AFTER your move ---\n" + hanging_phrase.capitalize() + ".")
-        focus_instruction = _FOCUS_SUPPLIED
+        loose = _squares_named(hanging_phrase)
+        # Does the CAUSE talk about the same piece? The old test was whether the whole hanging
+        # phrase appeared verbatim in the cause sentence, which fails as soon as the two are on
+        # different squares — and then BOTH were rendered and the focus instruction still called
+        # the loose one the subject. Comparing squares is the question that was meant.
+        same_piece = bool(loose & _squares_named(history_section)) if history_section else False
+        if same_piece:
+            focus_instruction = _FOCUS_SUPPLIED  # one piece, stated once by the cause
+        elif history_section:
+            # They disagree. The cause owns the turn; the loose piece is demoted to background
+            # and labelled as such, so it cannot be mistaken for what went wrong.
+            sections.append("--- Background (NOT the cause) ---\n" + hanging_phrase.capitalize() + ".")
+            focus_instruction = _FOCUS_CAUSE
+        else:
+            # No cause to compete with, so the loose piece IS the subject — the original case.
+            sections.append(_hanging_header(report, loose) + "\n" + hanging_phrase.capitalize() + ".")
+            focus_instruction = _FOCUS_SUPPLIED
     if history_section:
         sections.append(history_section)
 

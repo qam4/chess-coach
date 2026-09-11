@@ -57,6 +57,72 @@ v43 vs v48 came back 11-6 to v48, the first blind comparison in the project that
 a coin flip. These are the six pairs it LOST, each with a verified cause. Ordered by
 impact, and all three are ours rather than the engine's or the model's.
 
+### OPEN — Multi-model checking existed, and the report card dropped it
+
+Raised by the product owner as "I thought we discussed testing multiple models". We did, and
+we built for it — then stopped:
+
+- `docs/llm-probe-findings.md` (April): five models compared with hallucination counts and
+  latency. It is where "always feed structured engine data, never raw FEN" comes from, and
+  where `qwen3:8b` was rejected for coaching because it invented a board.
+- `scripts/eval_run.py --models A B` takes a LIST, and `docs/evaluation.md` documents it as
+  "specific models, head-to-head".
+- The model-capability-profiler spec is fully built; `src/chess_coach/eval/profile.py` exists.
+
+Then the mechanism, visible in one line each:
+
+```
+eval_run.py:          --models  nargs="*"    <- multi-model by design
+eval_coach_review.py: --model   required     <- single-model by construction
+```
+
+The report card became the only instrument we ran, and it cannot hold more than one model.
+Every number from v33 onward comes through it. Ledger row 93 also records that `config.yaml`
+carries an uncommitted `model: qwen3:8b -> qwen3:14b`, so the model CHANGED mid-project and
+nothing after that point is comparable with anything before.
+
+**Same failure shape as `--seed`:** the capability existed, a newer harness did not carry it
+forward, and nobody noticed because the newer harness was the only one in use. Recorded
+together so the pattern is visible: when a harness replaces an older one, check which of the
+older one's dimensions it silently fixed to a constant.
+
+**Fix:** give the report card `--models`, like `eval_run.py` has, so a second model is the
+default cost of a measurement rather than a special effort.
+
+The changes split into two kinds and the split is the reason for cautious optimism:
+
+- **Data-side, should port.** We were writing "defending YOUR pawn on h2" about the
+  opponent's pawn; we pointed at a threats section this prompt has never contained; we
+  supplied a reply that punished nothing; we asserted the subject was g5 while the cause
+  section said c2. Any model repeating a false input produces a falsehood, and any model
+  asked for absent data must invent it. Fixing those is structural.
+- **Wording, will not port.** "lead with it", "state the reply ONCE", "do not upgrade an
+  attack into a win". Adherence to instructions is model-specific, and ledger row 80 already
+  measured ours ignoring one on 3 of 4 turns.
+
+Encouragingly, the only levers that have ever moved anything here are the data-side ones
+(row 79/80: withholding data worked, the matching instruction did not). But that is an
+argument, not a measurement.
+
+**First re-measurement, done.** The subject-agreement counter is deterministic and needs no
+judge: for a turn whose prompt carries both a cause and a loose piece on a different square,
+which square does the coach's OPENING sentence name? With the fix in, across two models and
+two seeds, **0 of 18 turns open on the background piece** — qwen3:14b 9 of 9 on the cause,
+gemma4:12b-it-qat 6 of 9 on the cause and 3 on neither. Under qwen without the fix it was 4
+of 20 across five games.
+
+Missing piece of that claim, stated rather than glossed: there is no gemma run from BEFORE the
+fix, so gemma's zero cannot be attributed to it — gemma may never have had the confusion. A
+worktree run at the previous commit would close it, ~15 minutes.
+
+Gemma differs in STYLE, which is worth knowing before any wording change is judged on one
+model: it opens with the habit question rather than the diagnosis on 2 of 9 turns, emits
+markdown bold, and produced a mind-reading opener ("You're looking for active ways to use your
+rooks") — which is ledger row 91's known regression appearing under a second model.
+
+The models on the EC2 host: `qwen3:14b` (current), `gemma4:12b-it-qat` (different family,
+comparable size — the right portability check), `qwen3:8b`, `hermes3:8b` (Llama lineage).
+
 ### DONE — Multi-seed A/B harness, and what it costs to use
 
 Recipe, because it took some setting up and the next comparison should not rediscover it.

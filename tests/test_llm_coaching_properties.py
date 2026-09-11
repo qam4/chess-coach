@@ -614,8 +614,19 @@ def test_critical_moment_prompt_content(report: PositionReport) -> None:
         # The length guard alone was not enough: hypothesis found "000000000000", exactly 12
         # characters, which also occurs inside a generated PV theme — so the substring test fired
         # on a coincidence, not a leak. A real reason is a sentence and contains letters.
+        # Guarding by shape has now failed three times: a one-character reason, then
+        # "000000000000" (exactly 12), then "00000000000\u2514" (12 with a letter). Each time
+        # the string was not leaking — it was arriving through a DIFFERENT field that the prompt
+        # renders legitimately, most often `top_lines[].theme`, because the strategy draws both
+        # from one text pool. Chasing character classes cannot fix that; the question is not
+        # what the reason looks like, it is whether the reason is the only way it could have got
+        # there. So exclude the fields the prompt is entitled to echo.
         reason = (report.critical_reason or "").strip()
-        if len(reason) >= 12 and any(c.isalpha() for c in reason):
+        elsewhere = [ln.theme or "" for ln in report.top_lines]
+        elsewhere += [ks.description or "" for ks in report.king_safety.values()]
+        elsewhere.append(report.threat_map_summary or "")
+        arrived_by_another_route = any(reason and reason in other for other in elsewhere)
+        if len(reason) >= 12 and not arrived_by_another_route:
             assert reason.lower() not in prompt_lower, (
                 "The engine's critical_reason is eval bookkeeping and must not reach the prompt"
             )
