@@ -24,6 +24,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -36,16 +37,52 @@ from chess_coach.verify import check_text_fidelity, gating_violations
 #: Phrases that put a motive in the student's mouth. The reviewer flagged these on
 #: several runs ("I see you're trying to develop your pieces" on a move that did nothing
 #: of the kind) and they are the one Stance defect with a mechanical signature.
-MIND_READING = (
-    "i see you're trying",
-    "i see you are trying",
-    "i see that you're trying",
-    "you're looking to",
-    "you are looking to",
-    "your plan was to",
-    "you intended to",
-    "you wanted to",
+#: A LIST of exact phrases was the first version and it undercounted by roughly nine times: it
+#: held only "I see you're trying" and its variants, so the ledger recorded 1-2 turns per game
+#: while the actual rate was 5-7 — which `_check_intent_attribution`'s docstring had already
+#: measured and written down. Surveying every stored transcript found 148 instances and the
+#: dominant forms were all absent from the list: "your move aimed to ..." 55, "you were looking
+#: to ..." 26, "you were aiming to ..." 23, "you were trying to ..." 11, against 26 for the one
+#: phrase we were counting.
+#:
+#: So: a pattern over the SHAPE — an intent verb applied to the student — rather than a list of
+#: remembered sentences. The lesson generalises past this counter: a detector built from the
+#: examples someone happened to quote will measure those examples and nothing else.
+#: Cues that make the following clause ADVICE rather than a claim about what the student
+#: thought. "Next time you are looking for a way to improve, ask yourself..." is the takeaway
+#: hook doing its job; counting it as mind-reading would penalise the thing we want. Found by
+#: reading the two turns the counter still flagged after the prompt fix — both were this.
+_HYPOTHETICAL = ("next time", "whenever", "when ", "if ", "should ", "always ", "before you")
+_HYPOTHETICAL_LOOKBACK = 24
+
+MIND_READING_RE = re.compile(
+    r"\b(?:"
+    r"i (?:can )?see (?:that )?you"
+    r"|i notice (?:that )?you"
+    r"|(?:it )?(?:looks|sounds|seems) like you"
+    r"|(?:it )?seems (?:that )?you"
+    r"|you(?:'re| are| were) (?:trying|looking|hoping|aiming|planning|going for)"
+    r"|you (?:tried|wanted|intended|hoped|aimed|meant|planned)"
+    r"|your (?:move|plan|idea|intention|goal|aim)s? (?:was|were|is|aimed|tried|intended|wanted|sought|hoped)"
+    r")\b",
+    re.IGNORECASE,
 )
+
+
+def _mind_reads(low: str) -> bool:
+    """Does the text claim to know what the student was thinking?
+
+    A claim about the past, not advice about the future. The pattern alone cannot tell the two
+    apart — "you are looking for a way to improve" is mind-reading after "I see" and a habit
+    prompt after "next time" — so each match is checked against what precedes it.
+    """
+    for m in MIND_READING_RE.finditer(low):
+        before = low[max(0, m.start() - _HYPOTHETICAL_LOOKBACK) : m.start()]
+        if any(cue in before for cue in _HYPOTHETICAL):
+            continue
+        return True
+    return False
+
 
 #: A number that prices the position. Should be zero: the protocol forbids showing the
 #: student an evaluation, and the units were never defensible anyway.
@@ -146,7 +183,7 @@ def measure(path: Path) -> Metrics:
         # rather than a guess at the model's prose.
         if _names_a_cause(low):
             m.turns_with_cause += 1
-        if any(p in low for p in MIND_READING):
+        if _mind_reads(low):
             m.mind_reading += 1
         if any(p in low for p in MAGNITUDE):
             m.magnitude += 1

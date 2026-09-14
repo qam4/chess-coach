@@ -380,11 +380,24 @@ placements, tactics, or "and then..." continuations.
 # instead is the board-verified consequence, which is a fact either way: if the
 # opponent's reply wins a rook, saying so IS the severity, and the student can check
 # it. The tiers still differ, in directness and in length.
+#: "acknowledge the intent in a few words" used to open this block, and it is where the
+#: mind-reading comes from. We asked the coach to acknowledge a motive and never told it the
+#: motive, because we cannot know one: the prompt says what the move DOES, never why it was
+#: played. So the coach invented one, on 148 turns across the stored transcripts — "your move
+#: aimed to develop the bishop", "you were looking to activate your rook", "I see you're trying
+#: to develop your pieces". `_check_intent_attribution` catches only the subset that is also
+#: factually wrong (naming a piece the student does not have, or a different piece from the one
+#: moved), and its docstring already said the rest were invented and unfalsifiable.
+#:
+#: Fourth instance of one pattern: ask for a claim we have not supplied and the model supplies
+#: it. The other three were the reply template with no reply, the threats reference pointing at
+#: no threats section, and "what it wins" on a reply that wins nothing.
 _MOVE_EVAL_INSTRUCTIONS_INACCURACY = """\
 COACHING INSTRUCTIONS:
-- There was a stronger move here. Give a BRIEF redirect (2-3 sentences): \
-acknowledge the intent in a few words, then name the stronger move. No \
-motivational sign-off.
+- There was a stronger move here. Give a BRIEF redirect (2-3 sentences): name the \
+stronger move and what it does. Do NOT say what the student was trying, aiming, \
+hoping or looking to do, and do NOT open by guessing at a plan — nothing above tells \
+you why the move was played. No motivational sign-off.
 - Do NOT grade the move or say how much it cost. Do not call it an \
 inaccuracy, a mistake or a blunder, and do not quantify what was lost. \
 Describe what the stronger move does; that is the lesson.
