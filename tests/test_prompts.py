@@ -1351,3 +1351,112 @@ def test_unverifiable_lesson_is_unaffected_by_memory() -> None:
     for n in (0, 1, 5):
         prompt = build_rich_move_evaluation_prompt(report, lesson_times_taught=n)
         assert "CLOSE with one transferable takeaway" in prompt
+
+
+def test_a_retired_lesson_falls_back_to_the_guidance_principle() -> None:
+    """Going silent on a retired lesson silenced most endgame turns. Measured, then fixed.
+
+    `capture` is the winning effect category on 14 of 24 endgame turns across two games, so
+    `capture:phase:endgame` is taught once, reframed on the second showing and retired after
+    that — and every later endgame turn then closed on nothing at all. Across 28 endgame turns
+    the coach was handed a lesson on exactly one.
+
+    The ladder is right to stop repeating; the bug was having no second candidate. The guidance
+    block holds one that is already matched to this position and biased by the engine's
+    phase-aware theme, so on an endgame turn there is an endgame principle sitting right there.
+    """
+    from chess_coach.pedagogy.resource import GuidanceEntry
+    from chess_coach.prompts import LESSON_RETIRE_AFTER, _build_takeaway_instruction
+
+    report = dataclasses.replace(
+        _move_eval_report(CASTLE_FEN, "d2d3", "e1g1"),
+        eval_drop_cp=300,
+        classification="blunder",
+    )
+    entry = GuidanceEntry(
+        id="principle.endgame_king_activity",
+        type="principle",
+        theme="king activity in the endgame",
+        focus="focus text",
+        how_to_apply="how to apply",
+        levels=frozenset({"intermediate"}),
+        features=frozenset({"phase:endgame"}),
+        excludes_features=frozenset(),
+        eco_codes=frozenset(),
+        citation="c",
+        example=None,
+    )
+
+    # Retired, with nothing to fall back to: silence, as before.
+    assert _build_takeaway_instruction(report, "serious", LESSON_RETIRE_AFTER) == ""
+
+    # Retired, with guidance available: close on the guidance principle instead.
+    with_guidance = _build_takeaway_instruction(report, "serious", LESSON_RETIRE_AFTER, [entry])
+    assert "king activity in the endgame" in with_guidance
+    assert "rather than the lesson you have already given" in with_guidance
+
+    # And a lesson that has NOT been taught yet is untouched — the substitute must not pre-empt
+    # the composed lesson, only replace it once it has been given.
+    first = _build_takeaway_instruction(report, "serious", 0, [entry])
+    assert "CLOSE with one transferable takeaway on THIS lesson and no other" in first
+    assert "king activity in the endgame" not in first
+
+
+def test_the_substitute_arrives_at_the_REFRAME_step_not_only_at_retirement() -> None:
+    """Substituting only at retirement moved almost nothing. Measured, then widened.
+
+    Over two games the endgame turns sit overwhelmingly at the reframe step — taught once, so the
+    instruction re-serves the same lesson as "the SAME idea as earlier". That reframe is the
+    repetition the reviews describe, so a substitute that waits for retirement never arrives.
+    Naming a recurrence is still worth something, so it survives as the fallback for when there
+    is nothing better to offer.
+    """
+    from chess_coach.pedagogy.resource import GuidanceEntry
+    from chess_coach.prompts import _build_takeaway_instruction
+
+    report = dataclasses.replace(
+        _move_eval_report(CASTLE_FEN, "d2d3", "e1g1"),
+        eval_drop_cp=300,
+        classification="blunder",
+    )
+
+    def entry(entry_id: str, theme: str, features: set[str]) -> GuidanceEntry:
+        return GuidanceEntry(
+            id=entry_id,
+            type="principle",
+            theme=theme,
+            focus="f",
+            how_to_apply="h",
+            levels=frozenset({"intermediate"}),
+            features=frozenset(features),
+            excludes_features=frozenset(),
+            eco_codes=frozenset(),
+            citation="c",
+            example=None,
+        )
+
+    # Taught ONCE (the reframe step) with something else available: teach the something else.
+    once = _build_takeaway_instruction(report, "serious", 1, [entry("p.a", "answer the threat first", set())])
+    assert "answer the threat first" in once
+    assert "SAME idea as earlier" not in once
+
+    # Taught once with NOTHING else available: keep naming the recurrence rather than inventing.
+    bare = _build_takeaway_instruction(report, "serious", 1, [])
+    assert "SAME idea as earlier" in bare
+
+    # A phase-tagged entry is preferred over a higher-ranked one from another phase. The first
+    # version took whatever ranked first, and on 5 of 9 endgame turns that was a middlegame
+    # principle — so a fix for the middlegame monoculture served more middlegame.
+    import chess
+
+    from chess_coach.pedagogy.features import phase_of_board
+
+    board_phase = phase_of_board(chess.Board(CASTLE_FEN))
+    mixed = _build_takeaway_instruction(
+        report,
+        "serious",
+        1,
+        [entry("p.mid", "pin", set()), entry("p.phase", "the phase-specific one", {board_phase})],
+    )
+    assert "the phase-specific one" in mixed
+    assert "pin" not in mixed

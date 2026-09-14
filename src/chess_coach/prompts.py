@@ -1841,7 +1841,42 @@ _TAKEAWAY_ESCALATE = (
 LESSON_RETIRE_AFTER = 2
 
 
-def _build_takeaway_instruction(report: ComparisonReport, tier: str = "serious", times_taught: int = 0) -> str:
+def _guidance_takeaway(guidance: list[GuidanceEntry] | None, phase: str = "") -> str:
+    """A phase-appropriate lesson from the selected guidance, or ''.
+
+    Prefers an entry tagged with the CURRENT phase over the top-ranked one. Measured: the first
+    version took whatever ranked first, and on 5 of 9 endgame turns that was a middlegame
+    principle — "pin", "capture value" — so a mechanism built to break the middlegame monoculture
+    substituted more middlegame. Ranking is about relevance to the position; the point here is
+    that a turn in an endgame should close on an endgame idea if one is available.
+
+    The fallback for a retired lesson. Measured on two games: `capture` is the winning effect
+    category on 14 of 24 endgame turns, so `capture:phase:endgame` is taught once, reframed on
+    the second showing and retired after that — and every later endgame turn then closed on
+    NOTHING. Across 28 endgame turns the coach was handed a lesson on one. That is the
+    monoculture the reviews described, arriving by a mechanism nobody had looked at: the ladder
+    is right to stop repeating, but there was no second candidate to reach for.
+
+    The guidance block already holds one, and it is better suited than a second effect-derived
+    lesson would be: entries are selected BECAUSE their features match this position, and are
+    biased by the engine's phase-aware theme, so an endgame turn has endgame principles sitting
+    right there. This is row 103's generate-then-select in miniature — when the winner is spent,
+    take the next candidate rather than going silent.
+    """
+    entries = [e for e in (guidance or []) if (e.theme or "").strip()]
+    if phase:
+        for entry in entries:
+            if phase in entry.features:
+                return entry.theme.strip()
+    return entries[0].theme.strip() if entries else ""
+
+
+def _build_takeaway_instruction(
+    report: ComparisonReport,
+    tier: str = "serious",
+    times_taught: int = 0,
+    guidance: list[GuidanceEntry] | None = None,
+) -> str:
     """The closing-takeaway instruction, with the lesson composed where possible.
 
     The subject of the takeaway is derived from what the relevant move verifiably DOES
@@ -1864,12 +1899,34 @@ def _build_takeaway_instruction(report: ComparisonReport, tier: str = "serious",
     _key, lesson = composed_lesson(report, tier)
     if not lesson:
         return _TAKEAWAY_FALLBACK
-    if times_taught >= LESSON_RETIRE_AFTER:
-        # Taught, then flagged as recurring. A third telling adds nothing, and the
-        # response is still a complete piece of coaching without it: the move, what
-        # the stronger one does, and why. Silence beats a maxim on its fourth outing.
-        return ""
+    # ALREADY TAUGHT ONCE, so prefer a different lesson over saying the same one again.
+    #
+    # The first version of this substituted only at the RETIRE step, and it moved almost
+    # nothing: measured over two games, endgame turns sit overwhelmingly at the REFRAME step
+    # (taught once), where the instruction re-serves the same lesson as "the SAME idea as
+    # earlier". That reframe IS the repetition the reviews describe — "by the endgame the
+    # student is getting the identical 'check if it's defended' note for the fifth time",
+    # "seven turns of essentially one advice".
+    #
+    # Naming a recurrence is worth something, so it is kept as the fallback: reframe when we
+    # have nothing better to say. But when the guidance block offers a phase-appropriate
+    # principle we have not used, teaching that beats repeating ourselves. Row 103's
+    # generate-then-select, at the one place a lesson is chosen.
     if times_taught > 0:
+        board = _safe_board(report.fen)
+        phase = phase_of_board(board) if board is not None else ""
+        alternative = _guidance_takeaway(guidance, phase)
+        if alternative and alternative.strip().lower() != lesson.strip().lower():
+            return (
+                "CLOSE with one transferable takeaway, and use THIS one rather than the lesson "
+                f"you have already given earlier in this game: {alternative}. Put it in your own "
+                'words as a short "next time you see ..., ask yourself ..." hook. Do not assert '
+                "new pieces or squares in it, and do not repeat the earlier lesson."
+            )
+        if times_taught >= LESSON_RETIRE_AFTER:
+            # Taught, reframed, and nothing else to offer. A third telling adds nothing and the
+            # response is still complete without it.
+            return ""
         return _TAKEAWAY_ESCALATE.format(lesson=lesson)
     return (
         "CLOSE with one transferable takeaway on THIS lesson and no other: "
@@ -2602,7 +2659,10 @@ def build_rich_move_evaluation_prompt(
     word_limit = _TIER_WORD_LIMIT[tier]
     # ``lesson_times_taught`` comes from the caller's per-game memory: the coach used to
     # treat every turn as if it were the first, and taught one lesson five times.
-    takeaway_instruction = _build_takeaway_instruction(report, tier, lesson_times_taught)
+    # Guidance goes in so a retired lesson has somewhere to fall back to. Without it, the
+    # phase where one effect category dominates loses its takeaway on most turns — measured at
+    # 1 of 28 endgame turns carrying a lesson at all.
+    takeaway_instruction = _build_takeaway_instruction(report, tier, lesson_times_taught, guidance)
 
     # The engine's move, named only on the tiers that actually compare against it.
     # It used to be rendered unconditionally, so on the `equal` tier the prompt said
