@@ -191,6 +191,17 @@ from a byte-identical prompt.
 
 The cause should win when the two disagree, because the cause is what the turn teaches.
 
+### OPEN — Verify "cuts the king off" and other confinement claims (ledger row 136)
+
+The coach wrote "Re4, which cuts the king off" at ply 58 of seed 7 and `verify.py` passed
+it, because we have no check for confinement. It is checkable rules geometry and therefore
+ours: push the recommended move, count the enemy king's legal moves before and after, and
+reject the claim when the count does not drop. On the case that prompted this, it does not
+change at all — five squares (d6 d7 d8 f6 f8) either way.
+
+Worth generalising to the family: "cuts the king off", "traps", "confines", "takes away
+squares". All are the same measurement on the enemy king's (or a named piece's) move count.
+
 ### OPEN — Say whether the move CAUSED the piece to be undefended
 
 The header "--- Undefended AFTER your move ---" describes a STATE and reads as

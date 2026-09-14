@@ -750,6 +750,27 @@ def test_top_lines_section_names_which_side_is_the_opponent() -> None:
     assert "Black = you" in prompt
 
 
+def test_line_theme_is_scoped_to_the_line_not_to_its_first_move() -> None:
+    """A bare dash before the theme read as a claim about move one. Measured, then scoped.
+
+    Ply 58 of seed 7 carried "30.Re4 Rd3+ 31.Re3 Rxe3+ 32.Kxe3 h5 33.Rh7 Bg4 — theme: rook
+    cuts the king off" and the coach wrote "Re4, which cuts the king off". Checked against the
+    board: the enemy king on e7 had the same five squares (d6 d7 d8 f6 f8) before and after
+    Re4. The theme describes where the whole line ends up, so the prompt now says so and names
+    the move it is NOT a claim about.
+    """
+    report = dataclasses.replace(
+        _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300),
+        top_lines=[PVLine(depth=8, eval_cp=120, moves=["b8c6", "h5e5"], theme="material win")],
+    )
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "where the whole line ends up" in prompt
+    assert "material win" in prompt
+    # The first move of the line is named as the thing the theme is not about.
+    assert "not a claim about Nc6 on its own" in prompt
+    assert "— theme: material win" not in prompt
+
+
 def test_top_lines_section_is_omitted_entirely_when_nothing_renders() -> None:
     # No header without content. An empty section is worse than no section: the
     # grounding instructions point at it, so the coach was told to rely on facts
@@ -1390,14 +1411,23 @@ def test_a_retired_lesson_falls_back_to_the_guidance_principle() -> None:
     # Retired, with nothing to fall back to: silence, as before.
     assert _build_takeaway_instruction(report, "serious", LESSON_RETIRE_AFTER) == ""
 
-    # Retired, with guidance available: close on the guidance principle instead.
-    with_guidance = _build_takeaway_instruction(report, "serious", LESSON_RETIRE_AFTER, [entry])
+    # Retired, with an ANCHORED entry available: close on the guidance principle instead.
+    facts = {"phase:endgame": "your king is still on the back rank"}
+    with_guidance = _build_takeaway_instruction(report, "serious", LESSON_RETIRE_AFTER, [entry], facts)
     assert "king activity in the endgame" in with_guidance
     assert "rather than the lesson you have already given" in with_guidance
 
+    # The same entry with NO board fact is a generic maxim, and substituting it is padding.
+    # Measured at ply 58 of seed 7: an unanchored "king activity" substitute displaced a true
+    # clause about the recommended move with a false one ("Re4, which cuts the king off" — the
+    # enemy king had the same five squares before and after). Silence beats that.
+    unanchored = _build_takeaway_instruction(report, "serious", LESSON_RETIRE_AFTER, [entry])
+    assert "king activity in the endgame" not in unanchored
+    assert unanchored == ""
+
     # And a lesson that has NOT been taught yet is untouched — the substitute must not pre-empt
     # the composed lesson, only replace it once it has been given.
-    first = _build_takeaway_instruction(report, "serious", 0, [entry])
+    first = _build_takeaway_instruction(report, "serious", 0, [entry], facts)
     assert "CLOSE with one transferable takeaway on THIS lesson and no other" in first
     assert "king activity in the endgame" not in first
 
@@ -1436,13 +1466,28 @@ def test_the_substitute_arrives_at_the_REFRAME_step_not_only_at_retirement() -> 
         )
 
     # Taught ONCE (the reframe step) with something else available: teach the something else.
-    once = _build_takeaway_instruction(report, "serious", 1, [entry("p.a", "answer the threat first", set())])
+    # The alternative must be ANCHORED — an entry with a verified board fact behind it.
+    once = _build_takeaway_instruction(
+        report,
+        "serious",
+        1,
+        [entry("p.a", "answer the threat first", {"hanging_piece"})],
+        {"hanging_piece": "your knight on c3 is undefended"},
+    )
     assert "answer the threat first" in once
     assert "SAME idea as earlier" not in once
 
     # Taught once with NOTHING else available: keep naming the recurrence rather than inventing.
     bare = _build_takeaway_instruction(report, "serious", 1, [])
     assert "SAME idea as earlier" in bare
+
+    # Taught once with an UNANCHORED candidate: also the recurrence. A principle selected only
+    # because the phase matched is not about this turn, and closing on it is padding.
+    generic = _build_takeaway_instruction(
+        report, "serious", 1, [entry("p.a", "answer the threat first", {"hanging_piece"})], {}
+    )
+    assert "SAME idea as earlier" in generic
+    assert "answer the threat first" not in generic
 
     # A phase-tagged entry is preferred over a higher-ranked one from another phase. The first
     # version took whatever ranked first, and on 5 of 9 endgame turns that was a middlegame
@@ -1456,7 +1501,11 @@ def test_the_substitute_arrives_at_the_REFRAME_step_not_only_at_retirement() -> 
         report,
         "serious",
         1,
-        [entry("p.mid", "pin", set()), entry("p.phase", "the phase-specific one", {board_phase})],
+        [
+            entry("p.mid", "pin", {"pin"}),
+            entry("p.phase", "the phase-specific one", {board_phase}),
+        ],
+        {"pin": "their bishop pins your knight", board_phase: "few pieces are left"},
     )
     assert "the phase-specific one" in mixed
     assert "pin" not in mixed

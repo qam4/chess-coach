@@ -1841,8 +1841,25 @@ _TAKEAWAY_ESCALATE = (
 LESSON_RETIRE_AFTER = 2
 
 
-def _guidance_takeaway(guidance: list[GuidanceEntry] | None, phase: str = "") -> str:
+def _guidance_takeaway(
+    guidance: list[GuidanceEntry] | None,
+    phase: str = "",
+    facts: dict[str, str] | None = None,
+) -> str:
     """A phase-appropriate lesson from the selected guidance, or ''.
+
+    Only entries ANCHORED to this position are eligible: ``facts`` maps a feature to a
+    verified board fact, and an entry with no such fact is a generic maxim. Measured over
+    two games, substituting without this test moved two turns and one of them got worse —
+    at ply 58 the turn was about a pawn hanging on b4, the unanchored substitute was "king
+    activity in the endgame", and the model dropped a true clause (the recommended Re4 hits
+    a rook and a bishop) in favour of "Re4, which cuts the king off". The enemy king had the
+    same five squares before and after Re4. The turn it improved (a passed pawn on e4 the
+    king could support) had a fact; the turn it damaged did not.
+
+    That is also the product owner's rule: a lesson is not owed on every turn. With no
+    anchored candidate the caller falls back to naming the recurrence, which is a complete
+    turn on its own.
 
     Prefers an entry tagged with the CURRENT phase over the top-ranked one. Measured: the first
     version took whatever ranked first, and on 5 of 9 endgame turns that was a middlegame
@@ -1863,7 +1880,7 @@ def _guidance_takeaway(guidance: list[GuidanceEntry] | None, phase: str = "") ->
     right there. This is row 103's generate-then-select in miniature — when the winner is spent,
     take the next candidate rather than going silent.
     """
-    entries = [e for e in (guidance or []) if (e.theme or "").strip()]
+    entries = [e for e in (guidance or []) if (e.theme or "").strip() and any((facts or {}).get(f) for f in e.features)]
     if phase:
         for entry in entries:
             if phase in entry.features:
@@ -1876,6 +1893,7 @@ def _build_takeaway_instruction(
     tier: str = "serious",
     times_taught: int = 0,
     guidance: list[GuidanceEntry] | None = None,
+    guidance_facts: dict[str, str] | None = None,
 ) -> str:
     """The closing-takeaway instruction, with the lesson composed where possible.
 
@@ -1915,7 +1933,7 @@ def _build_takeaway_instruction(
     if times_taught > 0:
         board = _safe_board(report.fen)
         phase = phase_of_board(board) if board is not None else ""
-        alternative = _guidance_takeaway(guidance, phase)
+        alternative = _guidance_takeaway(guidance, phase, guidance_facts)
         if alternative and alternative.strip().lower() != lesson.strip().lower():
             return (
                 "CLOSE with one transferable takeaway, and use THIS one rather than the lesson "
@@ -2463,7 +2481,18 @@ def _format_comparison_top_lines(report: ComparisonReport) -> str:
         # defend, and the level instructions already had to ask the model not to
         # repeat the very numbers we were handing it. The line's POSITION in this
         # list carries the engine's preference, which is the trustworthy part.
-        lines.append(f"Line {i} ({whose}): {moves_str} — theme: {pv.theme}")
+        #
+        # The theme names where the WHOLE line ends up, and putting it after the
+        # moves with a bare dash read as a claim about the first one. Measured at
+        # ply 58 of seed 7: "30.Re4 Rd3+ 31.Re3 Rxe3+ 32.Kxe3 h5 33.Rh7 Bg4 —
+        # theme: rook cuts the king off" came back as "Re4, which cuts the king
+        # off". The enemy king had the same five squares before and after Re4; the
+        # cut-off happens later in the line, if at all. So name the move the theme
+        # is NOT about, which is the one the model reached for.
+        first = moves_str.split()[0] if moves_str.split() else ""
+        first = first.split(".")[-1] or first
+        scope = f" (not a claim about {first} on its own)" if first else ""
+        lines.append(f"Line {i} ({whose}): {moves_str} — where the whole line ends up{scope}: {pv.theme}")
     return "\n".join(lines)
 
 
@@ -2662,7 +2691,7 @@ def build_rich_move_evaluation_prompt(
     # Guidance goes in so a retired lesson has somewhere to fall back to. Without it, the
     # phase where one effect category dominates loses its takeaway on most turns — measured at
     # 1 of 28 endgame turns carrying a lesson at all.
-    takeaway_instruction = _build_takeaway_instruction(report, tier, lesson_times_taught, guidance)
+    takeaway_instruction = _build_takeaway_instruction(report, tier, lesson_times_taught, guidance, guidance_facts)
 
     # The engine's move, named only on the tiers that actually compare against it.
     # It used to be rendered unconditionally, so on the `equal` tier the prompt said
