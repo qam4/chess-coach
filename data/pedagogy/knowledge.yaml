@@ -190,6 +190,36 @@ entries:
     levels: [beginner, intermediate, advanced]
     features: [passed_pawn, phase:endgame]
     citation: "Silman, Silman's Complete Endgame Course, the square of the pawn"
+  - id: pattern.rook_behind_passed_pawn
+    type: pattern
+    theme: rook behind the passed pawn
+    focus: >
+      A rook belongs behind a passed pawn — yours or your opponent's.
+      Behind your own it supports every step forward; behind theirs it
+      holds the pawn back. As the pawn advances the rook behind it keeps
+      its scope while a rook in front of it runs out of squares.
+    how_to_apply: >
+      Before pushing the pawn, put your rook on the same file behind it,
+      then advance. If the passed pawn is your opponent's, get your rook
+      behind it rather than in front of it or beside it.
+    levels: [intermediate, advanced]
+    features: [passed_pawn, phase:endgame]
+    citation: "Tarrasch's rule, rook behind the passed pawn (widely attributed; locus unverified)"
+  - id: principle.convert_by_trading_pieces
+    type: principle
+    theme: converting a material lead
+    focus: >
+      When you are ahead in material, every piece that leaves the board
+      makes your advantage larger relative to what is left, and removes
+      the pieces your opponent needs to create counterplay. Pawns are
+      the opposite: trade them away and you may end up unable to win.
+    how_to_apply: >
+      Trade pieces, keep pawns. Offer even exchanges of knights, bishops
+      and rooks; avoid trading your last pawns. Aim for a position simple
+      enough that the extra material decides it without tactics.
+    levels: [beginner, intermediate, advanced]
+    features: [material_lead, phase:endgame]
+    citation: "Capablanca, Chess Fundamentals, simplification when ahead (locus unverified)"
 
   # ---------------------------------------------------------------
   # Planning (theme family: Planning) — ECO-keyed standard plans.
@@ -251,13 +281,16 @@ entries:
     theme: king activity in the endgame
     focus: >
       Once the queens are off, the king stops hiding and becomes a
-      strong fighting piece. A passive king loses endgames a active one
-      would draw or win.
+      strong fighting piece. A passive king loses endgames an active one
+      would draw or win. The same idea has a defensive half: the side
+      trying to hold must get its king in front of the enemy pawns.
     how_to_apply: >
       March the king toward the center and toward the pawns that matter.
       With king and rook against a lone king, use the king and rook
       together to drive the enemy king to the edge, where it can be
-      mated.
+      mated. A rook placed on the rank or file between the two kings
+      cuts the enemy king off from the pawns it is trying to reach —
+      then walk your own king up behind it.
     levels: [beginner, intermediate, advanced]
     features: [phase:endgame]
     citation: "Silman, Silman's Complete Endgame Course, king activity / K+R vs K (unverified locus)"

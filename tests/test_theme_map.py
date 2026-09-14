@@ -21,6 +21,52 @@ def test_theme_features_unmapped_is_empty() -> None:
     assert theme_features("something the engine added later") == frozenset()
 
 
+def test_every_engine_theme_is_mapped() -> None:
+    """The engine's whole vocabulary must have a home, or a phase goes unbiased.
+
+    This is the failure the endgame themes were added to fix, and it was invisible: the
+    classifier had six labels, all opening/middlegame, so every endgame line came back
+    "general play" — which maps to nothing, which leaves the selection exactly as if no
+    theme had been supplied. The phase with the MOST coached turns (13-18 of 40 in the
+    report card) had no theme signal at all, and nothing failed to say so.
+
+    Listed literally rather than imported, because the source of truth is a C++ function
+    in another repo (``label_line_theme`` in Blunder's PositionAnalyzer.cpp). If the engine
+    adds a label and this list is not updated, the new label silently contributes nothing —
+    so the list being hand-maintained is the point, not an oversight.
+    """
+    engine_vocabulary = (
+        # opening / middlegame
+        "king attack",
+        "material win",
+        "king safety, castling",
+        "central pawn break",
+        "piece development",
+        # endgame
+        "promotion",
+        "pawn race",
+        "passed pawn push",
+        "conversion, simplification",
+        "rook behind the passer",
+        "rook cuts the king off",
+        "king activity",
+    )
+    unmapped = [t for t in engine_vocabulary if not theme_features(t)]
+    assert not unmapped, f"engine themes with no pedagogy bias, so they contribute nothing: {unmapped}"
+
+
+def test_mapped_features_exist_in_the_closed_vocabulary() -> None:
+    # A typo maps to a feature no entry has, which is indistinguishable from no mapping at
+    # all — the selection is unbiased and nothing reports it. Check against the bank itself.
+    from chess_coach.pedagogy.resource import default_resource_path, load_resource
+    from chess_coach.pedagogy.theme_map import _THEME_TO_FEATURES
+
+    vocab = load_resource(default_resource_path()).feature_vocab
+    for theme, features in _THEME_TO_FEATURES.items():
+        for feature in features:
+            assert feature in vocab, f"theme {theme!r} maps to {feature!r}, which is not in the closed vocabulary"
+
+
 def _entry(eid: str, features: frozenset[str]) -> GuidanceEntry:
     return GuidanceEntry(
         id=eid,
