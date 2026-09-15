@@ -1,7 +1,12 @@
 ---
-inclusion: auto
+inclusion: always
 description: Project overview, architecture, module layout, and key design decisions
 ---
+
+<!-- inclusion MUST stay `always` — see the note in commit-checklist.md. `auto` defers
+loading until the request matches this description, so the module layout and the
+engine/coach division of labour were missing from sessions that did not name them. -->
+
 
 # Chess Coach — Project Overview
 

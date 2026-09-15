@@ -1,7 +1,15 @@
 ---
-inclusion: auto
+inclusion: always
 description: Chess-coach-specific build commands and rules
 ---
+
+<!-- inclusion MUST stay `always`. It read `auto` for a while, and `auto` does not mean
+"always on": per https://kiro.dev/docs/steering.md it defers loading until the request
+matches the description, the same way a skill does. So the verify commands and the
+after-pushing CI rule were absent from sessions that never mentioned them by name — which
+is every session that needed them most. `auto` also requires a `name` key this file never
+had. Same fix applied to project-overview.md. -->
+
 
 # Before committing
 
