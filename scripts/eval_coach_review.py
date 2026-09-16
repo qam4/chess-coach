@@ -92,7 +92,23 @@ CURATED = [
 ]
 
 
-def _run_environment(engine_cfg: dict, llm_cfg: dict, depth: int) -> dict:  # type: ignore[type-arg]
+#: The coach's sampling temperature for a report card run. Zero on purpose: two runs of one
+#: build then produce byte-identical output, so a before/after is a clean comparison and any
+#: difference between two runs is attributable to the change rather than to sampling. Verified
+#: — a re-run of qwen3:14b on seeds 7 and 13 matched an earlier run on 44/44 and 25/25 plies.
+#:
+#: Referenced by :func:`_run_environment` so the recorded value cannot drift from the used one.
+_COACH_TEMPERATURE = 0.0
+
+
+def _run_environment(  # type: ignore[type-arg]
+    engine_cfg: dict,
+    depth: int,
+    *,
+    model: str,
+    base_url: str,
+    temperature: float,
+) -> dict:
     """What produced this transcript: which engine binary, which model, what depth.
 
     Written into ``transcript.json`` next to ``stats`` so a confounded comparison declares
@@ -105,8 +121,20 @@ def _run_environment(engine_cfg: dict, llm_cfg: dict, depth: int) -> dict:  # ty
     moved from ``qwen3:8b`` to ``qwen3:14b`` mid-project, so transcripts either side of that
     are not comparable and nothing marked the boundary.
 
-    Only three LLM fields are copied, named explicitly rather than dumping ``llm_cfg``, so a
-    future key holding a token cannot leak into a committed artefact.
+    ``model``, ``base_url`` and ``temperature`` are the values the run ACTUALLY used and must
+    be passed in, not read from the config. The first version of this read ``config["llm"]``
+    and a ``--model gemma4:12b-it-qat`` run recorded itself as ``qwen3:14b``, because
+    ``--model`` overrides the config and the config is what got written. Wrong provenance is
+    worse than none: it is the confound this block exists to expose, wearing a label that says
+    it is not there.
+
+    The LLM fields are named individually rather than dumped from the config, so a future key
+    holding a token cannot leak into a committed artefact.
+
+    ``temperature`` is recorded because determinism depends on it. The report card runs the
+    coach at 0.0, which is why two runs of one build are byte-identical and a cross-model
+    difference is attributable to the model rather than to sampling. A reader cannot tell that
+    from the transcript unless it says so.
     """
     engine: dict = {"path": None, "size": None, "mtime": None, "sha256": None}
     try:
@@ -124,11 +152,7 @@ def _run_environment(engine_cfg: dict, llm_cfg: dict, depth: int) -> dict:  # ty
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "engine": engine,
         "depth": depth,
-        "llm": {
-            "provider": llm_cfg.get("provider"),
-            "model": llm_cfg.get("model"),
-            "base_url": llm_cfg.get("base_url"),
-        },
+        "llm": {"provider": "ollama", "model": model, "base_url": base_url, "temperature": temperature},
     }
 
 
@@ -283,7 +307,7 @@ def main() -> None:
         top_moves=args.multipv,
         level=args.level,
         max_tokens=config.get("llm", {}).get("max_tokens", 512),
-        temperature=0.0,  # deterministic, so a run is a clean before/after
+        temperature=_COACH_TEMPERATURE,
         template_only=coaching_cfg.get("template_only", False),
         guidance=coaching_cfg.get("guidance", True),
         guidance_max=args.guidance_max,
@@ -367,7 +391,13 @@ def main() -> None:
     (out_dir / "transcript.json").write_text(
         json.dumps(
             {
-                "environment": _run_environment(config["engine"], config.get("llm", {}), depth),
+                "environment": _run_environment(
+                    config["engine"],
+                    depth,
+                    model=args.model,
+                    base_url=args.base_url,
+                    temperature=_COACH_TEMPERATURE,
+                ),
                 "stats": stats.to_dict(),
                 "turns": [t.to_dict() for t in turns],
             },
