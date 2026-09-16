@@ -56,7 +56,13 @@ TEACHES_PRINCIPLE = "teaches_principle"
 
 # A stable substring of the engine-grounding instruction in the judge
 # prompt — present in every judge prompt regardless of guidance.
-JUDGE_GROUNDING_MARKER = "GROUND TRUTH"
+#
+# Was "GROUND TRUTH", which the prompt no longer says: the engine's centipawns carry
+# ~139cp mean absolute error against a reference where the coach speaks, so calling them
+# ground truth let the judge penalise the coach for disagreeing with a wrong number. The
+# grounding requirement itself is unchanged and still asserted — only the claim of
+# authority went.
+JUDGE_GROUNDING_MARKER = "GROUND YOUR FACTUAL CHECKS ONLY IN THE ENGINE DATA"
 # A stable substring of the teaches_principle grounding instruction.
 SOLE_STANDARD_MARKER = "ONLY against the curated guidance"
 

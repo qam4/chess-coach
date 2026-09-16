@@ -190,11 +190,25 @@ def format_engine_report(report: PositionReport) -> str:
     sections are omitted to keep the judge prompt focused."""
     sections: list[str] = []
     eb = report.eval_breakdown
+    # The heading used to read "Evaluation (ground truth)", which we now know is false.
+    # Measured against Stockfish 18 at depth 22: this engine at our shipping depth disagrees
+    # on 20 of 44 turns, with mean absolute error 139cp and signed +122cp on the turns where
+    # the coach actually speaks — wider than the whole `sound` band. Labelling that as ground
+    # truth invited the judge to mark the coach down for disagreeing with a wrong number.
+    #
+    # The DIRECTION survives, because a sign claim is robust to that error, and material is
+    # countable. The magnitudes do not, so they are handed over labelled rather than dropped:
+    # the judge still needs them to check whether the coach's explanation matches the engine's
+    # reasoning, and it cannot do that from a direction alone.
     sections.append(
-        "--- Evaluation (ground truth) ---\n"
+        "--- Engine evaluation (this engine's own numbers, NOT a reference) ---\n"
         f"Overall: {_fmt_eval(report.eval_cp)}\n"
         f"Material {eb.material}cp, mobility {eb.mobility}cp, "
-        f"king safety {eb.king_safety}cp, pawn structure {eb.pawn_structure}cp"
+        f"king safety {eb.king_safety}cp, pawn structure {eb.pawn_structure}cp\n"
+        "Trust the DIRECTION (which side stands better) and the material count. Do NOT grade "
+        "the coaching on the exact centipawn figures: they carry ~139cp mean absolute error "
+        "against a reference engine, so a coach describing this position in different "
+        "magnitude terms is not thereby wrong."
     )
 
     # All fact sentences come from the shared composer (never the engine's
@@ -226,8 +240,11 @@ def format_engine_report(report: PositionReport) -> str:
         lines = []
         for i, ln in enumerate(report.top_lines[:3], 1):
             moves = " ".join(ln.moves[:5])
-            lines.append(f"Line {i} ({ln.eval_cp}cp): {moves}")
-        sections.append("--- Top engine lines ---\n" + "\n".join(lines))
+            # Per-line cp dropped: same magnitude error as above, and the line's POSITION in
+            # this list already carries the engine's preference, which is the part we trust.
+            # The coach's own prompt made this trade first (_format_comparison_top_lines).
+            lines.append(f"Line {i}: {moves}")
+        sections.append("--- Top engine lines (best first; order is the engine's preference) ---\n" + "\n".join(lines))
 
     return "\n\n".join(sections)
 
@@ -309,12 +326,11 @@ def build_judge_prompt(
 
     return (
         "You are evaluating a chess coaching response for quality.\n"
-        "You are given the chess engine's authoritative analysis of the "
-        "position. TREAT THE ENGINE ANALYSIS AS GROUND TRUTH. Do NOT use "
-        "your own chess calculation to judge factual claims — rely only "
-        "on the engine data provided. Your job is to score the coaching "
-        "text against the rubric and to flag any claim in it that "
-        "contradicts the engine data.\n\n"
+        "You are given a chess engine's analysis of the position. GROUND YOUR "
+        "FACTUAL CHECKS ONLY IN THE ENGINE DATA PROVIDED — do NOT use your own "
+        "chess calculation, and do not treat the engine's centipawn figures as "
+        "exact. Your job is to score the coaching text against the rubric and to "
+        "flag any claim in it that contradicts the engine data.\n\n"
         f"Position FEN: {report.fen}\n"
         f"Side to move: {side}\n"
         f"Coaching target level: {position.level}\n\n"
@@ -525,8 +541,9 @@ def build_pairwise_prompt(
     side = "White" if board.turn == chess.WHITE else "Black"
     return (
         "You are comparing two chess coaching responses for the same "
-        "position. TREAT THE ENGINE ANALYSIS AS GROUND TRUTH; do not use "
-        "your own chess calculation. Pick the response that is the better "
+        "position. GROUND YOUR FACTUAL CHECKS ONLY IN THE ENGINE DATA PROVIDED; "
+        "do not use your own chess calculation, and do not treat the engine's "
+        "centipawn figures as exact. Pick the response that is the better "
         "coaching: grounded in the engine data (no contradictions), finds "
         "the key idea, explains why, is actionable, and fits the target "
         "level.\n\n"

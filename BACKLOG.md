@@ -165,7 +165,13 @@ Deliberately NOT fixed in the same change as the refutation fill: adding a fact 
 alters the prompt on most turns, and folding it into the same run would leave us unable to
 say which change moved the number.
 
-### OPEN — Supply the opponent's reply on every turn that has one
+### DONE — Supply the opponent's reply on every turn that has one
+
+**Closed, verified 2026-09-16.** `with_refutation` at `engine.py:765` fills an empty
+`refutation_line` from a post-move search, gated by `_reply_punishes` (`engine.py:24`, applied at
+842) so only a capture or a check qualifies. Multi-seed A/B 28-20 in favour, 5/5 seeds, p=0.312.
+The gate matters: unconditional fill put a reply on 70/70 turns and the judge called it
+"irrelevant narration".
 
 On plies 28 and 34 no refutation line was supplied, v43's model invented one, and both
 inventions were TRUE and checkable ("the opponent plays Rxg5, winning your undefended
@@ -180,7 +186,11 @@ moves into this repo. Costs one extra engine call on the turns that currently ha
 Measure with the same pairwise harness on plies 28 and 34 specifically, not on the
 aggregate: 18 pairs cannot resolve a two-turn change (row 101).
 
-### OPEN — One subject per turn, chosen rather than left to survive
+### DONE — One subject per turn, chosen rather than left to survive
+
+**Closed, verified 2026-09-16.** `_FOCUS_CAUSE` (`prompts.py:549`, used at 2669) makes the cause
+the subject and demotes the rest under a "Background (NOT the cause)" header. Measured 4 of 20
+turns opening on the wrong piece before, 1 of 14 after.
 
 Verified instance of the systemic filtering problem (row 103). On ply 34 the prompt
 carried two competing subjects on different squares — "Undefended AFTER your move: your
@@ -202,7 +212,11 @@ change at all — five squares (d6 d7 d8 f6 f8) either way.
 Worth generalising to the family: "cuts the king off", "traps", "confines", "takes away
 squares". All are the same measurement on the enemy king's (or a named piece's) move count.
 
-### OPEN — Say whether the move CAUSED the piece to be undefended
+### DONE — Say whether the move CAUSED the piece to be undefended
+
+**Closed, verified 2026-09-16.** The header is now computed rather than fixed
+(`prompts.py:566`): when the piece was already loose it reads "--- Already undefended before your
+move (your move did not cause this) ---" (line 590) instead of implying causation.
 
 The header "--- Undefended AFTER your move ---" describes a STATE and reads as
 causation, and the model duly wrote "you allowed your pawn on c2 to become undefended"
@@ -214,7 +228,12 @@ Note this class is invisible to the fidelity gate, which checks moves, captures,
 attacks, placement and ownership but nothing about causation — so it ships. Both
 falsehoods came from the judge's prose, not from any counter we have.
 
-### OPEN — Restore the reply's prominence in `_REPLY_SUPPLIED`
+### DONE — Restore the reply's prominence in `_REPLY_SUPPLIED`
+
+**Closed, verified 2026-09-16.** `_REPLY_SUPPLIED` now opens "THE OPPONENT'S ANSWER: lead with
+it", keeps the composed line as the only permitted source, and adds "State the reply ONCE, not
+again as a separate sentence" for the ply-30 duplication. The comment block above it records both
+failed wordings so neither is retried.
 
 Self-inflicted in v48. Tightening the instruction to "the line it appears on is the ONLY
 description you may give" cost the consequence at ply 20 ("omits the cost") and produced
@@ -365,7 +384,13 @@ wanted; a protocol version bump would not have caught it, because bumping relies
 person who changed the units noticing that they changed the contract, which is exactly
 what did not happen. See `docs/coaching-protocol.md` §5.7.
 
-### TOP — Stop the model authoring causal claims (ledger rows 74-76)
+### DONE — Stop the model authoring causal claims (ledger rows 74-76)
+
+**Closed, verified 2026-09-16.** `_FOCUS_CAUSE` at `prompts.py:549`, wired at `prompts.py:2669`;
+`_REPLY_SUPPLIED` carries the authorship rule ("that line is the ONLY source — do NOT upgrade
+what it says"). Ledger row 77 records it landing in v36. Left marked TOP for weeks after it
+shipped, and a session proposed rebuilding it from scratch as a result — the mechanism was even
+documented in `project-overview.md` the same morning. **When an item ships, close it here.**
 
 **The score is capped at 2/10 by fidelity and has been for most of the project.** Ten
 runs were scored on the v1 ask, which cannot discriminate; re-judged under v2, v33 and

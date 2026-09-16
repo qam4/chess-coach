@@ -71,7 +71,9 @@ def test_parse_pairwise() -> None:
 def test_build_pairwise_prompt_has_both_responses() -> None:
     p = build_pairwise_prompt("ALPHA", "BETA", _report(), _pos())
     assert "ALPHA" in p and "BETA" in p
-    assert "GROUND TRUTH" in p
+    assert "GROUND YOUR FACTUAL CHECKS ONLY IN THE ENGINE DATA" in p
+    # The engine's numbers are handed over, but not as truth — see test_eval_judge.
+    assert "ground truth" not in p.lower()
 
 
 # --------------------------------------------------------------- P6: order randomized + recorded

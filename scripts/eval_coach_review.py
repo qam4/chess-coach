@@ -29,11 +29,13 @@ result "1/2-1/2" as 50% complete.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shlex
 import sys
 import time
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 import chess
@@ -88,6 +90,46 @@ CURATED = [
     ("8/5k2/8/3P4/8/8/5K2/8 w - - 0 1", "f2e3"),  # K+P: escort with the king
     ("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", "a1a8"),  # back-rank idea
 ]
+
+
+def _run_environment(engine_cfg: dict, llm_cfg: dict, depth: int) -> dict:  # type: ignore[type-arg]
+    """What produced this transcript: which engine binary, which model, what depth.
+
+    Written into ``transcript.json`` next to ``stats`` so a confounded comparison declares
+    itself instead of being reconstructed later. v31 and v32 ran against DIFFERENT engine
+    binaries and nothing in either transcript said so; establishing it afterwards took
+    forensics on source-file and binary timestamps, by which point the two numbers had
+    already been read as a before/after.
+
+    The model is recorded for the same reason and it is not hypothetical: ``config.yaml``
+    moved from ``qwen3:8b`` to ``qwen3:14b`` mid-project, so transcripts either side of that
+    are not comparable and nothing marked the boundary.
+
+    Only three LLM fields are copied, named explicitly rather than dumping ``llm_cfg``, so a
+    future key holding a token cannot leak into a committed artefact.
+    """
+    engine: dict = {"path": None, "size": None, "mtime": None, "sha256": None}
+    try:
+        path = Path(_resolve_engine_path(engine_cfg["path"]))
+        engine["path"] = str(path)
+        st = path.stat()
+        engine["size"] = st.st_size
+        engine["mtime"] = datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()
+        engine["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    except Exception as e:  # noqa: BLE001
+        # Never fail a 20-minute review run over provenance. Record why it is missing.
+        engine["error"] = repr(e)
+
+    return {
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "engine": engine,
+        "depth": depth,
+        "llm": {
+            "provider": llm_cfg.get("provider"),
+            "model": llm_cfg.get("model"),
+            "base_url": llm_cfg.get("base_url"),
+        },
+    }
 
 
 def _build_engine(engine_cfg: dict, coaching_timeout: float) -> CoachingEngine:  # type: ignore[type-arg]
@@ -323,7 +365,15 @@ def main() -> None:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "transcript.json").write_text(
-        json.dumps({"stats": stats.to_dict(), "turns": [t.to_dict() for t in turns]}, indent=2), encoding="utf-8"
+        json.dumps(
+            {
+                "environment": _run_environment(config["engine"], config.get("llm", {}), depth),
+                "stats": stats.to_dict(),
+                "turns": [t.to_dict() for t in turns],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
     )
     (out_dir / "review.md").write_text(review.strip() + "\n", encoding="utf-8")
     print("\n" + "=" * 70)

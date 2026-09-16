@@ -90,12 +90,19 @@ def test_rubric_rejects_duplicate_keys(tmp_path) -> None:
 def test_judge_prompt_contains_report_and_grounding() -> None:
     report = _report(eval_cp=150, hanging=[HangingPiece("e4", "knight", "black")])
     prompt = build_judge_prompt("some coaching", report, _pos(), _rubric())
-    # Engine ground truth present.
+    # Engine data present.
     assert report.fen in prompt
-    assert "GROUND TRUTH" in prompt
+    assert "GROUND YOUR FACTUAL CHECKS ONLY IN THE ENGINE DATA" in prompt
     assert "knight on e4" in prompt
     # Grounding instruction present.
-    assert "Do NOT use your own chess" in prompt
+    assert "do NOT use your own" in prompt
+    # ...but the engine's numbers are NOT presented as truth. The heading said
+    # "ground truth" while the engine carries ~139cp mean absolute error against a
+    # reference on the turns where the coach speaks, so the judge was invited to mark
+    # the coach down for disagreeing with a wrong figure.
+    assert "ground truth" not in prompt.lower()
+    assert "authoritative" not in prompt.lower()
+    assert "do not treat the engine's centipawn figures as" in prompt
     # Rubric keys present.
     assert "key_idea" in prompt
     assert "grounded" in prompt
@@ -105,7 +112,7 @@ def test_judge_prompt_contains_report_and_grounding() -> None:
 
 def test_format_report_omits_empty_sections() -> None:
     text = format_engine_report(_report())
-    assert "Evaluation" in text
+    assert "evaluation" in text.lower()  # heading is "Engine evaluation (...)"
     assert "Hanging pieces" not in text  # none present
     assert "Tactics" not in text
 
