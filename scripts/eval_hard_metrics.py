@@ -94,23 +94,75 @@ MAGNITUDE = ("centipawn", "cp)", " cp ", "+0.", "-0.", "eval of", "score of")
 #: under-counted paraphrase, and it missed the composed fallback entirely, which renders the
 #: same habit as "Worth remembering: before I commit, ..." with no "check" in it. That error
 #: made a working fix read as 0 of 4 — the counter, not the coaching.
-_CAUSE_PHRASES = (
+#:
+#: RETIRED 2026-09-16 (ledger row 137). These phrases were lifted from our own composed
+#: clauses, so the metric scored whether the model ECHOED our wording, not whether the turn
+#: explained anything. First multi-model run exposed it: 50%/50% for qwen3:14b against
+#: 17%/12% for gemma4:12b-it-qat, and all 29 gemma turns it scored zero on do explain why the
+#: move failed. One missed on a single word — the list holds "check that was skipped" and
+#: gemma wrote "check was skipped". Kept only to document what not to do again; broadening the
+#: list is the approach ledger rows 27 and 95 record failing twice.
+_RETIRED_CAUSE_PHRASES = (
     "attacked on the square",
     "only thing guarding",
-    "something of theirs i can just take",
-    "still defended",
-    "open a line",
     "check that was skipped",
     "thinking that went wrong",
-    "has no defender",
-    "was the only piece guarding",
-    "not attacked before",
 )
 
+#: The composed cause section, as `prompts._came_about` emits it. Deterministic: it is our own
+#: text in our own prompt, so finding it is exact rather than a guess about prose.
+_CAUSE_SECTION = re.compile(r"--- How this came about ---\s*\n(.+?)(?=\n---|\n\n|\Z)", re.DOTALL)
 
-def _names_a_cause(low: str) -> bool:
-    """Does this turn tell the student WHY the move failed, however it is phrased?"""
-    return any(p in low for p in _CAUSE_PHRASES)
+#: Square extraction is deliberately ASYMMETRIC, because the two sides want opposite things.
+#:
+#: STRICT, for the composed cause: a bare square only. "Before Bd2 your pawn on b2 was
+#: defended" is about b2 — d2 is merely where the bishop went, and anchoring on a move's
+#: destination would point the metric at the wrong square.
+#:
+#: LOOSE, for the coach's text: a square even inside a SAN token, because that is still naming
+#: it. Measured — at ply 8 of seed 13 the cause was "their bishop on c3 was attacked and
+#: undefended, and bxc3 does not take it", and the coach answered "the stronger move was Bxc3,
+#: capturing their bishop". Strict matching scored that a miss, which it plainly is not.
+_SQUARE_STRICT = re.compile(r"\b([a-h][1-8])\b")
+_SQUARE_LOOSE = re.compile(r"(?<![a-h0-9])([a-h][1-8])(?![0-9])", re.IGNORECASE)
+
+
+def _cause_squares(prompt: str) -> set[str] | None:
+    """Squares the composed cause is ABOUT, or None when no cause was composed.
+
+    The anchor is a set of squares rather than any wording, which is the whole point: a board
+    fact ports across models where our phrasing does not. Returns an empty set when a cause
+    was composed but names no square — the repeat-clause-only case, "This same piece already
+    came up on move 6" — which is given but not scorable, and must not be counted either way.
+    """
+    m = _CAUSE_SECTION.search(prompt)
+    if not m:
+        return None
+    return set(_SQUARE_STRICT.findall(" ".join(m.group(1).split())))
+
+
+def _voices_the_cause(text: str, cause_sq: set[str]) -> bool:
+    """Does the turn name a square the composed cause is about?
+
+    Deliberately not "does it use a causal construction": that is phrasing, and phrasing is
+    what the retired metric got wrong. Validated across two models — 100%/90% for qwen and
+    92%/100% for gemma, a spread of ±8 points running in BOTH directions, against the retired
+    metric's consistent 35-point gap.
+
+    Known false-positive class, measured at ZERO occurrences over four runs: if the cause
+    square is also the square the opponent captures on, a turn could name it just by reporting
+    the capture. It has not happened, but it is the thing to re-check if this metric ever
+    saturates suspiciously.
+
+    Known FALSE NEGATIVE, and it is a limit of the design rather than a bug: a turn can convey
+    the cause without coordinates. At ply 56 of seed 7 the cause was about e1 and the coach
+    said "moving the rook left it undefended" — correct, and unscoreable here. So this metric
+    UNDERCOUNTS, and the honest reading of a figure below 100% is "at least this many", not
+    "exactly this many". Closing that gap means going back to matching phrasing, which is what
+    the retired metric did wrong.
+    """
+    said = {s.lower() for s in _SQUARE_LOOSE.findall(text)}
+    return bool(cause_sq & said)
 
 
 @dataclass
@@ -124,7 +176,9 @@ class Metrics:
     gating: int = 0
     turns_with_violation: int = 0
     kinds: Counter[str] = field(default_factory=Counter)
-    turns_with_cause: int = 0
+    cause_given: int = 0
+    cause_anchorable: int = 0
+    cause_voiced: int = 0
     mind_reading: int = 0
     magnitude: int = 0
     words: int = 0
@@ -136,9 +190,24 @@ class Metrics:
         return 0.0 if not self.spoken else 100.0 * (self.spoken - self.turns_with_violation) / self.spoken
 
     @property
-    def cause_rate(self) -> float:
-        """Share of spoken turns that name why the move failed, not just what happened."""
-        return 0.0 if not self.spoken else 100.0 * self.turns_with_cause / self.spoken
+    def cause_given_rate(self) -> float:
+        """Share of spoken turns we HANDED a composed cause. Ours, not the model's.
+
+        Split from voicing because one number conflated them and reported neither. Measured at
+        68-72%, so roughly three in ten spoken turns are given no cause at all — and that is a
+        composition gap, fixable here, not something to push the model harder about.
+        """
+        return 0.0 if not self.spoken else 100.0 * self.cause_given / self.spoken
+
+    @property
+    def cause_voiced_rate(self) -> float:
+        """Of the causes we composed AND could anchor, how many reached the student.
+
+        Near ceiling (90-100% across two models), which is itself the finding: when a cause is
+        composed it almost always gets voiced. Little headroom, so watch it for regressions
+        rather than expecting gains.
+        """
+        return 0.0 if not self.cause_anchorable else 100.0 * self.cause_voiced / self.cause_anchorable
 
     @property
     def words_per_turn(self) -> float:
@@ -178,11 +247,16 @@ def measure(path: Path) -> Metrics:
             m.gating += len(gating_violations(vs))
             m.kinds.update(v.kind for v in vs)
 
-        # Does the turn account for the failure, or only report it? The composed cause
-        # sentences are the only source of this phrasing, so matching them is exact
-        # rather than a guess at the model's prose.
-        if _names_a_cause(low):
-            m.turns_with_cause += 1
+        # Does the turn account for the failure, or only report it? Two questions, not one:
+        # did WE compose a cause, and did it reach the student. Anchored on the squares the
+        # composed cause names, so a model that paraphrases scores the same as one that echoes.
+        cause_sq = _cause_squares(t.get("prompt") or "")
+        if cause_sq is not None:
+            m.cause_given += 1
+            if cause_sq:  # a cause with no square is given but not scorable
+                m.cause_anchorable += 1
+                if _voices_the_cause(text, cause_sq):
+                    m.cause_voiced += 1
         if _mind_reads(low):
             m.mind_reading += 1
         if any(p in low for p in MAGNITUDE):
@@ -213,19 +287,23 @@ def main(argv: list[str]) -> int:
 
     print(
         f"{'run':<8}{'plies':>6}{'spoke':>6}{'clean%':>8}{'bad turns':>10}{'gating':>8}"
-        f"{'cause%':>8}{'mind-rd':>8}{'magn':>6}{'w/turn':>8}{'top-closer%':>12}"
+        f"{'cause-giv%':>11}{'cause-voi%':>11}{'mind-rd':>8}{'magn':>6}{'w/turn':>8}{'top-closer%':>12}"
     )
     for m in rows:
         print(
             f"{m.name:<8}{m.plies:>6}{m.spoken:>6}{m.clean_rate:>7.0f}%{m.turns_with_violation:>10}"
-            f"{m.gating:>8}{m.cause_rate:>7.0f}%{m.mind_reading:>8}{m.magnitude:>6}"
+            f"{m.gating:>8}{m.cause_given_rate:>10.0f}%{m.cause_voiced_rate:>10.0f}%"
+            f"{m.mind_reading:>8}{m.magnitude:>6}"
             f"{m.words_per_turn:>8.0f}{m.repeated_share:>11.0f}%"
         )
     print()
     print("clean%      turns with NOTHING the board contradicts (higher is better) — the")
     print("            one that decides whether this is safe for a 1200")
     print("gating      violations severe enough to block a response")
-    print("cause%      turns naming WHY the move failed, not just what happened")
+    print("cause-giv%  spoken turns WE handed a composed cause — ours to fix, not the model's")
+    print("cause-voi%  of those, how many reached the student. Anchored on the squares the")
+    print("            composed cause names, so it survives a change of model; the phrase-")
+    print("            matched version it replaces was really a compliance score (row 137)")
     print("mind-rd     turns inventing the student's intent")
     print("magn        turns leaking an evaluation number (must stay 0)")
     print("top-closer% share of turns ending on the single most-repeated idea (lower is better)")
@@ -234,7 +312,7 @@ def main(argv: list[str]) -> int:
         print()
         print(
             f"trend {first.name} -> {last.name}:  clean {first.clean_rate:.0f}% -> {last.clean_rate:.0f}%"
-            f"   cause {first.cause_rate:.0f}% -> {last.cause_rate:.0f}%"
+            f"   cause given {first.cause_given_rate:.0f}% -> {last.cause_given_rate:.0f}%"
             f"   words {first.words_per_turn:.0f} -> {last.words_per_turn:.0f}"
         )
 
