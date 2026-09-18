@@ -108,6 +108,7 @@ def _run_environment(  # type: ignore[type-arg]
     model: str,
     base_url: str,
     temperature: float,
+    seed: int,
 ) -> dict:
     """What produced this transcript: which engine binary, which model, what depth.
 
@@ -148,10 +149,17 @@ def _run_environment(  # type: ignore[type-arg]
         # Never fail a 20-minute review run over provenance. Record why it is missing.
         engine["error"] = repr(e)
 
+    label, _fen = _start_for_seed(seed)
     return {
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "engine": engine,
         "depth": depth,
+        # The seed selects which opening is played, so it identifies the GAME. Recorded because
+        # a metric can move 27 points on the opening alone (measured across 5 openings), which
+        # makes two runs on different seeds incomparable — and unlabelled runs made that
+        # invisible.
+        "seed": seed,
+        "opening": label,
         "llm": {"provider": "ollama", "model": model, "base_url": base_url, "temperature": temperature},
     }
 
@@ -397,6 +405,7 @@ def main() -> None:
                     model=args.model,
                     base_url=args.base_url,
                     temperature=_COACH_TEMPERATURE,
+                    seed=args.seed,
                 ),
                 "stats": stats.to_dict(),
                 "turns": [t.to_dict() for t in turns],

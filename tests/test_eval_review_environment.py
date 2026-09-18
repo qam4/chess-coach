@@ -40,11 +40,34 @@ def test_environment_records_the_model_actually_used_not_the_config() -> None:
         model="gemma4:12b-it-qat",
         base_url="http://localhost:11435",
         temperature=0.0,
+        seed=13,
     )
 
     assert env["llm"]["model"] == "gemma4:12b-it-qat"
     assert env["llm"]["base_url"] == "http://localhost:11435"
     assert env["depth"] == 8
+
+
+def test_environment_records_the_seed_and_the_opening_it_selects() -> None:
+    """The seed identifies the GAME, and the game moves the metrics on its own.
+
+    Measured across five openings on one identical build: `cause_given_pct` spans 27 points and
+    `spoke` spans 12 turns purely by which opening was played. So two runs on different seeds
+    are not comparable, and a run that does not record its seed cannot be placed.
+    """
+    mod = _load()
+    env = mod._run_environment({"path": "nope"}, 8, model="m", base_url="u", temperature=0.0, seed=13)
+    assert env["seed"] == 13
+    assert env["opening"] == "Queen's Gambit"
+
+    # Seed 7 is the standard start, and the whole historical v-series is seed 7.
+    seven = mod._run_environment({"path": "nope"}, 8, model="m", base_url="u", temperature=0.0, seed=7)
+    assert seven["opening"] == "standard start"
+
+    # An unknown seed must not claim an opening it did not play.
+    other = mod._run_environment({"path": "nope"}, 8, model="m", base_url="u", temperature=0.0, seed=999)
+    assert other["seed"] == 999
+    assert other["opening"] == "standard start"  # documented fallback in _start_for_seed
 
 
 def test_environment_records_temperature_from_the_single_source() -> None:
@@ -55,14 +78,16 @@ def test_environment_records_temperature_from_the_single_source() -> None:
     """
     mod = _load()
     assert mod._COACH_TEMPERATURE == 0.0
-    env = mod._run_environment({"path": "nope"}, 8, model="m", base_url="u", temperature=mod._COACH_TEMPERATURE)
+    env = mod._run_environment({"path": "nope"}, 8, model="m", base_url="u", temperature=mod._COACH_TEMPERATURE, seed=7)
     assert env["llm"]["temperature"] == 0.0
 
 
 def test_environment_never_raises_on_a_missing_engine_binary() -> None:
     """A 20-minute review run must not die over provenance. It records why instead."""
     mod = _load()
-    env = mod._run_environment({"path": "definitely/not/here/blunder.exe"}, 8, model="m", base_url="u", temperature=0.0)
+    env = mod._run_environment(
+        {"path": "definitely/not/here/blunder.exe"}, 8, model="m", base_url="u", temperature=0.0, seed=7
+    )
     assert env["engine"]["sha256"] is None
     assert "error" in env["engine"]
 
@@ -70,5 +95,5 @@ def test_environment_never_raises_on_a_missing_engine_binary() -> None:
 def test_environment_does_not_copy_unknown_llm_config_keys() -> None:
     """Only named fields, so a future `api_key` cannot reach a committed artefact."""
     mod = _load()
-    env = mod._run_environment({"path": "nope"}, 8, model="m", base_url="u", temperature=0.0)
+    env = mod._run_environment({"path": "nope"}, 8, model="m", base_url="u", temperature=0.0, seed=7)
     assert set(env["llm"]) == {"provider", "model", "base_url", "temperature"}

@@ -1,0 +1,69 @@
+run	group	detector	model	seed	opening	engine_sha	plies	spoke	spoke_pct_of_plies	clean_pct	bad_turns	gating	cause_given_pct	cause_voiced_pct	mind_reading	mind_reading_pct_of_spoken	magnitude	magnitude_pct_of_spoken	words_per_turn	lesson_conc_pct	lesson_open	lesson_open_pct_of_spoken
+v2	history	1					44	44	100	93	3	3	0	0	19	43	0	0	71		0	0
+v3	history	1					44	44	100	95	2	2	0	0	19	43	0	0	70		0	0
+v4	history	1					44	44	100	93	3	3	0	0	3	7	2	5	58		0	0
+v5	history	1					44	44	100	91	4	4	0	0	3	7	2	5	47		0	0
+v6	history	1					44	44	100	84	7	11	0	0	5	11	0	0	48		0	0
+v7	history	1					44	44	100	84	7	9	0	0	3	7	0	0	48		0	0
+v8	history	1					44	44	100	84	7	7	0	0	0	0	0	0	47		0	0
+v9	history	1					44	44	100	84	7	7	0	0	0	0	0	0	49		0	0
+v10	history	1					44	44	100	86	6	7	0	0	3	7	0	0	48		0	0
+v11	history	1					44	44	100	89	5	6	0	0	3	7	0	0	49		0	0
+v12	history	1					44	44	100	93	3	3	0	0	0	0	0	0	55		0	0
+v13	history	1					44	44	100	93	3	3	0	0	0	0	0	0	55		44	100
+v14	history	1					44	44	100	93	3	3	0	0	0	0	0	0	55		44	100
+v15	history	1					44	44	100	84	7	7	0	0	2	5	0	0	55		44	100
+v16	history	1					44	44	100	84	7	7	0	0	2	5	0	0	54		44	100
+v17	history	1					44	44	100	91	4	4	0	0	2	5	0	0	56		44	100
+v18	history	1					44	44	100	89	5	5	0	0	2	5	0	0	54		44	100
+v19	history	1					44	44	100	86	6	6	0	0	4	9	0	0	53		44	100
+v20	history	1					44	44	100	80	9	9	0	0	3	7	0	0	54		44	100
+v21	history	1					44	44	100	91	4	4	0	0	1	2	0	0	56		44	100
+v22	history	1					44	44	100	89	5	6	0	0	2	5	0	0	56	23	5	11
+v23	history	1					44	44	100	89	5	6	0	0	2	5	0	0	55	18	5	11
+v24	history	1					44	44	100	86	6	7	0	0	2	5	0	0	55	18	6	14
+v25	history	1					44	44	100	89	5	6	0	0	1	2	0	0	55	18	6	14
+v26	history	1					44	44	100	84	7	8	0	0	1	2	0	0	54	18	6	14
+v27	history	1					44	44	100	86	6	6	0	0	6	14	0	0	52	19	7	16
+v28	history	1					44	44	100	86	6	6	0	0	1	2	0	0	52	19	7	16
+v29	history	1					44	44	100	91	4	4	0	0	1	2	0	0	50	19	7	16
+v30	history	1					44	44	100	95	2	2	0	0	1	2	0	0	49	19	7	16
+v31	history	1					44	18	41	100	0	0	0	0	1	6	0	0	56	33	3	17
+v32	history	1					44	12	27	100	0	0	0	0	2	17	0	0	57	30	2	17
+v33	history	1					44	18	41	89	2	2	0	0	3	17	0	0	51	33	3	17
+v34	history	1					44	18	41	89	2	2	0	0	2	11	0	0	51	17	3	17
+v35	history	1					44	18	41	83	3	3	0	0	2	11	0	0	51	17	3	17
+v36	history	1					44	18	41	89	2	2	0	0	2	11	0	0	49	17	3	17
+v37	history	1					44	18	41	100	0	0	0	0	3	17	0	0	50	17	3	17
+v38	history	1					44	18	41	100	0	0	0	0	3	17	0	0	51	17	3	17
+v39	history	1					44	18	41	100	0	0	11	100	3	17	0	0	53	17	3	17
+v40	history	1					44	18	41	94	1	1	6	100	1	6	0	0	47	17	3	17
+v41	history	1					44	18	41	94	1	1	72	77	1	6	0	0	57	17	3	17
+v42	history	1					44	18	41	100	0	0	72	54	2	11	0	0	48	17	3	17
+v43	history	1					44	18	41	100	0	0	72	92	3	17	0	0	53	14	2	11
+v44	history	1					44	18	41	89	2	5	72	54	1	6	0	0	33	14	2	11
+v48	history	1					44	18	41	100	0	0	72	92	2	11	0	0	64	14	2	11
+v49	history	1					44	18	41	100	0	0	56	90	1	6	0	0	50	14	2	11
+v50	history	1					44	18	41	100	0	0	56	80	0	0	0	0	60	14	2	11
+v51	history	1					44	18	41	100	0	0	56	70	0	0	0	0	66	14	2	11
+v52	history	1					44	18	41	100	0	0	72	100	1	6	0	0	66	14	2	11
+gemma12_seed11	matrix	1	gemma4:12b-it-qat	11	Italian	29cc3f3a751b	23	8	35	100	0	0	75	100	0	0	0	0	86	12	0	0
+gemma12_seed13	matrix	1	gemma4:12b-it-qat	13	Queen's Gambit	29cc3f3a751b	25	16	64	100	0	0	69	100	0	0	0	0	92	31	0	0
+gemma12_seed17	matrix	1	gemma4:12b-it-qat	17	Sicilian	29cc3f3a751b	51	19	37	100	0	0	63	92	0	0	0	0	76	12	3	16
+gemma12_seed23	matrix	1	gemma4:12b-it-qat	23	French	29cc3f3a751b	40	20	50	100	0	0	90	94	0	0	0	0	79	15	0	0
+gemma12_seed7	matrix	1	gemma4:12b-it-qat	7	standard start	29cc3f3a751b	44	18	41	100	0	0	72	92	0	0	0	0	79	25	2	11
+hermes8_seed11	matrix	1	hermes3:8b	11	Italian	29cc3f3a751b	23	8	35	100	0	0	75	100	1	12	0	0	144	12	0	0
+hermes8_seed13	matrix	1	hermes3:8b	13	Queen's Gambit	29cc3f3a751b	25	16	64	100	0	0	69	50	1	6	0	0	181	31	0	0
+hermes8_seed17	matrix	1	hermes3:8b	17	Sicilian	29cc3f3a751b	51	19	37	100	0	0	63	67	0	0	0	0	134	12	3	16
+hermes8_seed23	matrix	1	hermes3:8b	23	French	29cc3f3a751b	40	20	50	100	0	0	90	67	1	5	0	0	142	15	0	0
+hermes8_seed7	matrix	1	hermes3:8b	7	standard start	29cc3f3a751b	44	18	41	100	0	0	72	69	1	6	0	0	100	25	2	11
+qwen14_seed11	matrix	1	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35	100	0	0	75	100	0	0	0	0	60	12	0	0
+qwen14_seed13	matrix	1	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64	100	0	0	69	100	0	0	0	0	71	31	0	0
+qwen14_seed17	matrix	1	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37	95	1	1	63	100	0	0	0	0	65	12	3	16
+qwen14_seed23	matrix	1	qwen3:14b	23	French	29cc3f3a751b	40	20	50	100	0	0	90	89	1	5	0	0	61	15	0	0
+qwen14_seed7	matrix	1	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41	100	0	0	72	100	0	0	0	0	62	25	2	11
+qwen8_seed11	matrix	1	qwen3:8b	11	Italian	29cc3f3a751b	23	8	35	100	0	0	75	100	0	0	0	0	76	12	0	0
+qwen8_seed13	matrix	1	qwen3:8b	13	Queen's Gambit	29cc3f3a751b	25	16	64	100	0	0	69	100	0	0	0	0	76	31	0	0
+qwen8_seed17	matrix	1	qwen3:8b	17	Sicilian	29cc3f3a751b	51	19	37	95	1	1	63	100	0	0	0	0	68	12	3	16
+qwen8_seed23	matrix	1	qwen3:8b	23	French	29cc3f3a751b	40	20	50	100	0	0	90	94	0	0	0	0	70	15	0	0
+qwen8_seed7	matrix	1	qwen3:8b	7	standard start	29cc3f3a751b	44	18	41	100	0	0	72	100	0	0	0	0	73	25	2	11
