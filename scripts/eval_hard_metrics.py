@@ -109,6 +109,37 @@ _RETIRED_CAUSE_PHRASES = (
     "thinking that went wrong",
 )
 
+#: The closing-takeaway instruction, in the four shapes the lesson ladder produces. Matching our
+#: OWN prompt text, which is deterministic and exact — unlike matching the model's prose.
+#:
+#: Replaces a cue-word counter that read the last 14 words of the response for one of five
+#: hardcoded phrases. That version was not merely noisy, it was directionally WRONG: it put v52
+#: (22%) worse than v33 (17%), when v33 is the documented monoculture peak — the ledger names
+#: the five plies where one lesson closed five of eighteen turns. Measured from composition the
+#: same run reads 33% at v33 falling to 14% by v43, which matches the record.
+_LESSON_TEACH = re.compile(r"CLOSE with one transferable takeaway on THIS lesson and no other:\s*(.+?)\.\s")
+_LESSON_SUBST = re.compile(r"CLOSE with one transferable takeaway, and use THIS one[^:]*:\s*(.+?)\.\s")
+_LESSON_REFRAME = re.compile(r"CLOSE by pointing out that this is the SAME idea as earlier[^\u2014]*\u2014\s*(.+?)\.\s")
+#: An open-ended ask: we wanted a takeaway and named no lesson, so the MODEL chose the topic.
+#: Distinct from silence, and the reason concentration cannot be measured before v30 — every
+#: turn in that era was open, which is exactly what composing the subject was built to stop.
+_LESSON_OPEN = re.compile(r"CLOSE with one transferable takeaway, not a generic maxim")
+
+
+def _composed_lesson(prompt: str) -> tuple[str, str]:
+    """``(state, lesson)`` for this turn's closing instruction.
+
+    State is one of ``teach`` / ``subst`` / ``reframe`` (we named the lesson), ``open`` (we
+    asked and let the model choose) or ``silent`` (the ladder retired it and we asked for
+    nothing). Only the first three carry a lesson to count.
+    """
+    for state, rx in (("teach", _LESSON_TEACH), ("subst", _LESSON_SUBST), ("reframe", _LESSON_REFRAME)):
+        m = rx.search(prompt)
+        if m:
+            return state, " ".join(m.group(1).split()).lower()
+    return ("open" if _LESSON_OPEN.search(prompt) else "silent"), ""
+
+
 #: The composed cause section, as `prompts._came_about` emits it. Deterministic: it is our own
 #: text in our own prompt, so finding it is exact rather than a guess about prose.
 _CAUSE_SECTION = re.compile(r"--- How this came about ---\s*\n(.+?)(?=\n---|\n\n|\Z)", re.DOTALL)
@@ -182,7 +213,10 @@ class Metrics:
     mind_reading: int = 0
     magnitude: int = 0
     words: int = 0
-    repeated_share: float = 0.0
+    lesson_composed: int = 0
+    lesson_open: int = 0
+    lesson_silent: int = 0
+    lessons: Counter[str] = field(default_factory=Counter)
 
     @property
     def clean_rate(self) -> float:
@@ -213,13 +247,29 @@ class Metrics:
     def words_per_turn(self) -> float:
         return 0.0 if not self.spoken else self.words / self.spoken
 
+    @property
+    def lesson_concentration(self) -> float | None:
+        """Share of COMPOSED lessons that are the single most-composed one. Lower is better.
+
+        ``None``, not zero, when nothing was composed. Reporting 0% for the pre-v30 era would
+        claim perfect variety where the truth is that the question does not apply — every turn
+        then was an open ask and the model chose its own topic. A metric that reads "excellent"
+        when it cannot see anything is the instrument error this file keeps recording.
+
+        Denominator is composed turns rather than spoken ones, because that is the population
+        the measurement can actually see. ``lesson_open`` is the blind spot and is reported
+        alongside so it cannot be forgotten.
+        """
+        if not self.lesson_composed or not self.lessons:
+            return None
+        return 100.0 * self.lessons.most_common(1)[0][1] / self.lesson_composed
+
 
 def measure(path: Path) -> Metrics:
     data = json.loads(path.read_text(encoding="utf-8"))
     turns = [t for t in data.get("turns", []) if isinstance(t.get("ply"), int)]
     m = Metrics(name=path.parent.name.replace("coach_review_", ""))
     m.plies = len(turns)
-    closers: Counter[str] = Counter()
 
     for t in turns:
         text = (t.get("coach_feedback") or "").strip()
@@ -262,16 +312,17 @@ def measure(path: Path) -> Metrics:
         if any(p in low for p in MAGNITUDE):
             m.magnitude += 1
 
-        # Lesson concentration: how much of the coaching lands on its most-used closing
-        # idea. High means the student hears the same thing every turn.
-        tail = " ".join(text.split()[-14:]).lower()
-        for cue in ("undefended", "attackers and defenders", "before you move", "attacked", "defended"):
-            if cue in tail:
-                closers[cue] += 1
-                break
+        # Lesson concentration, measured from what we COMPOSED rather than from cue words in
+        # the response. High means one idea is being taught over and over.
+        state, lesson = _composed_lesson(t.get("prompt") or "")
+        if lesson:
+            m.lesson_composed += 1
+            m.lessons[lesson] += 1
+        elif state == "open":
+            m.lesson_open += 1
+        else:
+            m.lesson_silent += 1
 
-    if m.spoken and closers:
-        m.repeated_share = 100.0 * closers.most_common(1)[0][1] / m.spoken
     return m
 
 
@@ -287,14 +338,17 @@ def main(argv: list[str]) -> int:
 
     print(
         f"{'run':<8}{'plies':>6}{'spoke':>6}{'clean%':>8}{'bad turns':>10}{'gating':>8}"
-        f"{'cause-giv%':>11}{'cause-voi%':>11}{'mind-rd':>8}{'magn':>6}{'w/turn':>8}{'top-closer%':>12}"
+        f"{'cause-giv%':>11}{'cause-voi%':>11}{'mind-rd':>8}{'magn':>6}{'w/turn':>8}"
+        f"{'lesson-conc%':>13}{'open':>6}"
     )
     for m in rows:
+        conc = m.lesson_concentration
+        conc_s = "n/a" if conc is None else f"{conc:.0f}%"
         print(
             f"{m.name:<8}{m.plies:>6}{m.spoken:>6}{m.clean_rate:>7.0f}%{m.turns_with_violation:>10}"
             f"{m.gating:>8}{m.cause_given_rate:>10.0f}%{m.cause_voiced_rate:>10.0f}%"
             f"{m.mind_reading:>8}{m.magnitude:>6}"
-            f"{m.words_per_turn:>8.0f}{m.repeated_share:>11.0f}%"
+            f"{m.words_per_turn:>8.0f}{conc_s:>13}{m.lesson_open:>6}"
         )
     print()
     print("clean%      turns with NOTHING the board contradicts (higher is better) — the")
@@ -306,7 +360,11 @@ def main(argv: list[str]) -> int:
     print("            matched version it replaces was really a compliance score (row 137)")
     print("mind-rd     turns inventing the student's intent")
     print("magn        turns leaking an evaluation number (must stay 0)")
-    print("top-closer% share of turns ending on the single most-repeated idea (lower is better)")
+    print("lesson-conc% share of the lessons WE composed that are the same single lesson (lower")
+    print("             is better). n/a means nothing was composed, which is not the same as")
+    print("             perfect variety — see `open`")
+    print("open        turns where we asked for a takeaway and named no lesson, so the MODEL")
+    print("            chose the topic. The blind spot in lesson-conc%")
     if len(rows) > 1:
         first, last = rows[0], rows[-1]
         print()
