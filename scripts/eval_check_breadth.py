@@ -26,6 +26,8 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import chess
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from chess_coach.cli import _resolve_engine_path, load_config  # noqa: E402
@@ -155,12 +157,28 @@ def main() -> None:
                 move_number = int(fen_before.split()[-1]) if fen_before.split() else 1
                 if (move_number <= 6 and comparison.eval_drop_cp <= 150) or comparison.eval_drop_cp <= 50:
                     return TurnRecord(ply, fen_before, student_move, "", 0, 0, 0, "good", [], "")
+                # The position the move PRODUCES, which is the one the coaching describes.
+                #
+                # Previously omitted, and that made every fidelity number this sweep produced
+                # from v44 onward describe a thinner prompt than the product's: no "Undefended
+                # AFTER your move" section and no focus instruction. Fewer facts means fewer
+                # chances to say something false, so the sweep UNDERSTATED the gate — it was
+                # measuring a coach we do not ship. Same hand-mirroring the report card was
+                # rewritten to escape.
+                after_report = None
+                try:
+                    board_after = chess.Board(fen_before)
+                    move_played = chess.Move.from_uci(student_move)
+                    if move_played in board_after.legal_moves:
+                        board_after.push(move_played)
+                        after_report = oracle.get_position_report(board_after.fen(), multipv=1)
+                except Exception as e:  # noqa: BLE001
+                    print(f"  ply {ply}: post-move report failed ({e}); prompt will be thinner")
                 # Name the opponent's answer where the engine gave none, exactly as the
                 # shipping Coach now does. Without this the sweep would measure a coach that
-                # withholds the reply on ~30 of 70 turns while the product names it, and the
-                # fidelity numbers would not describe anything we ship. No `after_report` to
-                # hand over here, so this pays for one extra evaluation per coached turn.
-                comparison = oracle.with_refutation(comparison, depth=depth)
+                # withholds the reply on ~30 of 70 turns while the product names it. Handing
+                # over `after_report` reuses the search above rather than paying for another.
+                comparison = oracle.with_refutation(comparison, depth=depth, after_report=after_report)
                 pos_report = oracle.get_position_report(fen_before, multipv=args.multipv, depth=depth)
                 facts = feature_facts(pos_report)
                 preferred = (
@@ -177,7 +195,11 @@ def main() -> None:
                     fact_features=frozenset(facts),
                 )
                 prompt = build_rich_move_evaluation_prompt(
-                    comparison, level=args.level, guidance=guidance, guidance_facts=facts
+                    comparison,
+                    level=args.level,
+                    guidance=guidance,
+                    guidance_facts=facts,
+                    position_after=after_report,
                 )
                 coached += 1
 

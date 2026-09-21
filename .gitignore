@@ -15,4 +15,34 @@ venv/
 COMMIT_MSG.txt
 
 # Eval/monitoring output
-output/
+output/*
+
+# ...EXCEPT the transcripts the metrics history is derived from.
+#
+# `docs/coach-metrics-history.tsv` and the dashboard are computed from these, so without them
+# committed nobody else can regenerate or verify a single number in them — and the whole
+# measurement history of the project lives on one laptop and dies with it.
+#
+# Cost measured 2026-09-18: 7.6 MB raw, 0.7 MB compressed (11.4x, the text is highly
+# repetitive), plus ~13 KB per future run. Git compresses blobs the same way.
+#
+# Only the transcript is kept, not `review.md` or the other per-run artefacts, and only from the
+# directories the history actually reads: `coach_review_v*` (the version series) and `matrix/*`
+# (the model x opening coverage grid). Ad-hoc sweeps and smoke runs stay ignored — they are not in
+# the TSV, so committing them would cost space for files nothing reads.
+#
+# Do NOT strip the `prompt` field to save space. It is 83% of a transcript and it is where the
+# composed cause and the closing instruction live, which is what `cause_voiced_pct` and
+# `lesson_conc_pct` read. Stripping it saves a megabyte and removes the ability to backfill any
+# metric that looks at what we asked the model to do.
+# The idiom matters: a negation cannot re-include through an EXCLUDED directory, so `output/`
+# has to become `output/*` and the exemption is walked down level by level.
+!output/coach_review_v*/
+output/coach_review_v*/*
+!output/coach_review_v*/transcript.json
+
+!output/matrix/
+output/matrix/*
+!output/matrix/*/
+output/matrix/*/*
+!output/matrix/*/transcript.json
