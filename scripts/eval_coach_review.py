@@ -271,6 +271,11 @@ def main() -> None:
         help="judge command; defaults to kiro-cli with --judge-model (prompt on stdin)",
     )
     parser.add_argument("--judge-base-url", default="http://localhost:11434")
+    parser.add_argument(
+        "--no-judge",
+        action="store_true",
+        help="write the transcript and skip the frontier review (for repeat runs measuring variance)",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -390,9 +395,17 @@ def main() -> None:
         sys.exit(1)
 
     stats = aggregate_review(turns)
+    # The judge is the expensive half and not every run wants a verdict. Repeat runs exist to
+    # measure the VARIANCE of the deterministic counters, which come from the transcript alone,
+    # so asking claude-opus-5 to write five reviews of five runs of the same cell would be pure
+    # waste. The prompt is still BUILT either way, so --no-judge cannot mask an error in it.
     review_prompt = build_coach_review_prompt(turns, stats)
-    print("\nRequesting frontier review...")
-    review = judge.generate(review_prompt, max_tokens=2048, temperature=0.0)
+    review = ""
+    if args.no_judge:
+        print("\n--no-judge: skipping the frontier review, writing the transcript only")
+    else:
+        print("\nRequesting frontier review...")
+        review = judge.generate(review_prompt, max_tokens=2048, temperature=0.0)
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -414,11 +427,16 @@ def main() -> None:
         ),
         encoding="utf-8",
     )
-    (out_dir / "review.md").write_text(review.strip() + "\n", encoding="utf-8")
-    print("\n" + "=" * 70)
-    print(review.strip())
-    print("=" * 70)
-    print(f"\nSaved: {out_dir / 'review.md'} and {out_dir / 'transcript.json'}")
+    if review:
+        (out_dir / "review.md").write_text(review.strip() + "\n", encoding="utf-8")
+        print("\n" + "=" * 70)
+        print(review.strip())
+        print("=" * 70)
+        print(f"\nSaved: {out_dir / 'review.md'} and {out_dir / 'transcript.json'}")
+    else:
+        # Deliberately NOT writing an empty review.md: a zero-byte file would be indistinguishable
+        # from a judge that failed, and `metrics_history.py` discovers runs by transcript.json.
+        print(f"\nSaved: {out_dir / 'transcript.json'} (no review — --no-judge)")
 
 
 if __name__ == "__main__":

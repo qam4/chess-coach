@@ -61,7 +61,13 @@ try {
     # silently dropped: a template-only run launched with "--config config.template_only.yaml"
     # quietly produced another LLM run, and the only reason it was caught is that the output
     # was 11/18 byte-identical to the run it was supposed to be compared against.
-    $extra = if ($ScriptArgLine) { $ScriptArgLine -split '\s+' } else { @() }
+    # @(...) is load-bearing. `-split` returns a SCALAR string when there is nothing to split, and
+    # splatting a scalar string with @extra enumerates its CHARACTERS — so a single flag arrived as
+    # "- - n o - j u d g e" and argparse rejected it, twelve runs in a row. Two or more flags
+    # happened to work, because then -split really does return an array, which is why a smoke test
+    # passing "--no-judge --no-curated" did not catch it. Where-Object drops the empty element a
+    # leading or trailing space would otherwise produce.
+    $extra = @($ScriptArgLine -split '\s+' | Where-Object { $_ })
     if ($Script -eq "scripts/eval_coach_review.py") {
         uv run python $Script `
             --model $Model --base-url $BaseUrl `
