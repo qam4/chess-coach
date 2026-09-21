@@ -1432,6 +1432,80 @@ def test_a_retired_lesson_falls_back_to_the_guidance_principle() -> None:
     assert "king activity in the endgame" not in first
 
 
+def test_a_substituted_lesson_is_retired_like_a_composed_one() -> None:
+    """It had no repeat limit at all, and the first multi-game sweep caught the result.
+
+    Ledger row 141: lesson concentration went 14% -> 25% at one seed because "isolated pawn" was
+    substituted on FOUR turns, where nothing previously repeated more than twice. The anchoring
+    test an entry passes is about whether the lesson fits THIS position; it says nothing about how
+    often the student has already heard it.
+    """
+    from collections import Counter
+
+    from chess_coach.pedagogy.resource import GuidanceEntry
+    from chess_coach.prompts import (
+        LESSON_RETIRE_AFTER,
+        _build_takeaway_instruction,
+        guidance_lesson_key,
+        substituted_lesson_key,
+    )
+
+    report = dataclasses.replace(
+        _move_eval_report(CASTLE_FEN, "d2d3", "e1g1"),
+        eval_drop_cp=300,
+        classification="blunder",
+    )
+    entry = GuidanceEntry(
+        id="principle.isolated_pawn",
+        type="principle",
+        theme="isolated pawn",
+        focus="f",
+        how_to_apply="h",
+        levels=frozenset({"intermediate"}),
+        features=frozenset({"isolated_pawn"}),
+        excludes_features=frozenset(),
+        eco_codes=frozenset(),
+        citation="c",
+        example=None,
+    )
+    facts = {"isolated_pawn": "your b-file pawn is isolated"}
+    key = guidance_lesson_key("isolated pawn")
+
+    # Fresh: substituted, and the caller is told which key to count.
+    fresh = _build_takeaway_instruction(report, "serious", 1, [entry], facts, Counter())
+    assert "isolated pawn" in fresh
+    assert substituted_lesson_key(report, times_taught=1, guidance=[entry], guidance_facts=facts) == key
+
+    # Used up to the limit: no longer offered, so the turn falls back to naming the recurrence
+    # instead of teaching the same substitute a third time.
+    spent = Counter({key: LESSON_RETIRE_AFTER})
+    out = _build_takeaway_instruction(report, "serious", 1, [entry], facts, spent)
+    assert "isolated pawn" not in out
+    assert "SAME idea as earlier" in out
+    assert (
+        substituted_lesson_key(report, times_taught=1, guidance=[entry], guidance_facts=facts, lessons_used=spent) == ""
+    )
+
+    # One use below the limit is still allowed — the ladder is teach, reframe, stop.
+    once = Counter({key: LESSON_RETIRE_AFTER - 1})
+    assert "isolated pawn" in _build_takeaway_instruction(report, "serious", 1, [entry], facts, once)
+
+
+def test_substituted_lesson_key_is_empty_when_nothing_is_substituted() -> None:
+    """The caller counts a substitution only when one happened, so this must not guess."""
+    from chess_coach.prompts import substituted_lesson_key
+
+    report = dataclasses.replace(
+        _move_eval_report(CASTLE_FEN, "d2d3", "e1g1"),
+        eval_drop_cp=300,
+        classification="blunder",
+    )
+    # First showing of the composed lesson: nothing is substituted at all.
+    assert substituted_lesson_key(report, times_taught=0) == ""
+    # Reframe step but no guidance to substitute from.
+    assert substituted_lesson_key(report, times_taught=1) == ""
+
+
 def test_the_substitute_arrives_at_the_REFRAME_step_not_only_at_retirement() -> None:
     """Substituting only at retirement moved almost nothing. Measured, then widened.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import Counter
 
 import chess
 
@@ -1841,10 +1842,19 @@ _TAKEAWAY_ESCALATE = (
 LESSON_RETIRE_AFTER = 2
 
 
+#: Key under which a SUBSTITUTED guidance lesson is counted, so it shares the repeat ladder with
+#: composed lessons instead of having none. See :func:`_guidance_takeaway`.
+def guidance_lesson_key(theme: str) -> str:
+    """Counter key for a substituted guidance lesson. Namespaced so it cannot collide with a
+    composed lesson key, which is ``"{category}:{phase}"``."""
+    return f"guidance:{theme.strip().lower()}"
+
+
 def _guidance_takeaway(
     guidance: list[GuidanceEntry] | None,
     phase: str = "",
     facts: dict[str, str] | None = None,
+    already_used: Counter[str] | None = None,
 ) -> str:
     """A phase-appropriate lesson from the selected guidance, or ''.
 
@@ -1881,11 +1891,46 @@ def _guidance_takeaway(
     take the next candidate rather than going silent.
     """
     entries = [e for e in (guidance or []) if (e.theme or "").strip() and any((facts or {}).get(f) for f in e.features)]
+    # A substituted lesson gets the SAME repeat limit as a composed one. It had none, and the
+    # first multi-game sweep caught the result: lesson concentration went 14% -> 25% at one seed
+    # because "isolated pawn" was substituted on FOUR turns, where nothing previously repeated
+    # more than twice. The anchoring test an entry passes is about whether the lesson fits THIS
+    # position; it says nothing about how often the student has already heard it.
+    if already_used:
+        entries = [e for e in entries if already_used[guidance_lesson_key(e.theme)] < LESSON_RETIRE_AFTER]
     if phase:
         for entry in entries:
             if phase in entry.features:
                 return entry.theme.strip()
     return entries[0].theme.strip() if entries else ""
+
+
+def substituted_lesson_key(
+    report: ComparisonReport,
+    tier: str = "serious",
+    times_taught: int = 0,
+    guidance: list[GuidanceEntry] | None = None,
+    guidance_facts: dict[str, str] | None = None,
+    lessons_used: Counter[str] | None = None,
+) -> str:
+    """Counter key for the lesson this turn would SUBSTITUTE, or ``""`` if it substitutes none.
+
+    Exists so the caller can count a substitution without reimplementing the choice. Deciding it
+    twice — once here to build the prompt, once in the coach to record it — is the two-copies-of-
+    one-check shape that has produced four defects in this repo; the arguments would drift and the
+    counter would record a lesson the prompt never asked for.
+    """
+    if times_taught <= 0:
+        return ""
+    _key, lesson = composed_lesson(report, tier)
+    if not lesson:
+        return ""
+    board = _safe_board(report.fen)
+    phase = phase_of_board(board) if board is not None else ""
+    alternative = _guidance_takeaway(guidance, phase, guidance_facts, lessons_used)
+    if not alternative or alternative.strip().lower() == lesson.strip().lower():
+        return ""
+    return guidance_lesson_key(alternative)
 
 
 def _build_takeaway_instruction(
@@ -1894,6 +1939,7 @@ def _build_takeaway_instruction(
     times_taught: int = 0,
     guidance: list[GuidanceEntry] | None = None,
     guidance_facts: dict[str, str] | None = None,
+    lessons_used: Counter[str] | None = None,
 ) -> str:
     """The closing-takeaway instruction, with the lesson composed where possible.
 
@@ -1933,7 +1979,7 @@ def _build_takeaway_instruction(
     if times_taught > 0:
         board = _safe_board(report.fen)
         phase = phase_of_board(board) if board is not None else ""
-        alternative = _guidance_takeaway(guidance, phase, guidance_facts)
+        alternative = _guidance_takeaway(guidance, phase, guidance_facts, lessons_used)
         if alternative and alternative.strip().lower() != lesson.strip().lower():
             return (
                 "CLOSE with one transferable takeaway, and use THIS one rather than the lesson "
@@ -2501,6 +2547,7 @@ def build_rich_move_evaluation_prompt(
     level: str = "intermediate",
     guidance: list[GuidanceEntry] | None = None,
     guidance_facts: dict[str, str] | None = None,
+    lessons_used: Counter[str] | None = None,
     lesson_times_taught: int = 0,
     achievement_times_shown: int = 0,
     history: PieceHistory | None = None,
@@ -2691,7 +2738,9 @@ def build_rich_move_evaluation_prompt(
     # Guidance goes in so a retired lesson has somewhere to fall back to. Without it, the
     # phase where one effect category dominates loses its takeaway on most turns — measured at
     # 1 of 28 endgame turns carrying a lesson at all.
-    takeaway_instruction = _build_takeaway_instruction(report, tier, lesson_times_taught, guidance, guidance_facts)
+    takeaway_instruction = _build_takeaway_instruction(
+        report, tier, lesson_times_taught, guidance, guidance_facts, lessons_used
+    )
 
     # The engine's move, named only on the tiers that actually compare against it.
     # It used to be rendered unconditionally, so on the `equal` tier the prompt said

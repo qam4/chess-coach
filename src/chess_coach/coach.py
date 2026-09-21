@@ -31,6 +31,7 @@ from chess_coach.prompts import (
     composed_lesson,
     move_feedback_max_tokens,
     refuted_square,
+    substituted_lesson_key,
 )
 from chess_coach.verify import Violation, generate_verified
 
@@ -831,11 +832,22 @@ class Coach:
                         + ("naming the recurrence" if count < LESSON_RETIRE_AFTER else "retiring it"),
                         tool="engine",
                     )
+            # A lesson SUBSTITUTED from the guidance block shares this counter, so it gets the
+            # same repeat limit as a composed one. It had none, and the first multi-game sweep
+            # found "isolated pawn" substituted on four turns of one game.
+            substituted = substituted_lesson_key(
+                report,
+                guidance=guidance,
+                guidance_facts=guidance_facts,
+                times_taught=times_taught,
+                lessons_used=self._lessons_taught,
+            )
             prompt = build_rich_move_evaluation_prompt(
                 report,
                 level=self.level,
                 guidance=guidance,
                 guidance_facts=guidance_facts,
+                lessons_used=self._lessons_taught,
                 lesson_times_taught=times_taught,
                 achievement_times_shown=times_shown,
                 history=self._piece_history,
@@ -903,6 +915,10 @@ class Coach:
                     self._lessons_taught[lesson_key] += 1
                 if clause_key:
                     self._lessons_taught[clause_key] += 1
+                # Only when a substitution actually happened, which is only at the reframe step
+                # and only when an anchored alternative differed from the composed lesson.
+                if substituted:
+                    self._lessons_taught[substituted] += 1
                 # Remember WHICH PIECE this turn was about, so a later turn can say the
                 # student has been here before. Recorded against the position the move
                 # was played in, and only on a turn that actually spoke.
