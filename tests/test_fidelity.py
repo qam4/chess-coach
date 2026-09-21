@@ -428,6 +428,84 @@ def test_opponent_reply_is_recognised_however_it_is_phrased() -> None:
         assert "move_claim" not in kinds, text
 
 
+def test_a_cut_off_claim_is_checked_against_the_kings_squares() -> None:
+    """Ledger row 136. The falsehood that got through, and the reason clean% read 100% anyway.
+
+    The coach wrote "Stronger move: Re4, which cuts the king off" at ply 58 of seed 7 and nothing
+    checked it, because no check covered confinement. On the board the black king on e7 has the
+    same five squares (d6 d7 d8 f6 f8) before and after Re4. What Re4 actually does is hit a rook
+    on d4 and a bishop on e6 — which is what the coach said one version earlier.
+    """
+    fen = "4r3/p1p1kpRp/1pp1b3/8/1P1r4/2N2K2/8/4R3 w - - 4 30"
+
+    false_claim = "Stronger move: Re4, which cuts the king off."
+    vs = [v for v in check_text_fidelity(false_claim, fen, played_uci="f3f2") if v.kind == "move_claim"]
+    assert len(vs) == 1, vs
+    assert "5 squares before and 5 after" in vs[0].detail
+
+    # The true description of the same move must stay clean.
+    true_claim = "The stronger move is Re4, which hits their rook on d4 and their bishop on e6."
+    assert "move_claim" not in _kinds(check_text_fidelity(true_claim, fen, played_uci="f3f2"))
+
+
+def test_a_genuine_cut_off_is_not_flagged() -> None:
+    """The check must not simply ban the word. Position verified legal before use.
+
+    White Kh1 Ra1, black Ke5, white to move. Ra4 controls rank 4 and removes d4/e4/f4, taking the
+    black king from 8 squares to 5 — a real cut-off. Rb1 changes nothing.
+    """
+    import chess
+
+    fen = "8/8/8/4k3/8/8/8/R6K w - - 0 1"
+    assert chess.Board(fen).is_valid()
+
+    assert "move_claim" not in _kinds(check_text_fidelity("The stronger move is Ra4, which cuts the king off.", fen))
+    bogus = [v for v in check_text_fidelity("The stronger move is Rb1, which cuts the king off.", fen)]
+    assert any("does not confine the king" in v.detail for v in bogus), bogus
+
+
+def test_confinement_wording_variants_all_reach_the_same_check() -> None:
+    """Cutting off, trapping, confining and taking squares away are one measurement.
+
+    Listed as a family in the backlog item precisely so the next phrasing does not need a new
+    check. The position is the ply-58 one, where none of these is true of Re4.
+    """
+    fen = "4r3/p1p1kpRp/1pp1b3/8/1P1r4/2N2K2/8/4R3 w - - 4 30"
+    for phrasing in (
+        "The stronger move is Re4, which cuts the king off.",
+        "The stronger move is Re4, cutting the enemy king off.",
+        "The stronger move is Re4, which traps their king.",
+        "The stronger move is Re4, confining the king.",
+        "The stronger move is Re4, which takes away the king's squares.",
+        "The stronger move is Re4, limiting the king's mobility.",
+    ):
+        kinds = _kinds(check_text_fidelity(phrasing, fen, played_uci="f3f2"))
+        assert "move_claim" in kinds, phrasing
+
+
+def test_confinement_check_covers_the_opponents_king() -> None:
+    """The phrasing the coach actually used, which the first version of this check missed.
+
+    v53 seed 17 ply 65: "Kc2, which helps you activate your king and prepare to cut off the
+    opponent's king". The regex listed enemy / opposing / their / black's / white's and not
+    "opponent's" — and the prompt tells the model to "refer to Black as their opponent", so that
+    is the wording it reaches for first. Verified on the board: the black king on g8 has the same
+    three squares (f7, h7, h8) before and after Kc2, so the claim is false.
+    """
+    fen = "2b2rk1/1p4p1/8/1RP1R3/7P/P1P2P2/1K4P1/8 w - - 1 35"
+    text = "The stronger move is Kc2, which helps you prepare to cut off the opponent's king."
+    vs = [v for v in check_text_fidelity(text, fen, played_uci="b2c2") if v.kind == "move_claim"]
+    assert len(vs) == 1, vs
+    assert "3 squares before and 3 after" in vs[0].detail
+
+    # Same wording, and the typographic apostrophe a model writing prose emits.
+    for variant in (
+        "The stronger move is Kc2, which traps the opponent\u2019s king.",
+        "The stronger move is Kc2, taking away the opponent\u2019s king's squares.",
+    ):
+        assert "move_claim" in _kinds(check_text_fidelity(variant, fen, played_uci="b2c2")), variant
+
+
 def test_consequence_belonging_to_the_opponent_is_not_charged_to_our_move() -> None:
     # "Your move, Be2, lets the opponent take your pawn on g5" is a claim about what THEY
     # get to do. Verified on the board: after Be2 the opponent really can play Rxg5.

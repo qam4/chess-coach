@@ -768,6 +768,88 @@ def _attack_claim_violations(
     return out
 
 
+#: Which side's king a confinement claim can be about. Written once and shared by all four
+#: phrasings below, because the first version spelled the list out four times and left
+#: "opponent's" out of every one of them — the phrasing the coach ACTUALLY used on v53 seed 17
+#: ply 65 ("prepare to cut off the opponent's king") and the one the prompt steers it towards,
+#: since it instructs the model to "refer to Black as their opponent". Both apostrophes, because
+#: a model writing prose emits the typographic one.
+_THEIR_KING = (
+    r"(?:enemy\s+|opposing\s+|their\s+|opponent(?:'|\u2019)?s?\s+"
+    r"|black(?:'|\u2019)?s?\s+|white(?:'|\u2019)?s?\s+)?"
+)
+
+#: Claims that a move restricts the enemy king. All of them are the same measurement — does the
+#: king have fewer squares afterwards — so one check covers the family.
+_CONFINE_RE = re.compile(
+    rf"\b(?:cuts?|cutting)\s+(?:the\s+)?{_THEIR_KING}king\s+off"
+    rf"|\bcuts?\s+off\s+(?:the\s+)?{_THEIR_KING}king"
+    r"|\b(?:traps?|trapping|confines?|confining|boxes?\s+in|boxing\s+in)\s+"
+    rf"(?:the\s+)?{_THEIR_KING}king"
+    r"|\b(?:takes?|taking|takes\s+away|limits?|limiting|restricts?|restricting)\s+"
+    rf"(?:away\s+)?(?:the\s+)?{_THEIR_KING}king(?:'|\u2019)?s?\s+(?:squares|mobility|movement)",
+    re.IGNORECASE,
+)
+
+#: How far after a move token a confinement claim still counts as being about that move.
+_CONFINE_WINDOW = 140
+
+
+def _king_moves(board: chess.Board, colour: chess.Color) -> int | None:
+    """How many squares ``colour``'s king can legally move to. ``None`` if not determinable.
+
+    Needs a null move when it is not that side's turn, which is illegal while in check — so the
+    answer is None there rather than a wrong number.
+    """
+    king = board.king(colour)
+    if king is None:
+        return None
+    if board.turn == colour:
+        return sum(1 for m in board.legal_moves if m.from_square == king)
+    if board.is_check():
+        return None
+    probe = board.copy(stack=False)
+    probe.push(chess.Move.null())
+    return sum(1 for m in probe.legal_moves if m.from_square == probe.king(colour))
+
+
+def _confinement_violations(
+    kind: str,
+    token: str,
+    before: chess.Board,
+    after_move: chess.Board,
+    text: str,
+    claim_start: int,
+) -> list[Violation]:
+    """Check "<move> ... cuts the king off" by counting the king's squares before and after.
+
+    Ledger row 136. The coach wrote "Stronger move: Re4, which cuts the king off" at ply 58 of
+    seed 7 and `verify.py` passed it, because nothing checked confinement — so `clean_pct` read
+    100% on a transcript containing a falsehood. Checked against the board, the black king on e7
+    had the same five squares (d6, d7, d8, f6, f8) before and after Re4. What Re4 actually does is
+    hit a rook and a bishop, which is what the coach had said one version earlier.
+
+    Rules geometry, so it is ours to compute rather than the engine's. The whole family reduces to
+    one measurement: cutting off, trapping, confining and taking squares away all mean the king has
+    fewer squares afterwards. A claim is wrong when the count does not drop.
+
+    Deliberately not "fewer squares OR further from the action": that would need a judgement about
+    worth, which belongs to the engine. Count only.
+    """
+    m = _CONFINE_RE.search(text, claim_start, claim_start + _CONFINE_WINDOW)
+    if m is None:
+        return []
+    defender = not before.turn  # the side NOT making the move owns the king being confined
+    was = _king_moves(before, defender)
+    now = _king_moves(after_move, defender)
+    if was is None or now is None:
+        return []
+    if now < was:
+        return []
+    detail = f"{token} does not confine the king: it had {was} square{'' if was == 1 else 's'} before and {now} after"
+    return [Violation(kind, m.group(0), detail)]
+
+
 def _file_control_violations(
     kind: str,
     token: str,
@@ -1056,6 +1138,7 @@ def _check_our_move_claims(text: str, board: chess.Board, played_uci: str = "") 
         opponent_word = "black" if board.turn == chess.WHITE else "white"
         out.extend(_attack_claim_violations("move_claim", token, after_move, move, text, m.end(), opponent_word))
         out.extend(_file_control_violations("move_claim", token, move, text, m.end()))
+        out.extend(_confinement_violations("move_claim", token, board, after_move, text, m.end()))
     return out
 
 
