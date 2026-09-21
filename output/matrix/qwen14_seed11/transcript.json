@@ -1,0 +1,353 @@
+{
+  "environment": {
+    "recorded_at": "2026-09-18T16:36:53.719736+00:00",
+    "engine": {
+      "path": "C:\\src\\blunder\\build\\dev\\blunder.exe",
+      "size": 1195309,
+      "mtime": "2026-09-14T18:39:15.650637+00:00",
+      "sha256": "29cc3f3a751b464257596886fedafb6760628d7f04fb35a4281149604cbdc2e5"
+    },
+    "depth": 8,
+    "llm": {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "base_url": "http://localhost:11435",
+      "temperature": 0.0
+    }
+  },
+  "stats": {
+    "n_turns": 23,
+    "phase_counts": {
+      "phase:opening": 6,
+      "phase:middlegame": 13,
+      "phase:endgame": 4
+    },
+    "classification_counts": {
+      "good": 16,
+      "blunder": 2,
+      "mistake": 5
+    },
+    "fidelity_totals": {
+      "off_menu": 1
+    },
+    "empty_feedback": 15,
+    "latency_mean_s": 2.09,
+    "latency_p90_s": 5.56,
+    "latency_max_s": 8.97,
+    "composed_fact_rate": 0.2609,
+    "unsourced_square_rate": 0.0,
+    "recycled_phrase_rate": 0.0142,
+    "lesson_concentration_rate": 0.2174,
+    "fidelity_by_phase": {
+      "phase:opening": {
+        "off_menu": 1
+      }
+    },
+    "prompt_uci_leaks": 0,
+    "graded_or_priced": 0,
+    "prompt_magnitude_leaks": 0
+  },
+  "turns": [
+    {
+      "ply": 1,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 6 5",
+      "student_move_san": "Ng5",
+      "best_move_san": "O-O",
+      "classification": "good",
+      "eval_drop_cp": 5,
+      "coach_feedback": "",
+      "latency_s": 0.16,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 3,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/ppp2ppp/2n2n2/3pp1N1/2B1P3/8/PPPP1PPP/RNBQK2R w KQkq - 0 6",
+      "student_move_san": "Bxd5",
+      "best_move_san": "exd5",
+      "classification": "blunder",
+      "eval_drop_cp": 197,
+      "coach_feedback": "You captured the pawn on d5, but the opponent immediately recaptured with Nxd5, taking your bishop. The check you skipped was: before moving, what of theirs attacks the square you're going to? The best move was exd5, capturing the pawn and keeping your bishop safe. This lets you control the center and develop smoothly. Next time you see a capture, ask yourself: what recaptures, and does the trade favor me?",
+      "latency_s": 5.16,
+      "fidelity_kinds": {},
+      "prompt": "You are a warm, encouraging chess coach who teaches students how to think about positions \u2014 not a computer that reports data. Your goal is to help the student improve by building their understanding and pattern recognition.\n\nGROUNDING RULES (strict):\n- Only use information from the engine data sections provided below.\n- Never invent analysis, piece placements, or tactical ideas not in the data.\n- Never describe a piece as being on a square unless the data confirms it.\n- Do not narrate \"and then...\" move sequences or follow-up variations unless those exact moves appear in the engine lines above. Explain the plan or idea in words rather than inventing concrete continuations \u2014 a made-up line is the most misleading error you can make.\n- If the engine data is empty or incomplete, say so honestly.\n\nPEDAGOGY:\n- Teach the student how to think about the position (e.g., \"before moving, check if any of your pieces are undefended\" or \"ask yourself: what is my opponent threatening?\").\n- Connect advice to a general chess principle \u2014 help the student build habits they can apply in every game.\n- Acknowledge good aspects of the student's position before pointing out problems, when applicable.\n\nTONE:\n- Be warm, supportive, and encouraging \u2014 like a real coach, not a machine.\n- Use positive framing: focus on what the student can do, not just what's wrong.\n- Give concrete advice referencing specific squares and pieces rather than generic platitudes.\n\n\nStudent level: intermediate\n\nYou are given a structured comparison of the student's move against the engine's preferred move. Use ONLY the data below \u2014 do not re-analyze the position or add ideas not present here.\n\nPosition (FEN): r1bqkb1r/ppp2ppp/2n2n2/3pp1N1/2B1P3/8/PPPP1PPP/RNBQK2R w KQkq - 0 6\nSide to move: White. You are coaching the player with the White pieces \u2014 address them as \"you\" and refer to Black as their opponent. The engine data below labels items by color (White/Black); translate them to the student's perspective.\n\nStudent's move: Bxd5\nBest move: exd5\n\nThe best move (exd5) does this: capturing their pawn on d5 (material gain \u00e2\u20ac\u201d winning capture).\n\n--- What to focus on ---\nCurated coaching themes selected for this position. Name the relevant theme and connect it to a concrete, engine-sound move from the data above.\n- center control \u2014 Control the central squares (e4, d4, e5, d5). A piece in the center reaches more of the board than one on the edge.\n How to apply: Put a pawn or piece that fights for a central square, or trade off an enemy piece that defends one. Prefer moves that increase your influence over the four center squares.\n\n- development \u2014 Get your knights and bishops off the back rank early so every piece is doing work before the middlegame begins.\n How to apply: Each opening move, prefer bringing a new minor piece into play toward the center over moving the same piece twice or making a slow pawn move. Develop, then castle.\n\n- king safety \u2014 Tuck your king into safety before opening the position, so the center cannot be pried open against an exposed king.\n How to apply: Castle early (usually within the first ten moves), keep the pawns in front of the castled king intact, and avoid opening files or diagonals toward your own king.\n\n\n--- Board (piece placement) ---\nWhite to move.\nWhite (YOURS \u2014 the student): K e1, Q d1, R a1 h1, B c1 c4, N b1 g5, P a2 b2 c2 d2 e4 f2 g2 h2\n  White developed minors: Ng5, Bc4; still home: Nb1, Bc1\nBlack (THEIRS \u2014 the opponent): K e8, Q d8, R a8 h8, B c8 f8, N c6 f6, P a7 b7 c7 d5 e5 f7 g7 h7\n  Black developed minors: Nc6, Nf6; still home: Bc8, Bf8\n\n--- Pawn structure (from the board) ---\nWhite: isolated pawns: none; doubled pawns: none\nBlack: isolated pawns: none; doubled pawns: none\n\n--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is Nxd5, capturing your bishop on d5.\n\n--- Top Engine Lines (Black = your opponent, White = you) ---\nLine 1 (from the position you were in): 6.exd5 Nxd5 7.O-O Be7 8.Bxd5 Bxg5 9.Bxc6+ bxc6 10.Nc3 \u2014 where the whole line ends up (not a claim about exd5 on its own): king safety, castling\nLine 2 (from the position you were in): 6.Be2 \u2014 where the whole line ends up (not a claim about Be2 on its own): general play\nLine 3 (from the position you were in): 6.Bb5 \u2014 where the whole line ends up (not a claim about Bb5 on its own): general play\n\n--- How this came about ---\nThe opponent was already attacking d5 before you moved there. The check that was skipped: before I move, what of theirs attacks the square I am going to?\n\nCOACHING INSTRUCTIONS:\n- This move let something concrete happen. Do NOT open with praise or \"great job\". Lead with what went wrong, using only what is given above. Do NOT list a sequence of moves.\n- Then name the concrete better move. Be direct, not generic. No motivational sign-off.\n- Do NOT grade the move or say how much it cost. Do not call it an inaccuracy, a mistake or a blunder, and do not quantify what was lost. The reply and what it wins are the cost, stated as a fact the student can check.\n- Stay grounded: only facts in the data above; no invented analysis, placements, tactics, or \"and then...\" continuations.\n- WHY it is the better move: the one line above describing what that move does is the ONLY reason you may give. Put it in your own words. Do NOT add a second reason of your own, and do NOT name a square, piece, file or threat that line does not name.\n- THE OPPONENT'S ANSWER: lead with it. In ONE sentence, name the single reply shown above and what the line above says it does (\"after your move, the opponent plays X, capturing your Y on Z\"). That line is the ONLY source \u2014 do NOT upgrade what it says (if it says the reply ATTACKS something, do not write that it wins it), and do NOT add a threat, capture, piece or square it does not name. State the reply ONCE, not again as a separate sentence, and do NOT continue past that one move.\n- THE THINKING THAT WENT WRONG: the \"How this came about\" line above names the check that was skipped. Say it, in your own words, as the point of the turn \u2014 not as an afterthought. It is the only account of the cause that you have. Do NOT add to it: do not say the piece had no escape, was trapped, or should have moved earlier.\n- WHAT MATTERS HERE: the undefended piece named above is the subject of this turn \u2014 not pawn structure, king repositioning or piece placement. Do NOT claim that any move defends it, saves it, or deals with the threat unless a line above says so. If you do not know how it gets fixed, name the problem and stop there.\nCLOSE with one transferable takeaway on THIS lesson and no other: what a capture is worth \u2014 check what you win, what recaptures, and whether the trade favours you. Put it in your own words as a short \"next time you see ..., ask yourself ...\" hook the student can reuse. Do not substitute a different principle, and do not assert new pieces or squares in it.\n- Plain language, no engine jargon: describe what is happening on the board in words the student can check against the pieces. Do not rate the position or the move with a number or a score.\n\u26a0 CRITICAL MOMENT: This was a critical decision point.\nPlease provide a MORE DETAILED explanation of what was missed and why this moment was so important, in terms of the pieces and squares on the board.\n\nKeep your response concise (under 120 words)."
+    },
+    {
+      "ply": 5,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/ppp2ppp/2n5/3np1N1/4P3/8/PPPP1PPP/RNBQK2R w KQkq - 0 7",
+      "student_move_san": "exd5",
+      "best_move_san": "exd5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.14,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 7,
+      "phase": "phase:opening",
+      "fen_before": "r1b1kb1r/ppp2ppp/2n5/3Pp1q1/8/8/PPPP1PPP/RNBQK2R w KQkq - 0 8",
+      "student_move_san": "Qf3",
+      "best_move_san": "dxc6",
+      "classification": "mistake",
+      "eval_drop_cp": 118,
+      "coach_feedback": "dxc6 was stronger here \u2014 capturing their knight on c6. Before Qf3 your bishop on c1 was defended; after it, it is not. Same idea as earlier in this game.",
+      "latency_s": 8.97,
+      "fidelity_kinds": {
+        "off_menu": 1
+      },
+      "prompt": "You are a warm, encouraging chess coach who teaches students how to think about positions \u2014 not a computer that reports data. Your goal is to help the student improve by building their understanding and pattern recognition.\n\nGROUNDING RULES (strict):\n- Only use information from the engine data sections provided below.\n- Never invent analysis, piece placements, or tactical ideas not in the data.\n- Never describe a piece as being on a square unless the data confirms it.\n- Do not narrate \"and then...\" move sequences or follow-up variations unless those exact moves appear in the engine lines above. Explain the plan or idea in words rather than inventing concrete continuations \u2014 a made-up line is the most misleading error you can make.\n- If the engine data is empty or incomplete, say so honestly.\n\nPEDAGOGY:\n- Teach the student how to think about the position (e.g., \"before moving, check if any of your pieces are undefended\" or \"ask yourself: what is my opponent threatening?\").\n- Connect advice to a general chess principle \u2014 help the student build habits they can apply in every game.\n- Acknowledge good aspects of the student's position before pointing out problems, when applicable.\n\nTONE:\n- Be warm, supportive, and encouraging \u2014 like a real coach, not a machine.\n- Use positive framing: focus on what the student can do, not just what's wrong.\n- Give concrete advice referencing specific squares and pieces rather than generic platitudes.\n\n\nStudent level: intermediate\n\nYou are given a structured comparison of the student's move against the engine's preferred move. Use ONLY the data below \u2014 do not re-analyze the position or add ideas not present here.\n\nPosition (FEN): r1b1kb1r/ppp2ppp/2n5/3Pp1q1/8/8/PPPP1PPP/RNBQK2R w KQkq - 0 8\nSide to move: White. You are coaching the player with the White pieces \u2014 address them as \"you\" and refer to Black as their opponent. The engine data below labels items by color (White/Black); translate them to the student's perspective.\n\nStudent's move: Qf3\nBest move: dxc6\n\nThe best move (dxc6) does this: capturing their knight on c6 (material win \u00e2\u20ac\u201d captures a minor piece).\n\n--- What to focus on ---\nCurated coaching themes selected for this position. Name the relevant theme and connect it to a concrete, engine-sound move from the data above.\n- capture value \u2014 When you win material, how you take it matters. Capture with your least valuable attacker, and when you recapture, take with the piece that also improves your position.\n How to apply: Before making a capture, check which of your attackers is cheapest \u2014 winning a knight with a pawn is a better deal than with a queen. On a recapture, prefer the piece that ends up more active or points toward the center, all else being equal.\n HERE: a capture is available that wins material.\n- answer the threat first \u2014 Before carrying out your own plan, find out what your opponent is threatening. Many losses come from executing a plan while ignoring an incoming threat.\n How to apply: Each move, ask \"if it were my opponent's turn, what would they do to me?\" If there is a real threat, meet it \u2014 defend the target, block, capture the attacker, or make a bigger threat of your own.\n HERE: you threaten their knight on c6.\n- don't hang pieces \u2014 The single biggest source of lost games at the club level is leaving a piece undefended where it can simply be taken.\n How to apply: Count the attackers and defenders on every piece you own. If a piece is attacked more times than it is defended, move it, defend it, or capture the attacker before doing anything else.\n HERE: your pawn on g2 is undefended.\n\n--- Board (piece placement) ---\nWhite to move.\nWhite (YOURS \u2014 the student): K e1, Q d1, R a1 h1, B c1, N b1, P a2 b2 c2 d2 d5 f2 g2 h2\n  White developed minors: none; still home: Nb1, Bc1\nBlack (THEIRS \u2014 the opponent): K e8, Q g5, R a8 h8, B c8 f8, N c6, P a7 b7 c7 e5 f7 g7 h7\n  Black developed minors: Nc6; still home: Bc8, Bf8\n\n--- Pawn structure (from the board) ---\nWhite: isolated pawns: none; doubled pawns: d-file\nBlack: isolated pawns: none; doubled pawns: none\n\n--- Missed Tactics ---\nWhite has a discovered attack: moving d2 reveals Bc1 hitting Qg5.\n\n--- Top Engine Lines (Black = your opponent, White = you) ---\nLine 1 (from the position you were in): 8.dxc6 Qxg2 9.Rf1 Bh3 10.Qe2 Qxf1+ 11.Qxf1 Bxf1 12.Kxf1 bxc6 \u2014 where the whole line ends up (not a claim about dxc6 on its own): general play\nLine 2 (from the position you were in): 8.Kf1 \u2014 where the whole line ends up (not a claim about Kf1 on its own): general play\nLine 3 (from the position you were in): 8.g3 Nb4 9.Nc3 Bg4 10.f3 \u2014 where the whole line ends up (not a claim about g3 on its own): piece development\n\n--- How this came about ---\nBefore Qf3 your bishop on c1 was defended; after it, it is not. The check that was skipped: after my move, is everything I was defending still defended?\n\nCOACHING INSTRUCTIONS:\n- This move let something concrete happen. Do NOT open with praise or \"great job\". Lead with what went wrong, using only what is given above. Do NOT list a sequence of moves.\n- Then name the concrete better move. Be direct, not generic. No motivational sign-off.\n- Do NOT grade the move or say how much it cost. Do not call it an inaccuracy, a mistake or a blunder, and do not quantify what was lost. The reply and what it wins are the cost, stated as a fact the student can check.\n- Stay grounded: only facts in the data above; no invented analysis, placements, tactics, or \"and then...\" continuations.\n- WHY it is the better move: the one line above describing what that move does is the ONLY reason you may give. Put it in your own words. Do NOT add a second reason of your own, and do NOT name a square, piece, file or threat that line does not name.\n- THE OPPONENT'S ANSWER is NOT given above, so you do not know it. Do NOT name a move for the opponent, do not write \"the opponent plays ...\", and do not work one out from the position. Lead with what is above instead.\n- THE THINKING THAT WENT WRONG: the \"How this came about\" line above names the check that was skipped. Say it, in your own words, as the point of the turn \u2014 not as an afterthought. It is the only account of the cause that you have. Do NOT add to it: do not say the piece had no escape, was trapped, or should have moved earlier.\nCLOSE with one transferable takeaway, and use THIS one rather than the lesson you have already given earlier in this game: capture value. Put it in your own words as a short \"next time you see ..., ask yourself ...\" hook. Do not assert new pieces or squares in it, and do not repeat the earlier lesson.\n- Plain language, no engine jargon: describe what is happening on the board in words the student can check against the pieces. Do not rate the position or the move with a number or a score.\nKeep your response concise (under 120 words)."
+    },
+    {
+      "ply": 9,
+      "phase": "phase:opening",
+      "fen_before": "r1b1kb1r/ppp2ppp/8/3Pp1q1/3n4/5Q2/PPPP1PPP/RNB1K2R w KQkq - 2 9",
+      "student_move_san": "Qe4",
+      "best_move_san": "Qe4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.06,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 11,
+      "phase": "phase:opening",
+      "fen_before": "r1b1kbr1/ppp2ppp/8/3Pp1q1/3nQ3/8/PPPP1PPP/RNB1K2R w KQq - 4 10",
+      "student_move_san": "h4",
+      "best_move_san": "O-O",
+      "classification": "mistake",
+      "eval_drop_cp": 116,
+      "coach_feedback": "Your move h4 lets your opponent take control of the center and threatens their pawn on e5. The better move is O-O, which castles short to tuck your king onto g1 and connect your rooks. This move prioritizes king safety, which is crucial before the center opens up. Next time you see a chance to castle, ask yourself: is my king safe, and are my rooks connected?",
+      "latency_s": 5.23,
+      "fidelity_kinds": {},
+      "prompt": "You are a warm, encouraging chess coach who teaches students how to think about positions \u2014 not a computer that reports data. Your goal is to help the student improve by building their understanding and pattern recognition.\n\nGROUNDING RULES (strict):\n- Only use information from the engine data sections provided below.\n- Never invent analysis, piece placements, or tactical ideas not in the data.\n- Never describe a piece as being on a square unless the data confirms it.\n- Do not narrate \"and then...\" move sequences or follow-up variations unless those exact moves appear in the engine lines above. Explain the plan or idea in words rather than inventing concrete continuations \u2014 a made-up line is the most misleading error you can make.\n- If the engine data is empty or incomplete, say so honestly.\n\nPEDAGOGY:\n- Teach the student how to think about the position (e.g., \"before moving, check if any of your pieces are undefended\" or \"ask yourself: what is my opponent threatening?\").\n- Connect advice to a general chess principle \u2014 help the student build habits they can apply in every game.\n- Acknowledge good aspects of the student's position before pointing out problems, when applicable.\n\nTONE:\n- Be warm, supportive, and encouraging \u2014 like a real coach, not a machine.\n- Use positive framing: focus on what the student can do, not just what's wrong.\n- Give concrete advice referencing specific squares and pieces rather than generic platitudes.\n\n\nStudent level: intermediate\n\nYou are given a structured comparison of the student's move against the engine's preferred move. Use ONLY the data below \u2014 do not re-analyze the position or add ideas not present here.\n\nPosition (FEN): r1b1kbr1/ppp2ppp/8/3Pp1q1/3nQ3/8/PPPP1PPP/RNB1K2R w KQq - 4 10\nSide to move: White. You are coaching the player with the White pieces \u2014 address them as \"you\" and refer to Black as their opponent. The engine data below labels items by color (White/Black); translate them to the student's perspective.\n\nStudent's move: h4\nBest move: O-O\n\nThe best move (O-O) does this: castling short to tuck your king onto g1 and connect your rooks (king safety \u00e2\u20ac\u201d castling to a safer position).\n\n--- What to focus on ---\nCurated coaching themes selected for this position. Name the relevant theme and connect it to a concrete, engine-sound move from the data above.\n- pin \u2014 A pinned piece cannot move without exposing a more valuable piece behind it, so it is effectively frozen and can be piled on.\n How to apply: When an enemy piece is pinned against its king or queen, attack it again with a pawn or another piece \u2014 it cannot run away.\n HERE: a pin involving e4, e5.\n- capture value \u2014 When you win material, how you take it matters. Capture with your least valuable attacker, and when you recapture, take with the piece that also improves your position.\n How to apply: Before making a capture, check which of your attackers is cheapest \u2014 winning a knight with a pawn is a better deal than with a queen. On a recapture, prefer the piece that ends up more active or points toward the center, all else being equal.\n HERE: a capture is available that wins material.\n- answer the threat first \u2014 Before carrying out your own plan, find out what your opponent is threatening. Many losses come from executing a plan while ignoring an incoming threat.\n How to apply: Each move, ask \"if it were my opponent's turn, what would they do to me?\" If there is a real threat, meet it \u2014 defend the target, block, capture the attacker, or make a bigger threat of your own.\n HERE: you threaten their pawn on e5.\n\n--- Board (piece placement) ---\nWhite to move.\nWhite (YOURS \u2014 the student): K e1, Q e4, R a1 h1, B c1, N b1, P a2 b2 c2 d2 d5 f2 g2 h2\n  White developed minors: none; still home: Nb1, Bc1\nBlack (THEIRS \u2014 the opponent): K e8, Q g5, R a8 g8, B c8 f8, N d4, P a7 b7 c7 e5 f7 g7 h7\n  Black developed minors: Nd4; still home: Bc8, Bf8\n\n--- Pawn structure (from the board) ---\nWhite: isolated pawns: none; doubled pawns: d-file\nBlack: isolated pawns: none; doubled pawns: none\n\n--- Missed Tactics ---\nWhite has a pin: Qe4 pins e5 to Ke8.\nWhite has a discovered attack: moving d2 reveals Bc1 hitting Qg5.\n\n--- Top Engine Lines (Black = your opponent, White = you) ---\nLine 1 (from the position you were in): 10.O-O Qf5 11.Re1 Qxe4 12.Rxe4 Bd6 \u2014 where the whole line ends up (not a claim about O-O on its own): king safety, castling\nLine 2 (from the position you were in): 10.c3 \u2014 where the whole line ends up (not a claim about c3 on its own): general play\nLine 3 (from the position you were in): 10.Nc3 \u2014 where the whole line ends up (not a claim about Nc3 on its own): piece development\n\nCOACHING INSTRUCTIONS:\n- This move let something concrete happen. Do NOT open with praise or \"great job\". Lead with what went wrong, using only what is given above. Do NOT list a sequence of moves.\n- Then name the concrete better move. Be direct, not generic. No motivational sign-off.\n- Do NOT grade the move or say how much it cost. Do not call it an inaccuracy, a mistake or a blunder, and do not quantify what was lost. The reply and what it wins are the cost, stated as a fact the student can check.\n- Stay grounded: only facts in the data above; no invented analysis, placements, tactics, or \"and then...\" continuations.\n- WHY it is the better move: the one line above describing what that move does is the ONLY reason you may give. Put it in your own words. Do NOT add a second reason of your own, and do NOT name a square, piece, file or threat that line does not name.\n- THE OPPONENT'S ANSWER is NOT given above, so you do not know it. Do NOT name a move for the opponent, do not write \"the opponent plays ...\", and do not work one out from the position. Lead with what is above instead.\nCLOSE with one transferable takeaway on THIS lesson and no other: getting the king to safety before the centre opens up. Put it in your own words as a short \"next time you see ..., ask yourself ...\" hook the student can reuse. Do not substitute a different principle, and do not assert new pieces or squares in it.\n- Plain language, no engine jargon: describe what is happening on the board in words the student can check against the pieces. Do not rate the position or the move with a number or a score.\nKeep your response concise (under 120 words)."
+    },
+    {
+      "ply": 13,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1kbr1/ppp2ppp/8/3Pp2q/3nQ2P/8/PPPP1PP1/RNB1K2R w KQq - 1 11",
+      "student_move_san": "O-O",
+      "best_move_san": "c3",
+      "classification": "good",
+      "eval_drop_cp": 20,
+      "coach_feedback": "",
+      "latency_s": 0.07,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 15,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1kbr1/ppp2ppp/8/3Pp2q/4Q2P/8/PPPPnPP1/RNB2RK1 w q - 3 12",
+      "student_move_san": "Kh2",
+      "best_move_san": "Kh2",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.06,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 17,
+      "phase": "phase:middlegame",
+      "fen_before": "1rb1kbr1/ppp2ppp/8/3Pp2q/4Q2P/8/PPPPnPPK/RNB2R2 w - - 5 13",
+      "student_move_san": "Re1",
+      "best_move_san": "Nc3",
+      "classification": "mistake",
+      "eval_drop_cp": 67,
+      "coach_feedback": "Your move left your pawn on f2 undefended, which you had previously protected. The best move, Nc3, attacks their knight on e2 and develops a minor piece. Next time you see an opponent\u2019s piece with few defenders, ask yourself if you can target it \u2014 it might be the key to improving your position.",
+      "latency_s": 4.68,
+      "fidelity_kinds": {},
+      "prompt": "You are a warm, encouraging chess coach who teaches students how to think about positions \u2014 not a computer that reports data. Your goal is to help the student improve by building their understanding and pattern recognition.\n\nGROUNDING RULES (strict):\n- Only use information from the engine data sections provided below.\n- Never invent analysis, piece placements, or tactical ideas not in the data.\n- Never describe a piece as being on a square unless the data confirms it.\n- Do not narrate \"and then...\" move sequences or follow-up variations unless those exact moves appear in the engine lines above. Explain the plan or idea in words rather than inventing concrete continuations \u2014 a made-up line is the most misleading error you can make.\n- If the engine data is empty or incomplete, say so honestly.\n\nPEDAGOGY:\n- Teach the student how to think about the position (e.g., \"before moving, check if any of your pieces are undefended\" or \"ask yourself: what is my opponent threatening?\").\n- Connect advice to a general chess principle \u2014 help the student build habits they can apply in every game.\n- Acknowledge good aspects of the student's position before pointing out problems, when applicable.\n\nTONE:\n- Be warm, supportive, and encouraging \u2014 like a real coach, not a machine.\n- Use positive framing: focus on what the student can do, not just what's wrong.\n- Give concrete advice referencing specific squares and pieces rather than generic platitudes.\n\n\nStudent level: intermediate\n\nYou are given a structured comparison of the student's move against the engine's preferred move. Use ONLY the data below \u2014 do not re-analyze the position or add ideas not present here.\n\nPosition (FEN): 1rb1kbr1/ppp2ppp/8/3Pp2q/4Q2P/8/PPPPnPPK/RNB2R2 w - - 5 13\nSide to move: White. You are coaching the player with the White pieces \u2014 address them as \"you\" and refer to Black as their opponent. The engine data below labels items by color (White/Black); translate them to the student's perspective.\n\nStudent's move: Re1\nBest move: Nc3\n\nThe best move (Nc3) does this: attacking their knight on e2 (piece development \u00e2\u20ac\u201d activating a minor piece).\n\n--- What to focus on ---\nCurated coaching themes selected for this position. Name the relevant theme and connect it to a concrete, engine-sound move from the data above.\n- answer the threat first \u2014 Before carrying out your own plan, find out what your opponent is threatening. Many losses come from executing a plan while ignoring an incoming threat.\n How to apply: Each move, ask \"if it were my opponent's turn, what would they do to me?\" If there is a real threat, meet it \u2014 defend the target, block, capture the attacker, or make a bigger threat of your own.\n HERE: you threaten their pawn on e5.\n- make a plan \u2014 In the middlegame, drifting without a plan is how good positions slip away. Decide what the position is about before you move.\n How to apply: Ask three questions: which of my pieces is worst-placed, what is the weakest point in my opponent's camp, and which side of the board is mine to play on? Improve the worst piece and aim at the weakness.\n\n\n--- Board (piece placement) ---\nWhite to move.\nWhite (YOURS \u2014 the student): K h2, Q e4, R a1 f1, B c1, N b1, P a2 b2 c2 d2 d5 f2 g2 h4\n  White developed minors: none; still home: Nb1, Bc1\nBlack (THEIRS \u2014 the opponent): K e8, Q h5, R b8 g8, B c8 f8, N e2, P a7 b7 c7 e5 f7 g7 h7\n  Black developed minors: Ne2; still home: Bc8, Bf8\n\n--- Pawn structure (from the board) ---\nWhite: isolated pawns: none; doubled pawns: d-file\nBlack: isolated pawns: none; doubled pawns: none\n\n--- Top Engine Lines (Black = your opponent, White = you) ---\nLine 1 (from the position you were in): 13.Nc3 Nxc1 14.Raxc1 Be7 15.Rfe1 Bxh4 16.Qxe5+ Qxe5+ 17.Rxe5+ \u2014 where the whole line ends up (not a claim about Nc3 on its own): piece development\nLine 2 (from the position you were in): 13.g3 Nxc1 14.Rxc1 Bd6 15.Nc3 Kf8 \u2014 where the whole line ends up (not a claim about g3 on its own): general play\nLine 3 (from the position you were in): 13.Na3 Bg4 14.g3 Nxc1 15.Raxc1 Bc5 \u2014 where the whole line ends up (not a claim about Na3 on its own): piece development\n\n--- How this came about ---\nBefore Re1 your pawn on f2 was defended; after it, it is not. The check that was skipped: after my move, is everything I was defending still defended?\n\nCOACHING INSTRUCTIONS:\n- This move let something concrete happen. Do NOT open with praise or \"great job\". Lead with what went wrong, using only what is given above. Do NOT list a sequence of moves.\n- Then name the concrete better move. Be direct, not generic. No motivational sign-off.\n- Do NOT grade the move or say how much it cost. Do not call it an inaccuracy, a mistake or a blunder, and do not quantify what was lost. The reply and what it wins are the cost, stated as a fact the student can check.\n- Stay grounded: only facts in the data above; no invented analysis, placements, tactics, or \"and then...\" continuations.\n- WHY it is the better move: the one line above describing what that move does is the ONLY reason you may give. Put it in your own words. Do NOT add a second reason of your own, and do NOT name a square, piece, file or threat that line does not name.\n- THE OPPONENT'S ANSWER is NOT given above, so you do not know it. Do NOT name a move for the opponent, do not write \"the opponent plays ...\", and do not work one out from the position. Lead with what is above instead.\n- THE THINKING THAT WENT WRONG: the \"How this came about\" line above names the check that was skipped. Say it, in your own words, as the point of the turn \u2014 not as an afterthought. It is the only account of the cause that you have. Do NOT add to it: do not say the piece had no escape, was trapped, or should have moved earlier.\nCLOSE with one transferable takeaway on THIS lesson and no other: going after a piece that has too few defenders. Put it in your own words as a short \"next time you see ..., ask yourself ...\" hook the student can reuse. Do not substitute a different principle, and do not assert new pieces or squares in it.\n- Plain language, no engine jargon: describe what is happening on the board in words the student can check against the pieces. Do not rate the position or the move with a number or a score.\nKeep your response concise (under 120 words)."
+    },
+    {
+      "ply": 19,
+      "phase": "phase:middlegame",
+      "fen_before": "1rb1k1r1/ppp1bppp/8/3Pp2q/4Q2P/8/PPPPnPPK/RNB1R3 w - - 7 14",
+      "student_move_san": "Rxe2",
+      "best_move_san": "Rxe2",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.13,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 21,
+      "phase": "phase:middlegame",
+      "fen_before": "1rb1k1r1/ppp1bppp/8/3Pp3/4Q2q/8/PPPPRPPK/RNB5 w - - 0 15",
+      "student_move_san": "Qxh4",
+      "best_move_san": "Qxh4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.06,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 23,
+      "phase": "phase:middlegame",
+      "fen_before": "1rb1k1r1/ppp2ppp/8/3Pp3/7b/8/PPPPRPPK/RNB5 w - - 0 16",
+      "student_move_san": "Rxe5+",
+      "best_move_san": "d4",
+      "classification": "good",
+      "eval_drop_cp": 24,
+      "coach_feedback": "",
+      "latency_s": 0.16,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 25,
+      "phase": "phase:middlegame",
+      "fen_before": "1rbk2r1/ppp2ppp/8/3PR3/7b/8/PPPP1PPK/RNB5 w - - 1 17",
+      "student_move_san": "d3",
+      "best_move_san": "f3",
+      "classification": "mistake",
+      "eval_drop_cp": 68,
+      "coach_feedback": "Your move let something concrete happen: the opponent's reply was Bxf2, capturing your pawn on f2. The check that was skipped was: is anything of mine already under attack, before I look for something to improve? The better move is f3, which moves your pawn off f2 where it was attacked (pawn structure \u2014 improving pawn position). What matters here is your pawn on f2 was undefended. Next time you see a piece under attack, ask yourself: where can I move it to be both safe and useful?",
+      "latency_s": 5.56,
+      "fidelity_kinds": {},
+      "prompt": "You are a warm, encouraging chess coach who teaches students how to think about positions \u2014 not a computer that reports data. Your goal is to help the student improve by building their understanding and pattern recognition.\n\nGROUNDING RULES (strict):\n- Only use information from the engine data sections provided below.\n- Never invent analysis, piece placements, or tactical ideas not in the data.\n- Never describe a piece as being on a square unless the data confirms it.\n- Do not narrate \"and then...\" move sequences or follow-up variations unless those exact moves appear in the engine lines above. Explain the plan or idea in words rather than inventing concrete continuations \u2014 a made-up line is the most misleading error you can make.\n- If the engine data is empty or incomplete, say so honestly.\n\nPEDAGOGY:\n- Teach the student how to think about the position (e.g., \"before moving, check if any of your pieces are undefended\" or \"ask yourself: what is my opponent threatening?\").\n- Connect advice to a general chess principle \u2014 help the student build habits they can apply in every game.\n- Acknowledge good aspects of the student's position before pointing out problems, when applicable.\n\nTONE:\n- Be warm, supportive, and encouraging \u2014 like a real coach, not a machine.\n- Use positive framing: focus on what the student can do, not just what's wrong.\n- Give concrete advice referencing specific squares and pieces rather than generic platitudes.\n\n\nStudent level: intermediate\n\nYou are given a structured comparison of the student's move against the engine's preferred move. Use ONLY the data below \u2014 do not re-analyze the position or add ideas not present here.\n\nPosition (FEN): 1rbk2r1/ppp2ppp/8/3PR3/7b/8/PPPP1PPK/RNB5 w - - 1 17\nSide to move: White. You are coaching the player with the White pieces \u2014 address them as \"you\" and refer to Black as their opponent. The engine data below labels items by color (White/Black); translate them to the student's perspective.\n\nStudent's move: d3\nBest move: f3\n\nThe best move (f3) does this: moving your pawn off f2 where it was attacked (pawn structure \u00e2\u20ac\u201d improving pawn position).\n\n--- What to focus on ---\nCurated coaching themes selected for this position. Name the relevant theme and connect it to a concrete, engine-sound move from the data above.\n- answer the threat first \u2014 Before carrying out your own plan, find out what your opponent is threatening. Many losses come from executing a plan while ignoring an incoming threat.\n How to apply: Each move, ask \"if it were my opponent's turn, what would they do to me?\" If there is a real threat, meet it \u2014 defend the target, block, capture the attacker, or make a bigger threat of your own.\n HERE: you threaten the e8 square.\n- rooks on open files \u2014 A rook is at its best on an open file (one with no pawns), where it controls the whole file and can swing into the enemy position.\n How to apply: Place a rook on the open file, and double rooks (or rook plus queen) on it when you can. Contest a file the opponent already controls rather than leaving it to them.\n HERE: the e-file is open.\n- don't hang pieces \u2014 The single biggest source of lost games at the club level is leaving a piece undefended where it can simply be taken.\n How to apply: Count the attackers and defenders on every piece you own. If a piece is attacked more times than it is defended, move it, defend it, or capture the attacker before doing anything else.\n HERE: your pawn on f2 is undefended.\n\n--- Board (piece placement) ---\nWhite to move.\nWhite (YOURS \u2014 the student): K h2, R a1 e5, B c1, N b1, P a2 b2 c2 d2 d5 f2 g2\n  White developed minors: none; still home: Nb1, Bc1\nBlack (THEIRS \u2014 the opponent): K d8, R b8 g8, B c8 h4, P a7 b7 c7 f7 g7 h7\n  Black developed minors: Bh4; still home: Bc8\n\n--- Pawn structure (from the board) ---\nWhite: isolated pawns: none; doubled pawns: d-file\nBlack: isolated pawns: none; doubled pawns: none\n\n--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is Bxf2, capturing your pawn on f2.\n\n--- Top Engine Lines (Black = your opponent, White = you) ---\nLine 1 (from the position you were in): 17.f3 Be7 18.Rh5 Bd6+ 19.Kg1 h6 20.Nc3 Bd7 21.Ne4 \u2014 where the whole line ends up (not a claim about f3 on its own): general play\nLine 2 (from the position you were in): 17.Kg1 Bf6 18.Rh5 h6 19.f3 Bd4+ 20.Kf1 Re8 21.Nc3 \u2014 where the whole line ends up (not a claim about Kg1 on its own): general play\nLine 3 (from the position you were in): 17.Re4 \u2014 where the whole line ends up (not a claim about Re4 on its own): general play\n\n--- How this came about ---\nYour pawn on f2 was already attacked and undefended before this move, and the move went elsewhere. The check that was skipped: is anything of mine already under attack, before I look for something to improve?\n\nCOACHING INSTRUCTIONS:\n- This move let something concrete happen. Do NOT open with praise or \"great job\". Lead with what went wrong, using only what is given above. Do NOT list a sequence of moves.\n- Then name the concrete better move. Be direct, not generic. No motivational sign-off.\n- Do NOT grade the move or say how much it cost. Do not call it an inaccuracy, a mistake or a blunder, and do not quantify what was lost. The reply and what it wins are the cost, stated as a fact the student can check.\n- Stay grounded: only facts in the data above; no invented analysis, placements, tactics, or \"and then...\" continuations.\n- WHY it is the better move: the one line above describing what that move does is the ONLY reason you may give. Put it in your own words. Do NOT add a second reason of your own, and do NOT name a square, piece, file or threat that line does not name.\n- THE OPPONENT'S ANSWER: lead with it. In ONE sentence, name the single reply shown above and what the line above says it does (\"after your move, the opponent plays X, capturing your Y on Z\"). That line is the ONLY source \u2014 do NOT upgrade what it says (if it says the reply ATTACKS something, do not write that it wins it), and do NOT add a threat, capture, piece or square it does not name. State the reply ONCE, not again as a separate sentence, and do NOT continue past that one move.\n- THE THINKING THAT WENT WRONG: the \"How this came about\" line above names the check that was skipped. Say it, in your own words, as the point of the turn \u2014 not as an afterthought. It is the only account of the cause that you have. Do NOT add to it: do not say the piece had no escape, was trapped, or should have moved earlier.\n- WHAT MATTERS HERE: the undefended piece named above is the subject of this turn \u2014 not pawn structure, king repositioning or piece placement. Do NOT claim that any move defends it, saves it, or deals with the threat unless a line above says so. If you do not know how it gets fixed, name the problem and stop there.\nCLOSE with one transferable takeaway on THIS lesson and no other: when one of your pieces is attacked, move it somewhere it is both safe and useful. Put it in your own words as a short \"next time you see ..., ask yourself ...\" hook the student can reuse. Do not substitute a different principle, and do not assert new pieces or squares in it.\n- Plain language, no engine jargon: describe what is happening on the board in words the student can check against the pieces. Do not rate the position or the move with a number or a score.\nKeep your response concise (under 120 words)."
+    },
+    {
+      "ply": 27,
+      "phase": "phase:middlegame",
+      "fen_before": "1rbk2r1/ppp3pp/5p2/3PR3/7b/3P4/PPP2PPK/RNB5 w - - 0 18",
+      "student_move_san": "Rh5",
+      "best_move_san": "Re2",
+      "classification": "mistake",
+      "eval_drop_cp": 99,
+      "coach_feedback": "Your move let the opponent capture your pawn on f2. The better move was Re2, moving your rook off e5 where it was attacked. The thinking that went wrong was not checking if anything of yours was already under attack. What matters here is your pawn on f2 was undefended. Next time you see a piece under threat, ask yourself: what is my opponent threatening?",
+      "latency_s": 5.0,
+      "fidelity_kinds": {},
+      "prompt": "You are a warm, encouraging chess coach who teaches students how to think about positions \u2014 not a computer that reports data. Your goal is to help the student improve by building their understanding and pattern recognition.\n\nGROUNDING RULES (strict):\n- Only use information from the engine data sections provided below.\n- Never invent analysis, piece placements, or tactical ideas not in the data.\n- Never describe a piece as being on a square unless the data confirms it.\n- Do not narrate \"and then...\" move sequences or follow-up variations unless those exact moves appear in the engine lines above. Explain the plan or idea in words rather than inventing concrete continuations \u2014 a made-up line is the most misleading error you can make.\n- If the engine data is empty or incomplete, say so honestly.\n\nPEDAGOGY:\n- Teach the student how to think about the position (e.g., \"before moving, check if any of your pieces are undefended\" or \"ask yourself: what is my opponent threatening?\").\n- Connect advice to a general chess principle \u2014 help the student build habits they can apply in every game.\n- Acknowledge good aspects of the student's position before pointing out problems, when applicable.\n\nTONE:\n- Be warm, supportive, and encouraging \u2014 like a real coach, not a machine.\n- Use positive framing: focus on what the student can do, not just what's wrong.\n- Give concrete advice referencing specific squares and pieces rather than generic platitudes.\n\n\nStudent level: intermediate\n\nYou are given a structured comparison of the student's move against the engine's preferred move. Use ONLY the data below \u2014 do not re-analyze the position or add ideas not present here.\n\nPosition (FEN): 1rbk2r1/ppp3pp/5p2/3PR3/7b/3P4/PPP2PPK/RNB5 w - - 0 18\nSide to move: White. You are coaching the player with the White pieces \u2014 address them as \"you\" and refer to Black as their opponent. The engine data below labels items by color (White/Black); translate them to the student's perspective.\n\nStudent's move: Rh5\nBest move: Re2\n\nThe best move (Re2) does this: moving your rook off e5 where it was attacked (rook activity \u00e2\u20ac\u201d rook on the seventh rank).\n\n--- What to focus on ---\nCurated coaching themes selected for this position. Name the relevant theme and connect it to a concrete, engine-sound move from the data above.\n- answer the threat first \u2014 Before carrying out your own plan, find out what your opponent is threatening. Many losses come from executing a plan while ignoring an incoming threat.\n How to apply: Each move, ask \"if it were my opponent's turn, what would they do to me?\" If there is a real threat, meet it \u2014 defend the target, block, capture the attacker, or make a bigger threat of your own.\n HERE: you threaten the e8 square.\n- rooks on open files \u2014 A rook is at its best on an open file (one with no pawns), where it controls the whole file and can swing into the enemy position.\n How to apply: Place a rook on the open file, and double rooks (or rook plus queen) on it when you can. Contest a file the opponent already controls rather than leaving it to them.\n HERE: the e-file is open.\n- don't hang pieces \u2014 The single biggest source of lost games at the club level is leaving a piece undefended where it can simply be taken.\n How to apply: Count the attackers and defenders on every piece you own. If a piece is attacked more times than it is defended, move it, defend it, or capture the attacker before doing anything else.\n HERE: your pawn on f2 is undefended.\n\n--- Board (piece placement) ---\nWhite to move.\nWhite (YOURS \u2014 the student): K h2, R a1 e5, B c1, N b1, P a2 b2 c2 d3 d5 f2 g2\n  White developed minors: none; still home: Nb1, Bc1\nBlack (THEIRS \u2014 the opponent): K d8, R b8 g8, B c8 h4, P a7 b7 c7 f6 g7 h7\n  Black developed minors: Bh4; still home: Bc8\n\n--- Pawn structure (from the board) ---\nWhite: isolated pawns: none; doubled pawns: d-file\nBlack: isolated pawns: none; doubled pawns: none\n\n--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is Bxf2, capturing your pawn on f2.\n\n--- Top Engine Lines (Black = your opponent, White = you) ---\nLine 1 (from the position you were in): 18.Re2 Bg4 19.f3 Bf5 20.g3 Bg5 21.Nc3 Bxc1 22.Rxc1 \u2014 where the whole line ends up (not a claim about Re2 on its own): piece development\nLine 2 (from the position you were in): 18.Rh5 Bxf2 19.Rxh7 Bf5 20.Rh5 Bg6 21.Rh3 Kc8 \u2014 where the whole line ends up (not a claim about Rh5 on its own): general play\nLine 3 (from the position you were in): 18.Re4 Bxf2 19.Be3 Bxe3 20.Rxe3 Re8 21.Rxe8+ Kxe8 22.Nd2 \u2014 where the whole line ends up (not a claim about Re4 on its own): piece development\n\n--- How this came about ---\nYour pawn on f2 was already attacked and undefended before this move, and the move went elsewhere. The check that was skipped: is anything of mine already under attack, before I look for something to improve? This same piece already came up on move 17.\n\nCOACHING INSTRUCTIONS:\n- This move let something concrete happen. Do NOT open with praise or \"great job\". Lead with what went wrong, using only what is given above. Do NOT list a sequence of moves.\n- Then name the concrete better move. Be direct, not generic. No motivational sign-off.\n- Do NOT grade the move or say how much it cost. Do not call it an inaccuracy, a mistake or a blunder, and do not quantify what was lost. The reply and what it wins are the cost, stated as a fact the student can check.\n- Stay grounded: only facts in the data above; no invented analysis, placements, tactics, or \"and then...\" continuations.\n- WHY it is the better move: the one line above describing what that move does is the ONLY reason you may give. Put it in your own words. Do NOT add a second reason of your own, and do NOT name a square, piece, file or threat that line does not name.\n- THE OPPONENT'S ANSWER: lead with it. In ONE sentence, name the single reply shown above and what the line above says it does (\"after your move, the opponent plays X, capturing your Y on Z\"). That line is the ONLY source \u2014 do NOT upgrade what it says (if it says the reply ATTACKS something, do not write that it wins it), and do NOT add a threat, capture, piece or square it does not name. State the reply ONCE, not again as a separate sentence, and do NOT continue past that one move.\n- THE THINKING THAT WENT WRONG: the \"How this came about\" line above names the check that was skipped. Say it, in your own words, as the point of the turn \u2014 not as an afterthought. It is the only account of the cause that you have. Do NOT add to it: do not say the piece had no escape, was trapped, or should have moved earlier.\n- WHAT MATTERS HERE: the undefended piece named above is the subject of this turn \u2014 not pawn structure, king repositioning or piece placement. Do NOT claim that any move defends it, saves it, or deals with the threat unless a line above says so. If you do not know how it gets fixed, name the problem and stop there.\nCLOSE with one transferable takeaway, and use THIS one rather than the lesson you have already given earlier in this game: answer the threat first. Put it in your own words as a short \"next time you see ..., ask yourself ...\" hook. Do not assert new pieces or squares in it, and do not repeat the earlier lesson.\n- Plain language, no engine jargon: describe what is happening on the board in words the student can check against the pieces. Do not rate the position or the move with a number or a score.\n\u26a0 CRITICAL MOMENT: This was a critical decision point.\nPlease provide a MORE DETAILED explanation of what was missed and why this moment was so important, in terms of the pieces and squares on the board.\n\nKeep your response concise (under 120 words)."
+    },
+    {
+      "ply": 29,
+      "phase": "phase:middlegame",
+      "fen_before": "1rbk2r1/ppp3pp/5p2/3P3R/8/3P4/PPP2bPK/RNB5 w - - 0 19",
+      "student_move_san": "Nc3",
+      "best_move_san": "Rxh7",
+      "classification": "good",
+      "eval_drop_cp": 22,
+      "coach_feedback": "",
+      "latency_s": 0.12,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 31,
+      "phase": "phase:middlegame",
+      "fen_before": "1r1k2r1/ppp3pp/5p2/3P3R/6b1/2NP4/PPP2bPK/R1B5 w - - 2 20",
+      "student_move_san": "Rxh7",
+      "best_move_san": "Rxh7",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.1,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 33,
+      "phase": "phase:middlegame",
+      "fen_before": "1r1k2r1/ppp3pR/5p2/3P1b2/8/2NP4/PPP2bPK/R1B5 w - - 1 21",
+      "student_move_san": "Rh5",
+      "best_move_san": "Rh5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.11,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 35,
+      "phase": "phase:middlegame",
+      "fen_before": "1r1k2r1/ppp3p1/5p2/3P3R/6b1/2NP4/PPP2bPK/R1B5 w - - 3 22",
+      "student_move_san": "Rh7",
+      "best_move_san": "Rh7",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.1,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 37,
+      "phase": "phase:middlegame",
+      "fen_before": "1r1k2r1/ppp3pR/5p2/3P1b2/8/2NP4/PPP2bPK/R1B5 w - - 5 23",
+      "student_move_san": "Rh5",
+      "best_move_san": "Rh5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "",
+      "latency_s": 0.11,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 1000,
+      "phase": "phase:endgame",
+      "fen_before": "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1",
+      "student_move_san": "e5",
+      "best_move_san": "Kf4",
+      "classification": "blunder",
+      "eval_drop_cp": 162,
+      "coach_feedback": "Your move e5 left the pawn undefended, and the opponent's reply was Kxe5, capturing your pawn on e5. The check that was skipped: before moving, ask if the piece you're moving is attacked on the square you're moving it to. The better move is Kf4. What matters here is that your pawn on e4 was left undefended. Next time you see a piece moving to a square, ask yourself: is it attacked there?",
+      "latency_s": 4.75,
+      "fidelity_kinds": {},
+      "prompt": "You are a warm, encouraging chess coach who teaches students how to think about positions \u2014 not a computer that reports data. Your goal is to help the student improve by building their understanding and pattern recognition.\n\nGROUNDING RULES (strict):\n- Only use information from the engine data sections provided below.\n- Never invent analysis, piece placements, or tactical ideas not in the data.\n- Never describe a piece as being on a square unless the data confirms it.\n- Do not narrate \"and then...\" move sequences or follow-up variations unless those exact moves appear in the engine lines above. Explain the plan or idea in words rather than inventing concrete continuations \u2014 a made-up line is the most misleading error you can make.\n- If the engine data is empty or incomplete, say so honestly.\n\nPEDAGOGY:\n- Teach the student how to think about the position (e.g., \"before moving, check if any of your pieces are undefended\" or \"ask yourself: what is my opponent threatening?\").\n- Connect advice to a general chess principle \u2014 help the student build habits they can apply in every game.\n- Acknowledge good aspects of the student's position before pointing out problems, when applicable.\n\nTONE:\n- Be warm, supportive, and encouraging \u2014 like a real coach, not a machine.\n- Use positive framing: focus on what the student can do, not just what's wrong.\n- Give concrete advice referencing specific squares and pieces rather than generic platitudes.\n\n\nStudent level: intermediate\n\nYou are given a structured comparison of the student's move against the engine's preferred move. Use ONLY the data below \u2014 do not re-analyze the position or add ideas not present here.\n\nPosition (FEN): 8/8/4k3/8/4P3/4K3/8/8 w - - 0 1\nSide to move: White. You are coaching the player with the White pieces \u2014 address them as \"you\" and refer to Black as their opponent. The engine data below labels items by color (White/Black); translate them to the student's perspective.\n\nStudent's move: e5\nBest move: Kf4\n\n--- What to focus on ---\nCurated coaching themes selected for this position. Name the relevant theme and connect it to a concrete, engine-sound move from the data above.\n- passed pawn \u2014 A passed pawn has no enemy pawn ahead of it on its file or the adjacent files, so it has a clear run toward promotion.\n How to apply: Push the passed pawn with the support of your king, and remember the rule of the square to judge whether a lone enemy king can catch it. Passed pawns must be pushed.\n HERE: you have a passed pawn on the e-file.\n- rook behind the passed pawn \u2014 A rook belongs behind a passed pawn \u2014 yours or your opponent's. Behind your own it supports every step forward; behind theirs it holds the pawn back. As the pawn advances the rook behind it keeps its scope while a rook in front of it runs out of squares.\n How to apply: Before pushing the pawn, put your rook on the same file behind it, then advance. If the passed pawn is your opponent's, get your rook behind it rather than in front of it or beside it.\n HERE: you have a passed pawn on the e-file.\n- isolated pawn \u2014 An isolated pawn has no friendly pawn on either neighboring file, so it cannot be defended by a pawn and the square in front of it is a permanent outpost for the enemy.\n How to apply: If the isolated pawn is yours, use the open files and active pieces it gives you to attack before the endgame; if it is the opponent's, blockade the square in front of it and trade pieces.\n HERE: your e-file pawn is isolated.\n\n--- Board (piece placement) ---\nWhite to move.\nWhite (YOURS \u2014 the student): K e3, P e4\n  White developed minors: none; still home: none\nBlack (THEIRS \u2014 the opponent): K e6\n  Black developed minors: none; still home: none\n\n--- Pawn structure (from the board) ---\nWhite: isolated pawns: e4; doubled pawns: none\nBlack: isolated pawns: none; doubled pawns: none\n\n--- Opponent's reply ---\nAfter your move, the opponent's strongest reply is Kxe5, capturing your pawn on e5.\n\n--- Top Engine Lines (Black = your opponent, White = you) ---\nLine 1 (from the position you were in): 1.Kf4 Kd6 2.e5+ Kd5 3.Kf5 Kc4 4.e6 Kd4 5.e7 \u2014 where the whole line ends up (not a claim about Kf4 on its own): passed pawn push\nLine 2 (from the position you were in): 1.Kd4 Kf6 2.e5+ Kf5 3.Kd5 Kg5 4.e6 Kf4 5.e7 \u2014 where the whole line ends up (not a claim about Kd4 on its own): passed pawn push\nLine 3 (from the position you were in): 1.Kd2 \u2014 where the whole line ends up (not a claim about Kd2 on its own): general play\n\n--- How this came about ---\nAfter e5 nothing of yours defends e5, and e6 attacks it. The check that was skipped: before I commit, is the piece I am moving attacked on the square I am moving it to?\n\nCOACHING INSTRUCTIONS:\n- This move let something concrete happen. Do NOT open with praise or \"great job\". Lead with what went wrong, using only what is given above. Do NOT list a sequence of moves.\n- Then name the concrete better move. Be direct, not generic. No motivational sign-off.\n- Do NOT grade the move or say how much it cost. Do not call it an inaccuracy, a mistake or a blunder, and do not quantify what was lost. The reply and what it wins are the cost, stated as a fact the student can check.\n- Stay grounded: only facts in the data above; no invented analysis, placements, tactics, or \"and then...\" continuations.\n- WHY it is the better move is NOT established in the data above, so you do not know it. Name the move and stop there. Do NOT say what it attacks, defends, controls, wins, prevents or prepares, and do NOT reason one out from the position facts. The takeaway principle carries the lesson on this turn.\n- THE OPPONENT'S ANSWER: lead with it. In ONE sentence, name the single reply shown above and what the line above says it does (\"after your move, the opponent plays X, capturing your Y on Z\"). That line is the ONLY source \u2014 do NOT upgrade what it says (if it says the reply ATTACKS something, do not write that it wins it), and do NOT add a threat, capture, piece or square it does not name. State the reply ONCE, not again as a separate sentence, and do NOT continue past that one move.\n- THE THINKING THAT WENT WRONG: the \"How this came about\" line above names the check that was skipped. Say it, in your own words, as the point of the turn \u2014 not as an afterthought. It is the only account of the cause that you have. Do NOT add to it: do not say the piece had no escape, was trapped, or should have moved earlier.\n- WHAT MATTERS HERE: the undefended piece named above is the subject of this turn \u2014 not pawn structure, king repositioning or piece placement. Do NOT claim that any move defends it, saves it, or deals with the threat unless a line above says so. If you do not know how it gets fixed, name the problem and stop there.\nCLOSE with one transferable takeaway on THIS lesson and no other: before I commit, is the piece I am moving attacked on the square I am moving it to?. Put it in your own words as a short \"next time you see ..., ask yourself ...\" hook the student can reuse. Do not substitute a different principle, and do not assert new pieces or squares in it.\n- Plain language, no engine jargon: describe what is happening on the board in words the student can check against the pieces. Do not rate the position or the move with a number or a score.\nKeep your response concise (under 120 words)."
+    },
+    {
+      "ply": 1001,
+      "phase": "phase:endgame",
+      "fen_before": "8/8/8/4k3/8/8/R7/4K3 w - - 0 1",
+      "student_move_san": "Ra5+",
+      "best_move_san": "Ra4",
+      "classification": "good",
+      "eval_drop_cp": 3,
+      "coach_feedback": "",
+      "latency_s": 0.05,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 1002,
+      "phase": "phase:endgame",
+      "fen_before": "8/5k2/8/3P4/8/8/5K2/8 w - - 0 1",
+      "student_move_san": "Ke3",
+      "best_move_san": "Kf3",
+      "classification": "good",
+      "eval_drop_cp": 15,
+      "coach_feedback": "",
+      "latency_s": 0.05,
+      "fidelity_kinds": {},
+      "prompt": ""
+    },
+    {
+      "ply": 1003,
+      "phase": "phase:endgame",
+      "fen_before": "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+      "student_move_san": "Ra8#",
+      "best_move_san": "Ra8#",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "That's checkmate \u2014 Ra8# ends the game. Worth remembering: to mate with a rook, cut the enemy king off from the squares it could run to, then bring your own king up to take away the rest.",
+      "latency_s": 7.32,
+      "fidelity_kinds": {},
+      "prompt": "You are a warm, encouraging chess coach who teaches students how to think about positions \u2014 not a computer that reports data. Your goal is to help the student improve by building their understanding and pattern recognition.\n\nGROUNDING RULES (strict):\n- Only use information from the engine data sections provided below.\n- Never invent analysis, piece placements, or tactical ideas not in the data.\n- Never describe a piece as being on a square unless the data confirms it.\n- Do not narrate \"and then...\" move sequences or follow-up variations unless those exact moves appear in the engine lines above. Explain the plan or idea in words rather than inventing concrete continuations \u2014 a made-up line is the most misleading error you can make.\n- If the engine data is empty or incomplete, say so honestly.\n\nPEDAGOGY:\n- Teach the student how to think about the position (e.g., \"before moving, check if any of your pieces are undefended\" or \"ask yourself: what is my opponent threatening?\").\n- Connect advice to a general chess principle \u2014 help the student build habits they can apply in every game.\n- Acknowledge good aspects of the student's position before pointing out problems, when applicable.\n\nTONE:\n- Be warm, supportive, and encouraging \u2014 like a real coach, not a machine.\n- Use positive framing: focus on what the student can do, not just what's wrong.\n- Give concrete advice referencing specific squares and pieces rather than generic platitudes.\n\n\nStudent level: intermediate\n\nYou are given a structured comparison of the student's move against the engine's preferred move. Use ONLY the data below \u2014 do not re-analyze the position or add ideas not present here.\n\nPosition (FEN): 6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1\nSide to move: White. You are coaching the player with the White pieces \u2014 address them as \"you\" and refer to Black as their opponent. The engine data below labels items by color (White/Black); translate them to the student's perspective.\n\nStudent's move: Ra8#\n\nYour move does this: giving check (rook activity \u00e2\u20ac\u201d improving rook placement).\n\n--- What to focus on ---\nCurated coaching themes selected for this position. Name the relevant theme and connect it to a concrete, engine-sound move from the data above.\n- converting a material lead \u2014 When you are ahead in material, every piece that leaves the board makes your advantage larger relative to what is left, and removes the pieces your opponent needs to create counterplay. Pawns are the opposite: trade them away and you may end up unable to win.\n How to apply: Trade pieces, keep pawns. Offer even exchanges of knights, bishops and rooks; avoid trading your last pawns. Aim for a position simple enough that the extra material decides it without tactics.\n HERE: you are ahead in material.\n- when to exchange \u2014 Trading pieces when you are ahead in material simplifies the game toward a winning endgame; trade pieces (not pawns) to reach a position where your extra material decides.\n How to apply: With a material lead, welcome fair trades of pieces and steer toward an endgame, but keep your pawns on the board. If you are attacking or behind, do the opposite \u2014 keep pieces on to preserve your chances rather than trading into a lost or drawn ending.\n HERE: you are ahead in material.\n- answer the threat first \u2014 Before carrying out your own plan, find out what your opponent is threatening. Many losses come from executing a plan while ignoring an incoming threat.\n How to apply: Each move, ask \"if it were my opponent's turn, what would they do to me?\" If there is a real threat, meet it \u2014 defend the target, block, capture the attacker, or make a bigger threat of your own.\n HERE: you threaten the a8 square.\n\n--- Board (piece placement) ---\nWhite to move.\nWhite (YOURS \u2014 the student): K g1, R a1, P f2 g2 h2\n  White developed minors: none; still home: none\nBlack (THEIRS \u2014 the opponent): K g8, P f7 g7 h7\n  Black developed minors: none; still home: none\n\n--- Pawn structure (from the board) ---\nWhite: isolated pawns: none; doubled pawns: none\nBlack: isolated pawns: none; doubled pawns: none\n\nCOACHING INSTRUCTIONS:\n- The student played the engine's top move \u2014 there is no better move here. Do NOT suggest a different or \"better\" move, and do NOT imply a superior alternative exists.\n- Keep it SHORT (1-2 sentences): affirm the move, then the takeaway. No motivational sign-off.\n- Stay grounded: only facts in the data above; no invented analysis, placements, tactics, or \"and then...\" continuations.\n- WHY it is the better move: the one line above describing what that move does is the ONLY reason you may give. Put it in your own words. Do NOT add a second reason of your own, and do NOT name a square, piece, file or threat that line does not name.\nCLOSE with one transferable takeaway on THIS lesson and no other: a check forces an answer, which buys you a move to use elsewhere. Put it in your own words as a short \"next time you see ..., ask yourself ...\" hook the student can reuse. Do not substitute a different principle, and do not assert new pieces or squares in it.\n- Plain language, no engine jargon: describe what is happening on the board in words the student can check against the pieces. Do not rate the position or the move with a number or a score.\n\u26a0 CRITICAL MOMENT: This was a critical decision point.\nPlease provide a MORE DETAILED explanation of what was missed and why this moment was so important, in terms of the pieces and squares on the board.\n\nKeep your response concise (under 40 words)."
+    }
+  ]
+}

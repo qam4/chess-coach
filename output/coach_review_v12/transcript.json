@@ -1,0 +1,573 @@
+{
+  "stats": {
+    "n_turns": 44,
+    "phase_counts": {
+      "phase:opening": 10,
+      "phase:middlegame": 16,
+      "phase:endgame": 18
+    },
+    "classification_counts": {
+      "good": 23,
+      "inaccuracy": 9,
+      "mistake": 8,
+      "blunder": 4
+    },
+    "fidelity_totals": {
+      "off_menu": 4,
+      "unsound_move": 2,
+      "placement": 2,
+      "piece_type": 1
+    },
+    "empty_feedback": 0,
+    "latency_mean_s": 4.97,
+    "latency_p90_s": 5.56,
+    "latency_max_s": 9.62
+  },
+  "turns": [
+    {
+      "ply": 0,
+      "phase": "phase:opening",
+      "fen_before": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "student_move_san": "Nf3",
+      "best_move_san": "Nc3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Your move, Nf3, is a solid development that gets a knight into the game. The best move, Nc3, also develops a knight toward the center, which is a key idea in the opening. Next time you see a knight at home, ask yourself: can it move to a central square and help control the board?",
+      "latency_s": 9.62,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 2,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkbnr/pppppppp/2n5/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 2 2",
+      "student_move_san": "e3",
+      "best_move_san": "Nc3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Your move e3 is a solid, safe choice that supports your central pawns. The best move, Nc3, develops a knight to a strong central square, improving piece activity. Next time you see a knight on the back rank, ask yourself: can I move it to a central square early to increase my influence?",
+      "latency_s": 4.73,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 4,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppppppp/2n2n2/8/8/4PN2/PPPP1PPP/RNBQKB1R w KQkq - 1 3",
+      "student_move_san": "Bc4",
+      "best_move_san": "Bc4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move with Bc4 \u2014 it activates a minor piece by developing the bishop to a strong, central square. Transferable takeaway: **piece development** \u2014 next time you see a bishop on the back rank, ask yourself, \"Can I move it to a more active square early?\"",
+      "latency_s": 4.5,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 6,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/2n1pn2/8/2B5/4PN2/PPPP1PPP/RNBQK2R w KQkq - 0 4",
+      "student_move_san": "Ng5",
+      "best_move_san": "O-O",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 91,
+      "coach_feedback": "Your move, Ng5, aimed to challenge Black\u2019s position, but the best move, O-O, prioritizes king safety by castling early. This move secures your king and prepares for a strong central presence. Next time you see your king exposed, ask yourself: *Have I castled yet?*",
+      "latency_s": 4.77,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 8,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/4pn2/4n1N1/2B5/4P3/PPPP1PPP/RNBQK2R w KQkq - 2 5",
+      "student_move_san": "b3",
+      "best_move_san": "Be2",
+      "classification": "mistake",
+      "eval_drop_cp": 138,
+      "coach_feedback": "This was a serious mistake. After your move b3, the opponent plays f6g4, gaining a strong central pawn and increasing pressure on your position. The better move is Be2, which improves piece activity by developing the bishop to a more active square, increasing control over the center. This move supports your long-term plan of central dominance and prepares for future piece coordination.  \n\nNext time you see a bishop on c1, ask yourself: can it move to a more active square that controls the center?",
+      "latency_s": 5.56,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 10,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/4p3/4n1N1/2B3n1/1P2P3/P1PP1PPP/RNBQK2R w KQkq - 1 6",
+      "student_move_san": "f4",
+      "best_move_san": "Nf3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Your move f4 is sound and helps control the center. The best move, Nf3, improves piece activity by developing the knight to a more active square. Next time you see a knight on the edge, ask yourself: can it move to a central square that attacks two pieces or supports a pawn?",
+      "latency_s": 4.61,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 12,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/4p3/4n1N1/2B2P2/1P2n3/P1PP2PP/RNBQK2R w KQkq - 0 7",
+      "student_move_san": "dxe3",
+      "best_move_san": "dxe3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move! You captured the knight on e3, winning material. This shows strong awareness of capturing value \u2014 taking with the least valuable piece to maximize your gain. Next time you see a fork opportunity, ask yourself: can I attack two pieces at once with a single move?",
+      "latency_s": 4.56,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 14,
+      "phase": "phase:opening",
+      "fen_before": "r1bqk2r/pppp1ppp/4p3/4n1N1/1bB2P2/1P2P3/P1P3PP/RNBQK2R w KQkq - 1 8",
+      "student_move_san": "Ke2",
+      "best_move_san": "Nd2",
+      "classification": "mistake",
+      "eval_drop_cp": 139,
+      "coach_feedback": "This was a serious mistake. After your move Ke2, the opponent plays e5, attacking your king and gaining a strong central square. The better move is Nd2, developing your knight to a central square and improving your control of the board. This move supports your long-term plan by activating a minor piece and increasing your influence in the center.  \n\nNext time you see a knight on the back rank, ask yourself: can I move it to a central square now to improve its activity?",
+      "latency_s": 5.57,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 16,
+      "phase": "phase:opening",
+      "fen_before": "r1bqk2r/pppp1ppp/4p1n1/6N1/1bB2P2/1P2P3/P1P1K1PP/RNBQ3R w kq - 3 9",
+      "student_move_san": "Qd4",
+      "best_move_san": "Kf1",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 37,
+      "coach_feedback": "Your move, Qd4, is a reasonable choice that exerts pressure on the center. The best move, Kf1, improves king safety by starting the castling process. Next time you see your king in the center, ask yourself: is there a safe square to move it toward?",
+      "latency_s": 4.69,
+      "fidelity_kinds": {
+        "unsound_move": 1
+      }
+    },
+    {
+      "ply": 18,
+      "phase": "phase:opening",
+      "fen_before": "r1b1k2r/pppp1ppp/4pqn1/6N1/1bBQ1P2/1P2P3/P1P1K1PP/RNB4R w kq - 5 10",
+      "student_move_san": "Qxf6",
+      "best_move_san": "Qxf6",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move! You captured the opponent's queen with your queen, winning material. This shows strong tactical awareness. Transferable takeaway: Look for forks \u2014 next time you see a piece attacking two targets, ask yourself if you can use it to win material.",
+      "latency_s": 4.35,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 20,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k2r/pppp1p1p/4ppn1/6N1/1bB2P2/1P2P3/P1P1K1PP/RNB4R w kq - 0 11",
+      "student_move_san": "Kd1",
+      "best_move_san": "a3",
+      "classification": "blunder",
+      "eval_drop_cp": 673,
+      "coach_feedback": "This was a serious mistake. After your move, the opponent plays **fxg5**, capturing your knight and gaining a strong piece for free. The better move was **a3**, which improves your pawn structure and strengthens your control over the center. This move prepares for future piece activity and keeps your position solid.\n\n**Transferable takeaway:** *Pawn structure matters.* Next time you see a pawn that can be advanced to support your pieces, ask yourself, \"Can I improve my pawn position to help my plan?\"",
+      "latency_s": 5.56,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 22,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k2r/pppp1p1p/4p1n1/6p1/1bB2P2/1P2P3/P1P3PP/RNBK3R w kq - 0 12",
+      "student_move_san": "Bb2",
+      "best_move_san": "fxg5",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 66,
+      "coach_feedback": "Your move, Bb2, aimed to develop your bishop, but the best move, fxg5, wins material by capturing a pawn. This creates a clear advantage. Next time you see a capture opportunity, ask yourself: \"Can I take this pawn with a piece that also improves my position?\"",
+      "latency_s": 4.57,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 24,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/4p1n1/6p1/1bB2P2/1P2P3/PBP3PP/RN1K3R w q - 2 13",
+      "student_move_san": "fxg5",
+      "best_move_san": "fxg5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move \u2014 you captured the knight with your pawn, winning material. This shows good understanding of **capture value**. Next time you see a capture, ask yourself: *Which of my pieces can take this most effectively?*",
+      "latency_s": 4.27,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 26,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/4p3/6P1/1bB4n/1P2P3/PBP3PP/RN1K3R w q - 1 14",
+      "student_move_san": "Bd4",
+      "best_move_san": "Ke2",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 67,
+      "coach_feedback": "Your move, Bd4, aimed to develop your bishop, but the best move, Ke2, improves king safety by repositioning the king. This is crucial in the middlegame. Next time you see your king exposed, ask yourself: \"Is there a safer square for my king?\"",
+      "latency_s": 4.59,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 28,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/4p3/6P1/1bBB4/1P2P3/P1P3nP/RN1K3R w q - 0 15",
+      "student_move_san": "Be2",
+      "best_move_san": "Ke2",
+      "classification": "mistake",
+      "eval_drop_cp": 174,
+      "coach_feedback": "This was a serious mistake. After your move Be2, the opponent plays Ke8g7, winning material due to your weakened king position. The better move is Ke2, which improves king safety by repositioning the king to a more secure square. This move also prepares to support your pawn on e3 and avoids immediate threats.\n\nNext time you see a weak king position, ask yourself: \"Is my king in a safe zone, or should I move it to a more protected square?\"",
+      "latency_s": 5.52,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 30,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/8/4p1P1/1b1B4/1P2P3/P1P1B1nP/RN1K3R w q - 0 16",
+      "student_move_san": "Bc4",
+      "best_move_san": "Bc3",
+      "classification": "blunder",
+      "eval_drop_cp": 878,
+      "coach_feedback": "This was a serious mistake. After your move Bc4, your opponent immediately plays exd4, capturing your bishop and gaining a clear advantage. The better move was Bc3, which improves your bishop\u2019s activity and supports your pawn structure. This move keeps your pieces active and avoids giving your opponent a free capture.  \n\nNext time you see an isolated pawn, ask yourself: \"Can I improve my pieces to attack it before it becomes a weakness?\"",
+      "latency_s": 5.33,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 32,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/8/6P1/1bBp4/1P2P3/P1P3nP/RN1K3R w q - 0 17",
+      "student_move_san": "exd4",
+      "best_move_san": "exd4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move \u2014 you've won a pawn by capturing on d4. This opens lines for your knight and creates pressure on Black's king. Transferable takeaway: **capture value** \u2014 next time you see a capture, ask yourself: *which piece should I use to take?*",
+      "latency_s": 4.63,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 34,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/8/6P1/1bBP4/1P2n3/P1P4P/RN1K3R w q - 1 18",
+      "student_move_san": "Ke2",
+      "best_move_san": "Kc1",
+      "classification": "blunder",
+      "eval_drop_cp": 413,
+      "coach_feedback": "This was a serious mistake. After your move Ke2, your king becomes a target, and your opponent can exploit it immediately. The best move was Kc1, which improves king safety by moving the king to a more secure square. This allows your king to stay protected and avoids unnecessary exposure.  \n\nTransferable takeaway: **King safety first** \u2014 next time you see your king in a vulnerable position, ask yourself, \"Is there a safer square for my king?\"",
+      "latency_s": 5.4,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 36,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/8/6P1/1bnP4/1P6/P1P1K2P/RN5R w q - 0 19",
+      "student_move_san": "bxc4",
+      "best_move_san": "c3",
+      "classification": "good",
+      "eval_drop_cp": 17,
+      "coach_feedback": "Your move bxc4 is a solid choice that gains a pawn. The best move, c3, improves your pawn structure by creating a more stable position. Next time you see a chance to improve your pawn setup, ask yourself: does this move help my pawns control key squares or prepare for future plans?",
+      "latency_s": 4.78,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 38,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k3/pppp1p1p/8/6r1/1bPP4/8/P1P1K2P/RN5R w q - 0 20",
+      "student_move_san": "h4",
+      "best_move_san": "a3",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 72,
+      "coach_feedback": "Your move, h4, aimed to develop pressure on the kingside, but the best move, a3, improves your pawn structure by supporting the c4 pawn and preventing future weaknesses. This strengthens your position long-term.\n\nNext time you see an isolated pawn, ask yourself: *Can I improve its support or block the opponent\u2019s access to its square?*",
+      "latency_s": 4.87,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 40,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k3/pppp1p1p/8/8/1bPP3P/8/P1P1K1r1/RN5R w q - 1 21",
+      "student_move_san": "Kf3",
+      "best_move_san": "Kd3",
+      "classification": "mistake",
+      "eval_drop_cp": 143,
+      "coach_feedback": "This was a serious mistake. After your move Kf3, your king becomes exposed, and your opponent can exploit it immediately. The best move, Kd3, safely repositions your king and improves its security. Focus on king safety \u2014 if your king is exposed, prioritize getting it to safety before anything else. Next time you see your king in the center without a pawn shield, ask yourself: *is there a safer square for my king?*",
+      "latency_s": 5.54,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 42,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k3/pppp1p1p/8/8/1bPP3P/5K2/P1r5/RN5R w q - 0 22",
+      "student_move_san": "Rg1",
+      "best_move_san": "c5",
+      "classification": "mistake",
+      "eval_drop_cp": 166,
+      "coach_feedback": "This was a serious mistake. After your move Rg1, your opponent plays c2c4, gaining a strong central pawn push and improving their structure. The better move is c5, which improves your pawn structure by challenging Black\u2019s isolated pawns on f7 and h7. This move creates pressure and opens lines for your pieces.\n\nTransferable takeaway: **Pawn structure matters**. Next time you see an isolated pawn, ask yourself, \u201cCan I use this to create pressure or open lines?\u201d",
+      "latency_s": 5.76,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 44,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b5/ppppkp1p/8/8/1bPP3P/5K2/P1r5/RN4R1 w - - 2 23",
+      "student_move_san": "c5",
+      "best_move_san": "a3",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 53,
+      "coach_feedback": "Your move, c5, aimed to advance a pawn, but the best move, a3, improves your pawn structure by supporting the b-pawn and preparing for better piece coordination. The isolated pawn on a2 becomes less of a weakness when supported.  \n\nNext time you see an isolated pawn, ask yourself: *Can I improve its support or use the open files to my advantage?*",
+      "latency_s": 5.05,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 46,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b5/p1ppkp1p/1p6/2P5/1b1P3P/5K2/P1r5/RN4R1 w - - 0 24",
+      "student_move_san": "c6",
+      "best_move_san": "a3",
+      "classification": "mistake",
+      "eval_drop_cp": 144,
+      "coach_feedback": "This was a serious mistake. After your move c6, the opponent plays a3, winning a pawn and improving their pawn structure. The better move is a3, which strengthens your pawn structure and prevents the opponent from creating a long-term weakness. Focus on pawn structure: next time you see an isolated pawn, ask yourself, \"Can I improve its position or block the opponent\u2019s?\"",
+      "latency_s": 5.08,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 48,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b5/p1p1kp1p/1pp5/8/1b1P3P/5K2/P1r5/RN4R1 w - - 0 25",
+      "student_move_san": "a3",
+      "best_move_san": "a3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move with a3 \u2014 it improves your pawn structure by creating a more solid foundation. Next time you see an isolated pawn, ask yourself how you can use open files to gain space and control the center.",
+      "latency_s": 4.15,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 50,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b5/p1p1kp1p/1pp5/8/1b1P3P/P4K2/7r/RN4R1 w - - 1 26",
+      "student_move_san": "axb4",
+      "best_move_san": "axb4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move \u2014 you captured a valuable black piece with your pawn. This creates a material advantage and opens lines for your pieces. Next time you see an undefended minor piece, ask yourself: can I take it with a pawn to gain material and improve my position?",
+      "latency_s": 4.4,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 52,
+      "phase": "phase:endgame",
+      "fen_before": "r1b5/p1p1kp1p/1pp5/8/1P1P3r/5K2/8/RN4R1 w - - 0 27",
+      "student_move_san": "Nc3",
+      "best_move_san": "Ke3",
+      "classification": "mistake",
+      "eval_drop_cp": 184,
+      "coach_feedback": "This was a serious mistake. After your move Nc3, the opponent plays Ke3, gaining a significant advantage by improving king safety. The better move is Ke3, which repositions your king to a safer square and improves coordination. Focus on king safety \u2014 if your king is exposed, prioritize getting it to safety before anything else. Next time you see your king in a vulnerable position, ask yourself: *Can I move my king to a more secure square immediately?*",
+      "latency_s": 5.45,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 54,
+      "phase": "phase:endgame",
+      "fen_before": "r1b5/p1p1kp1p/1pp5/8/1P1r4/2N2K2/8/R5R1 w - - 0 28",
+      "student_move_san": "Rae1+",
+      "best_move_san": "Rge1+",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Your move Rae1+ is a solid choice that improves rook activity by placing the rook on a more active square. The best move Rge1+ also enhances rook placement, showing how small adjustments can make a difference. Next time you see a rook on the back rank, ask yourself: is there a more active square for it to occupy?",
+      "latency_s": 4.89,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 56,
+      "phase": "phase:endgame",
+      "fen_before": "r7/p1p1kp1p/1pp1b3/8/1P1r4/2N2K2/8/4R1R1 w - - 2 29",
+      "student_move_san": "Rg7",
+      "best_move_san": "Re4",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 58,
+      "coach_feedback": "Your move, Rg7, aimed to develop the rook, but Re4 is stronger \u2014 it improves rook activity by placing it on a more influential square. Look for open files and active squares for your rook, especially when there's an isolated pawn nearby.  \n\nTransferable takeaway: **Rook activity** \u2014 next time you see an open file, ask yourself, \"Can I place my rook on a central or attacking square?\"",
+      "latency_s": 5.53,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 58,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p1kpRp/1pp1b3/8/1P1r4/2N2K2/8/4R3 w - - 4 30",
+      "student_move_san": "Kf2",
+      "best_move_san": "Re4",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 60,
+      "coach_feedback": "Your move, Kf2, was well-intended but missed a chance to improve your rook's activity. The best move, Re4, activates your rook by placing it on a more influential square. Focus on using your pieces to control key squares and files.  \n\nTransferable takeaway: **Rook activity** \u2014 next time you see a rook that can move to a more central or open file, ask yourself, \"Can I improve its position to increase its influence?\"",
+      "latency_s": 5.46,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 60,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p1kpRp/1pp1b3/8/1r6/2N5/5K2/4R3 w - - 0 31",
+      "student_move_san": "Kf3",
+      "best_move_san": "Rxh7",
+      "classification": "mistake",
+      "eval_drop_cp": 180,
+      "coach_feedback": "This was a serious mistake. After your move Kf3, your opponent plays Rxh7, winning a rook. The best move was Rxh7, capturing the rook on h7 and gaining material. This move takes advantage of an undefended piece and improves your position.  \n\nTransferable takeaway: **Capture value** \u2014 next time you see a chance to win material, ask yourself: *Which of my pieces can take it most effectively?*",
+      "latency_s": 5.56,
+      "fidelity_kinds": {
+        "placement": 1,
+        "piece_type": 1
+      }
+    },
+    {
+      "ply": 62,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p2pRp/1pp1bk2/8/1r6/2N2K2/8/4R3 w - - 2 32",
+      "student_move_san": "Rxh7",
+      "best_move_san": "Rgg1",
+      "classification": "good",
+      "eval_drop_cp": 17,
+      "coach_feedback": "Your move Rxh7 is a solid choice that targets a weak pawn. The best move, Rgg1, improves rook activity by placing it on a more central square. Next time you see a rook that can move to a better square, ask yourself: is there a more active place for it to go?",
+      "latency_s": 4.69,
+      "fidelity_kinds": {
+        "unsound_move": 1
+      }
+    },
+    {
+      "ply": 64,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p2p1R/1pp2k2/8/1r4b1/2N2K2/8/4R3 w - - 1 33",
+      "student_move_san": "Kf2",
+      "best_move_san": "Kf2",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move, Kf2! It improves king safety by repositioning the king toward the center. Transferable takeaway: king activity in the endgame \u2014 next time you see a passive king, ask yourself, \"Can I move it closer to the action?\"",
+      "latency_s": 4.47,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 66,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p2p1R/1pp2k2/8/5rb1/2N5/5K2/4R3 w - - 3 34",
+      "student_move_san": "Kg3",
+      "best_move_san": "Kg3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move, Kg3! It improves king safety by repositioning the king toward the center. Next time you see an exposed king, ask yourself: can I move it to a safer square that also supports my plan?",
+      "latency_s": 4.27,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 68,
+      "phase": "phase:endgame",
+      "fen_before": "8/p1p2p1R/1pp2k2/8/5rb1/2N3K1/8/4r3 w - - 0 35",
+      "student_move_san": "Kxf4",
+      "best_move_san": "Kxf4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move! You captured the rook with your king, winning material. Transferable takeaway: Look for forks \u2014 next time you see a piece that can attack two targets, ask yourself, \"Can I use this to win material?\"",
+      "latency_s": 4.29,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 70,
+      "phase": "phase:endgame",
+      "fen_before": "8/p1p2p1R/1pp3k1/8/5Kb1/2N5/8/4r3 w - - 1 36",
+      "student_move_san": "Rh8",
+      "best_move_san": "Rh8",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move with Rh8 \u2014 it improves your rook's activity by placing it on a more influential square. Transferable takeaway: **Rook activity** \u2014 next time you see a rook that can move to a more open file or diagonal, ask yourself, \"Can I improve its placement to control more squares?\"",
+      "latency_s": 4.67,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 72,
+      "phase": "phase:endgame",
+      "fen_before": "7R/p1p5/1pp3k1/5p2/5Kb1/2N5/8/4r3 w - - 0 37",
+      "student_move_san": "Rf8",
+      "best_move_san": "Ra8",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 38,
+      "coach_feedback": "Your move Rf8 is sound and keeps your rook active. The best move Ra8 improves rook placement even more by centralizing it. Next time you see your rook on the edge, ask yourself: can I move it closer to the action and key squares?",
+      "latency_s": 4.52,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 74,
+      "phase": "phase:endgame",
+      "fen_before": "5R2/p1p5/1pp3k1/5p2/5Kb1/2N5/8/5r2 w - - 2 38",
+      "student_move_san": "Ke5",
+      "best_move_san": "Ke5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move, Ke5! It improves king safety by repositioning toward the center. Transferable takeaway: **king activity in the endgame** \u2014 next time you see a passive king, ask yourself, \"Can I move it closer to the action?\"",
+      "latency_s": 4.36,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 76,
+      "phase": "phase:endgame",
+      "fen_before": "5R2/p1p5/1pp3k1/4Kp2/6b1/2N5/8/4r3 w - - 4 39",
+      "student_move_san": "Kf4",
+      "best_move_san": "Kd4",
+      "classification": "good",
+      "eval_drop_cp": 28,
+      "coach_feedback": "Your move Kf4 is sound and keeps your king active. The best move Kd4 also improves king safety by repositioning it toward the center. Next time you see your king in a tense endgame, ask yourself: is it moving toward the action or staying passive?",
+      "latency_s": 4.47,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 78,
+      "phase": "phase:endgame",
+      "fen_before": "5R2/p1p5/1pp3k1/5p2/5Kb1/2N5/8/5r2 w - - 6 40",
+      "student_move_san": "Ke5",
+      "best_move_san": "Ke5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move with Ke5 \u2014 it improves king safety by repositioning toward the center. Transferable takeaway: **king activity in the endgame** \u2014 next time you see a passive king, ask yourself, \"Can I move it closer to the action?\"",
+      "latency_s": 4.4,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 1000,
+      "phase": "phase:endgame",
+      "fen_before": "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1",
+      "student_move_san": "e5",
+      "best_move_san": "Kf4",
+      "classification": "blunder",
+      "eval_drop_cp": 323,
+      "coach_feedback": "This was a serious mistake. After your move e5, your opponent captures the pawn with Kxe5, gaining a strong central square and a significant advantage. The better move was Kf4, which improves king safety and prepares to support your passed pawn on e4. Next time you see a passed pawn, ask yourself: can I move my king to support it and control the key squares?",
+      "latency_s": 5.29,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 1001,
+      "phase": "phase:endgame",
+      "fen_before": "8/8/8/4k3/8/8/R7/4K3 w - - 0 1",
+      "student_move_san": "Ra5+",
+      "best_move_san": "Ra4",
+      "classification": "good",
+      "eval_drop_cp": 6,
+      "coach_feedback": "Your move Ra5+ is a solid choice that improves rook activity by bringing the rook closer to the action. The best move, Ra4, is a slight refinement that also enhances rook placement. Next time you see a rook on the back rank, ask yourself: can I move it to a more active square that supports my plan?",
+      "latency_s": 4.79,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 1002,
+      "phase": "phase:endgame",
+      "fen_before": "8/5k2/8/3P4/8/8/5K2/8 w - - 0 1",
+      "student_move_san": "Ke3",
+      "best_move_san": "Kf3",
+      "classification": "good",
+      "eval_drop_cp": 29,
+      "coach_feedback": "Your move Ke3 is sound and helps secure your king's safety. The best move Kf3 also improves king safety by repositioning it more actively. Next time you see a passed pawn, ask yourself: can I support it with my king to help it advance?",
+      "latency_s": 4.49,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 1003,
+      "phase": "phase:endgame",
+      "fen_before": "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+      "student_move_san": "Ra8#",
+      "best_move_san": "Ra8#",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great move! Your rook on a8 delivers checkmate by exploiting the open file and the opponent's king being trapped. Transferable takeaway: **Rook activity** \u2014 next time you see an open file, ask yourself, \"Can my rook dominate this line?\"",
+      "latency_s": 4.46,
+      "fidelity_kinds": {
+        "placement": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,583 @@
+{
+  "stats": {
+    "n_turns": 44,
+    "phase_counts": {
+      "phase:opening": 10,
+      "phase:middlegame": 16,
+      "phase:endgame": 18
+    },
+    "classification_counts": {
+      "good": 23,
+      "inaccuracy": 9,
+      "mistake": 8,
+      "blunder": 4
+    },
+    "fidelity_totals": {
+      "off_menu": 9,
+      "unsound_move": 4,
+      "placement": 1
+    },
+    "empty_feedback": 0,
+    "latency_mean_s": 5.32,
+    "latency_p90_s": 5.49,
+    "latency_max_s": 10.06
+  },
+  "turns": [
+    {
+      "ply": 0,
+      "phase": "phase:opening",
+      "fen_before": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "student_move_san": "Nf3",
+      "best_move_san": "Nc3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job with Nf3 \u2014 it's a solid, developing move that gets your knight active. The engine's top move, Nc3, also focuses on development by aiming toward the center. Both moves help you get your pieces into the game early, which is key in the opening. Focus on moving your knights and bishops toward the center to control key squares and prepare for castling. Keep developing, and your position will grow stronger!",
+      "latency_s": 10.06,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 2,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkbnr/pppppppp/2n5/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 2 2",
+      "student_move_san": "e3",
+      "best_move_san": "Nc3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job with e3 \u2014 it's a solid, safe move that prepares for future central control. The engine's top move, Nc3, is also excellent and focuses on quick development by activating a knight toward the center. Both moves are strong, but Nc3 gives you a slight edge by getting a piece into the game faster. Focus on developing your knights and bishops early, aiming for the center. This builds a strong foundation for the middlegame. Keep up the good work!",
+      "latency_s": 5.49,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 4,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppppppp/2n2n2/8/8/4PN2/PPPP1PPP/RNBQKB1R w KQkq - 1 3",
+      "student_move_san": "Bc4",
+      "best_move_san": "Bc4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job with Bc4 \u2014 it's a strong, developing move that activates your bishop and puts pressure on the center. This shows you're thinking about piece development, a key principle in the opening. Aim to bring your minor pieces into the game early and aim for central squares like e5 and d4. Keep up the good work!",
+      "latency_s": 4.94,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 6,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/2n1pn2/8/2B5/4PN2/PPPP1PPP/RNBQK2R w KQkq - 0 4",
+      "student_move_san": "Ng5",
+      "best_move_san": "O-O",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 91,
+      "coach_feedback": "It sounds like you were aiming to develop your knight and put pressure on the center. However, moving Ng5 leaves your king exposed and doesn\u2019t contribute to central control. The best move, O-O, safely castles your king and follows a key principle: king safety comes first. Castling also prepares for future development and keeps your position solid. Focus on developing your pieces toward the center and castling early to keep your king safe.",
+      "latency_s": 5.25,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 8,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/4pn2/4n1N1/2B5/4P3/PPPP1PPP/RNBQK2R w KQkq - 2 5",
+      "student_move_san": "b3",
+      "best_move_san": "Be2",
+      "classification": "mistake",
+      "eval_drop_cp": 138,
+      "coach_feedback": "It sounds like you were aiming to develop your pawn structure, but b3 doesn't contribute much to central control or development. The best move, Be2, improves piece activity by developing the bishop to a strong central square. This supports future plans in the center and keeps your pieces active. Focus on developing your knights and bishops early, aiming for the center. Try Be2 next time \u2014 it's a solid, active move!",
+      "latency_s": 5.1,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 10,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/4p3/4n1N1/2B3n1/1P2P3/P1PP1PPP/RNBQK2R w KQkq - 1 6",
+      "student_move_san": "f4",
+      "best_move_san": "Nf3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job with your move, f4 \u2014 it's a solid, reasonable choice that keeps the position balanced. The engine's top move, Nf3, improves piece activity by developing the knight to a central square, which gives it more influence over the board. Focus on developing your knights and bishops early to get them active in the center. Look for squares where your pieces can control key central squares and aim to place them there as soon as possible.",
+      "latency_s": 5.42,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 12,
+      "phase": "phase:opening",
+      "fen_before": "r1bqkb1r/pppp1ppp/4p3/4n1N1/2B2P2/1P2n3/P1PP2PP/RNBQK2R w KQkq - 0 7",
+      "student_move_san": "dxe3",
+      "best_move_san": "dxe3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job capturing with dxe3 \u2014 it wins a knight! This move shows how a pawn can be a powerful attacker. Look for squares where your pawn or piece can hit two enemy pieces at once, like a fork. This move also helps control the center. Keep an eye out for opportunities to win material with your least valuable piece \u2014 pawns can do big things!",
+      "latency_s": 4.99,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 14,
+      "phase": "phase:opening",
+      "fen_before": "r1bqk2r/pppp1ppp/4p3/4n1N1/1bB2P2/1P2P3/P1P3PP/RNBQK2R w KQkq - 1 8",
+      "student_move_san": "Ke2",
+      "best_move_san": "Nd2",
+      "classification": "mistake",
+      "eval_drop_cp": 139,
+      "coach_feedback": "It sounds like you were looking for a safe, central square for your king. However, Ke2 doesn't develop a piece or control the center. The best move, Nd2, activates your knight and puts it on a strong central square, improving your influence over the board. Focus on developing your minor pieces early and controlling the center \u2014 it sets up a strong foundation for the middlegame. Try Nd2 next time!",
+      "latency_s": 5.21,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 16,
+      "phase": "phase:opening",
+      "fen_before": "r1bqk2r/pppp1ppp/4p1n1/6N1/1bB2P2/1P2P3/P1P1K1PP/RNBQ3R w kq - 3 9",
+      "student_move_san": "Qd4",
+      "best_move_san": "Kf1",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 37,
+      "coach_feedback": "Great job with Qd4 \u2014 it's a solid move that keeps your queen active and eyes the center. The engine suggests Kf1 to improve king safety by starting the castling process. This shows the importance of developing your king early to protect it. A key principle: always prioritize king safety and development in the opening. Keep looking for ways to move your king toward the center and castle smoothly.",
+      "latency_s": 5.1,
+      "fidelity_kinds": {
+        "unsound_move": 1
+      }
+    },
+    {
+      "ply": 18,
+      "phase": "phase:opening",
+      "fen_before": "r1b1k2r/pppp1ppp/4pqn1/6N1/1bBQ1P2/1P2P3/P1P1K1PP/RNB4R w kq - 5 10",
+      "student_move_san": "Qxf6",
+      "best_move_san": "Qxf6",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job capturing the queen with Qxf6 \u2014 that\u2019s a clear material win! This move shows how a single piece can attack two targets at once, a powerful fork. Look for similar opportunities where your pieces can hit two enemy pieces, especially when giving check. This is a key idea in winning material \u2014 always check if your pieces can create forks!",
+      "latency_s": 4.83,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 20,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k2r/pppp1p1p/4ppn1/6N1/1bB2P2/1P2P3/P1P1K1PP/RNB4R w kq - 0 11",
+      "student_move_san": "Kd1",
+      "best_move_san": "a3",
+      "classification": "blunder",
+      "eval_drop_cp": 673,
+      "coach_feedback": "It seems you were looking for a safe king move, but Kd1 doesn\u2019t address the immediate threat or improve your position. The best move, a3, strengthens your pawn structure and prepares for future plans. Focus on improving your worst-placed pieces and answering threats before moving forward. Ask yourself: what is my opponent threatening? What can I do to support my position?",
+      "latency_s": 4.94,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 22,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k2r/pppp1p1p/4p1n1/6p1/1bB2P2/1P2P3/P1P3PP/RNBK3R w kq - 0 12",
+      "student_move_san": "Bb2",
+      "best_move_san": "fxg5",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 66,
+      "coach_feedback": "It sounds like you were looking to develop your bishop. However, your move Bb2 didn't address the immediate threat on g5. The best move, fxg5, wins a pawn and improves your position. Capturing with the pawn allows you to later recapture with a more active piece. Always check for threats before moving \u2014 in this case, the knight on g6 was threatening to take your pawn. Focus on answering threats first, then proceed with your plan.",
+      "latency_s": 5.53,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 24,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/4p1n1/6p1/1bB2P2/1P2P3/PBP3PP/RN1K3R w q - 2 13",
+      "student_move_san": "fxg5",
+      "best_move_san": "fxg5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job capturing with fxg5 \u2014 it's the best move here! This win of the knight is a material gain and sets up good long-term plans. The key idea is **capture value**: using your least valuable piece to take material. This move also opens lines for your bishop on c4. Always ask: *\u201cIs there a better piece to take with?\u201d* \u2014 it helps you maximize your gains and improve your position.",
+      "latency_s": 5.26,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 26,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/4p3/6P1/1bB4n/1P2P3/PBP3PP/RN1K3R w q - 1 14",
+      "student_move_san": "Bd4",
+      "best_move_san": "Ke2",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 67,
+      "coach_feedback": "It sounds like you were aiming to develop your bishop and influence the center. However, your move Bd4 didn\u2019t address the immediate need to protect your king. The best move, Ke2, safely repositions your king and improves its security. This follows the principle of answering the threat first \u2014 in this case, ensuring your king isn\u2019t exposed. Focus on king safety before pushing forward with other plans.",
+      "latency_s": 5.02,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 28,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/4p3/6P1/1bBB4/1P2P3/P1P3nP/RN1K3R w q - 0 15",
+      "student_move_san": "Be2",
+      "best_move_san": "Ke2",
+      "classification": "mistake",
+      "eval_drop_cp": 174,
+      "coach_feedback": "It sounds like you were looking to develop your bishop. However, moving Be2 doesn't address the immediate need to protect your king, which is currently exposed. The best move, Ke2, safely repositions your king and improves its security. This follows the principle of answering the threat first \u2014 in this case, ensuring your king is safe before focusing on other plans. Keep an eye on king safety, especially in open positions!",
+      "latency_s": 5.44,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 30,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/8/4p1P1/1b1B4/1P2P3/P1P1B1nP/RN1K3R w q - 0 16",
+      "student_move_san": "Bc4",
+      "best_move_san": "Bc3",
+      "classification": "blunder",
+      "eval_drop_cp": 878,
+      "coach_feedback": "It sounds like you were aiming to develop your bishop and increase its influence. However, Bc4 allows Black to capture on d4, leading to a strong central break and a dangerous attack. The best move, Bc3, improves your bishop\u2019s activity and keeps your position solid. Focus on answering threats first and improving your pieces before pushing forward. Look for ways to support your pawns and keep your pieces active.",
+      "latency_s": 5.19,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 32,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/8/6P1/1bBp4/1P2P3/P1P3nP/RN1K3R w q - 0 17",
+      "student_move_san": "exd4",
+      "best_move_san": "exd4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job playing exd4 \u2014 it's the best move here! This capture wins material by taking a pawn and opens the path for your knight to jump to e3, attacking the black king and gaining more influence in the center. The key idea is to look for forks \u2014 when one piece attacks two targets, especially the king. This move sets up a powerful follow-up. Keep hunting for squares where your pieces can hit two targets at once \u2014 it\u2019s a winning pattern!",
+      "latency_s": 5.42,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 34,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/8/6P1/1bBP4/1P2n3/P1P4P/RN1K3R w q - 1 18",
+      "student_move_san": "Ke2",
+      "best_move_san": "Kc1",
+      "classification": "blunder",
+      "eval_drop_cp": 413,
+      "coach_feedback": "It sounds like you were trying to develop your king, but moving your king to e2 leaves it exposed and vulnerable. The best move, Kc1, safely repositions your king behind its pawns, improving its security. This allows you to focus on other plans without worrying about immediate threats. Always ask: is my king safe? Prioritizing king safety can make a big difference in the middlegame.",
+      "latency_s": 5.11,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 36,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k1r1/pppp1p1p/8/6P1/1bnP4/1P6/P1P1K2P/RN5R w q - 0 19",
+      "student_move_san": "bxc4",
+      "best_move_san": "c3",
+      "classification": "good",
+      "eval_drop_cp": 17,
+      "coach_feedback": "Great job with your move, bxc4 \u2014 it's a sound, reasonable choice that targets a key square. The engine's top move, c3, slightly improves your pawn structure by centralizing a pawn. Focus on asking: *Before capturing, which of my pieces is best suited to take?* This helps you maximize value and position. Keep building that habit \u2014 it\u2019ll serve you well!",
+      "latency_s": 5.05,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 38,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k3/pppp1p1p/8/6r1/1bPP4/8/P1P1K2P/RN5R w q - 0 20",
+      "student_move_san": "h4",
+      "best_move_san": "a3",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 72,
+      "coach_feedback": "It sounds like you were looking to activate your king's side, but h4 doesn't improve your pawn structure or support your pieces. The best move, a3, strengthens your pawn formation and prepares for future plans. Focus on improving your pawn structure first \u2014 it gives your pieces more space and control. Ask yourself: are my pawns supporting my pieces, or are they holding me back?",
+      "latency_s": 5.19,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 40,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k3/pppp1p1p/8/8/1bPP3P/8/P1P1K1r1/RN5R w q - 1 21",
+      "student_move_san": "Kf3",
+      "best_move_san": "Kd3",
+      "classification": "mistake",
+      "eval_drop_cp": 143,
+      "coach_feedback": "It sounds like you were trying to move your king toward the center, but Kf3 leaves it exposed and vulnerable. The best move, Kd3, safely repositions your king while keeping it protected. This follows the king safety principle \u2014 a safer king can better support your plan. Focus on protecting your king first, and you'll be in a stronger position to play actively later.",
+      "latency_s": 4.93,
+      "fidelity_kinds": {
+        "unsound_move": 1
+      }
+    },
+    {
+      "ply": 42,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b1k3/pppp1p1p/8/8/1bPP3P/5K2/P1r5/RN5R w q - 0 22",
+      "student_move_san": "Rg1",
+      "best_move_san": "c5",
+      "classification": "mistake",
+      "eval_drop_cp": 166,
+      "coach_feedback": "It sounds like you were looking to develop your rook or prepare for the kingside. However, your move Rg1 doesn\u2019t address the key issue: improving your pawn structure. The best move, c5, strengthens your pawn formation and creates long-term pressure. Focus on improving your pawn structure first \u2014 it gives your pieces more space and control. Ask yourself: \"Is my pawn structure supporting my pieces?\"",
+      "latency_s": 5.2,
+      "fidelity_kinds": {
+        "unsound_move": 1
+      }
+    },
+    {
+      "ply": 44,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b5/ppppkp1p/8/8/1bPP3P/5K2/P1r5/RN4R1 w - - 2 23",
+      "student_move_san": "c5",
+      "best_move_san": "a3",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 53,
+      "coach_feedback": "It sounds like you were aiming to control the center with c5, but this move doesn't address the key issue: improving your pawn structure. The best move, a3, strengthens your pawn formation and prepares for better piece activity. Since White has isolated pawns on a2 and h4, improving their placement is crucial. Focus on moves that support your pawns and develop your pieces more actively.",
+      "latency_s": 5.05,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 46,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b5/p1ppkp1p/1p6/2P5/1b1P3P/5K2/P1r5/RN4R1 w - - 0 24",
+      "student_move_san": "c6",
+      "best_move_san": "a3",
+      "classification": "mistake",
+      "eval_drop_cp": 144,
+      "coach_feedback": "It sounds like you were looking to develop your pieces or improve your pawn structure with c6. However, this move doesn\u2019t address the isolated pawn on a2 or improve your position. The best move, a3, improves your pawn structure by supporting the a2 pawn and preparing to develop your knight. This helps you control key squares and sets up a stronger foundation for future plans. Focus on improving pawn structure and king safety in your next moves.",
+      "latency_s": 5.23,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 48,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b5/p1p1kp1p/1pp5/8/1b1P3P/5K2/P1r5/RN4R1 w - - 0 25",
+      "student_move_san": "a3",
+      "best_move_san": "a3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job playing a3 \u2014 it's the best move here! This move improves your pawn structure by supporting the d4 pawn and preparing for better control of the center. Focus on using your pawns to create strong foundations for your pieces. A key principle: always look for ways to improve your pawn structure, especially by supporting isolated pawns and preparing for active piece play. Keep up the good work!",
+      "latency_s": 5.23,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 50,
+      "phase": "phase:middlegame",
+      "fen_before": "r1b5/p1p1kp1p/1pp5/8/1b1P3P/P4K2/7r/RN4R1 w - - 1 26",
+      "student_move_san": "axb4",
+      "best_move_san": "axb4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job capturing with axb4 \u2014 it wins a valuable piece! This move takes advantage of the isolated pawn on b4, which can\u2019t be defended. The principle here is **capture value**: using your least valuable piece (a pawn) to win a knight. This opens up opportunities for your rook to take control of the h-file. Always look for chances to win material with your cheapest attacker \u2014 it\u2019s a powerful idea to remember!",
+      "latency_s": 5.28,
+      "fidelity_kinds": {
+        "placement": 1
+      }
+    },
+    {
+      "ply": 52,
+      "phase": "phase:endgame",
+      "fen_before": "r1b5/p1p1kp1p/1pp5/8/1P1P3r/5K2/8/RN4R1 w - - 0 27",
+      "student_move_san": "Nc3",
+      "best_move_san": "Ke3",
+      "classification": "mistake",
+      "eval_drop_cp": 184,
+      "coach_feedback": "It sounds like you were aiming to develop your knight, but Nc3 doesn't address the key issue: your king's safety. The best move, Ke3, starts repositioning your king to a safer, more active square. This is crucial in the endgame, where an active king can support pawns and control key squares. Focus on king safety first \u2014 it sets the stage for better piece activity later.",
+      "latency_s": 5.1,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 54,
+      "phase": "phase:endgame",
+      "fen_before": "r1b5/p1p1kp1p/1pp5/8/1P1r4/2N2K2/8/R5R1 w - - 0 28",
+      "student_move_san": "Rae1+",
+      "best_move_san": "Rge1+",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job with Rae1+ \u2014 it's a sound move that keeps your rook active and ready to support your plan. The engine's top move, Rge1+, is a slight refinement that also improves rook placement. Focus on using your rook to control open files and support your pawn structure. Remember: active pieces and good rook placement are key in the endgame. Keep building that habit!",
+      "latency_s": 5.07,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 56,
+      "phase": "phase:endgame",
+      "fen_before": "r7/p1p1kp1p/1pp1b3/8/1P1r4/2N2K2/8/4R1R1 w - - 2 29",
+      "student_move_san": "Rg7",
+      "best_move_san": "Re4",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 58,
+      "coach_feedback": "It sounds like you were looking to activate your rook. However, Rg7 doesn\u2019t improve its position or create useful threats. The best move, Re4, improves rook activity by placing it on a more central and influential square. This supports your pawn on b4 and increases pressure on Black\u2019s position. Focus on placing your pieces where they can influence the most squares and support your pawns.",
+      "latency_s": 5.04,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 58,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p1kpRp/1pp1b3/8/1P1r4/2N2K2/8/4R3 w - - 4 30",
+      "student_move_san": "Kf2",
+      "best_move_san": "Re4",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 60,
+      "coach_feedback": "It sounds like you were trying to improve your king's safety, but moving your king to f2 doesn't address the key issue: your rook on e1 is passive. The best move, Re4, activates your rook by placing it on a more influential square, improving your control of the board. Focus on using your pieces actively, especially your rook \u2014 it can make a big difference in the game!",
+      "latency_s": 5.3,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 60,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p1kpRp/1pp1b3/8/1r6/2N5/5K2/4R3 w - - 0 31",
+      "student_move_san": "Kf3",
+      "best_move_san": "Rxh7",
+      "classification": "mistake",
+      "eval_drop_cp": 180,
+      "coach_feedback": "It sounds like you were looking to develop your king or improve your position, but moving your king to f3 doesn\u2019t address the immediate opportunity to win material. The best move, Rxh7, takes a valuable rook right away. This captures with your least valuable attacker and creates a strong initiative. Focus on looking for direct material gains first \u2014 they can change the course of the game quickly.",
+      "latency_s": 4.96,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 62,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p2pRp/1pp1bk2/8/1r6/2N2K2/8/4R3 w - - 2 32",
+      "student_move_san": "Rxh7",
+      "best_move_san": "Rgg1",
+      "classification": "good",
+      "eval_drop_cp": 17,
+      "coach_feedback": "Great job with Rxh7 \u2014 it's a solid move that targets a key square and improves your piece activity. The engine's top move, Rgg1, also improves rook placement by making it more active. Focus on placing your rooks on open files and ranks where they can influence the center and support your pieces. This helps you control the game and prepare for future plans. Keep looking for ways to improve your pieces\u2019 activity \u2014 it\u2019s a powerful idea in chess!",
+      "latency_s": 5.41,
+      "fidelity_kinds": {
+        "unsound_move": 1
+      }
+    },
+    {
+      "ply": 64,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p2p1R/1pp2k2/8/1r4b1/2N2K2/8/4R3 w - - 1 33",
+      "student_move_san": "Kf2",
+      "best_move_san": "Kf2",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job playing Kf2 \u2014 it's the best move here! This move improves your king's safety and starts positioning it for active play in the endgame. The principle is to keep your king safe but also ready to support your pawns and pieces. In endgames, an active king can control key squares and help win the game. Focus on moving your king toward the center and toward important pawns. This was a critical moment because the best move leads to a much better position than other options.",
+      "latency_s": 5.79,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 66,
+      "phase": "phase:endgame",
+      "fen_before": "4r3/p1p2p1R/1pp2k2/8/5rb1/2N5/5K2/4R3 w - - 3 34",
+      "student_move_san": "Kg3",
+      "best_move_san": "Kg3",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job playing Kg3 \u2014 it's the best move here! This move improves your king's safety and starts a plan to activate it in the endgame. The principle is: **a king becomes a powerful piece when it's active and near the action**. Focus on moving your king toward the center and toward the pawns that matter. This moment was critical because the best move leads to a material win, while other choices drop the evaluation significantly.",
+      "latency_s": 5.33,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 68,
+      "phase": "phase:endgame",
+      "fen_before": "8/p1p2p1R/1pp2k2/8/5rb1/2N3K1/8/4r3 w - - 0 35",
+      "student_move_san": "Kxf4",
+      "best_move_san": "Kxf4",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job playing Kxf4 \u2014 it's the best move and wins a rook! This move shows how a king can be active in the endgame, supporting your pieces and preparing to take control of the board. Look for opportunities where your king can join the fight, especially when the queens are gone. Keep an eye on central squares and how your king can help your pieces advance.",
+      "latency_s": 4.96,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 70,
+      "phase": "phase:endgame",
+      "fen_before": "8/p1p2p1R/1pp3k1/8/5Kb1/2N5/8/4r3 w - - 1 36",
+      "student_move_san": "Rh8",
+      "best_move_san": "Rh8",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job choosing Rh8 \u2014 it's the best move here! This move improves your rook's activity by placing it on a more central and powerful square. The principle to remember is that in the endgame, active piece placement can make a big difference. Look for ways to improve your pieces\u2019 mobility and control key squares. Keep building that habit!",
+      "latency_s": 4.8,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 72,
+      "phase": "phase:endgame",
+      "fen_before": "7R/p1p5/1pp3k1/5p2/5Kb1/2N5/8/4r3 w - - 0 37",
+      "student_move_san": "Rf8",
+      "best_move_san": "Ra8",
+      "classification": "inaccuracy",
+      "eval_drop_cp": 38,
+      "coach_feedback": "Great job with Rf8 \u2014 it keeps your rook active and ready to support your plan. The engine suggests Ra8 as a slight refinement, improving rook placement even more. Focus on king activity: move your king toward the center and toward the pawns, using it with your rook to control key squares. This helps you dominate the endgame. Keep asking, \"What\u2019s my king\u2019s best path?\" \u2014 it\u2019s a powerful question!",
+      "latency_s": 5.3,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 74,
+      "phase": "phase:endgame",
+      "fen_before": "5R2/p1p5/1pp3k1/5p2/5Kb1/2N5/8/5r2 w - - 2 38",
+      "student_move_san": "Ke5",
+      "best_move_san": "Ke5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job playing Ke5 \u2014 it's the best move here! This move starts repositioning your king toward the center, which is crucial in the endgame. An active king can support your pieces and control key squares. The principle to remember: in the endgame, your king isn\u2019t a target \u2014 it\u2019s a weapon. Aim to bring it closer to the action and the pawns that matter. This sets up a strong plan for the future.",
+      "latency_s": 5.49,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 76,
+      "phase": "phase:endgame",
+      "fen_before": "5R2/p1p5/1pp3k1/4Kp2/6b1/2N5/8/4r3 w - - 4 39",
+      "student_move_san": "Kf4",
+      "best_move_san": "Kd4",
+      "classification": "good",
+      "eval_drop_cp": 28,
+      "coach_feedback": "Great job with Kf4 \u2014 it's a reasonable move that keeps your king active. The engine suggests Kd4 as a slight refinement, aiming to improve king safety by moving toward the center. In endgames, an active king can be a powerful tool. Focus on guiding your king toward the center and key pawns, while staying mindful of any threats from your opponent. Keep building that habit \u2014 it will serve you well!",
+      "latency_s": 5.16,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 78,
+      "phase": "phase:endgame",
+      "fen_before": "5R2/p1p5/1pp3k1/5p2/5Kb1/2N5/8/5r2 w - - 6 40",
+      "student_move_san": "Ke5",
+      "best_move_san": "Ke5",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job playing Ke5 \u2014 it's the best move here! This move starts repositioning your king toward the center, which is crucial in the endgame. An active king can support your pieces and control key squares. The principle to remember: in the endgame, your king isn\u2019t a target \u2014 it\u2019s a weapon. Aim to bring it closer to the action and the pawns that matter. This sets up a strong plan for the future.",
+      "latency_s": 5.34,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 1000,
+      "phase": "phase:endgame",
+      "fen_before": "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1",
+      "student_move_san": "e5",
+      "best_move_san": "Kf4",
+      "classification": "blunder",
+      "eval_drop_cp": 323,
+      "coach_feedback": "It sounds like you were trying to push your pawn and create activity. However, moving e5 leaves your king exposed and allows Black to capture the pawn and take control of the center. The best move, Kf4, safely repositions your king toward the center, improving its activity and supporting your pawn. This keeps your position strong and sets up good long-term plans. Focus on king safety and pawn structure in the endgame.",
+      "latency_s": 5.25,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 1001,
+      "phase": "phase:endgame",
+      "fen_before": "8/8/8/4k3/8/8/R7/4K3 w - - 0 1",
+      "student_move_san": "Ra5+",
+      "best_move_san": "Ra4",
+      "classification": "good",
+      "eval_drop_cp": 6,
+      "coach_feedback": "Great job with Ra5+ \u2014 it's a sound move that keeps your rook active and eyes on the center. The engine's top move, Ra4, is a slight refinement, improving rook placement even more. Focus on using your rook to control key squares and support your king\u2019s future activity. A strong principle here is to keep your pieces active and ready to support your king as it advances. Keep up the good work!",
+      "latency_s": 5.21,
+      "fidelity_kinds": {
+        "off_menu": 1
+      }
+    },
+    {
+      "ply": 1002,
+      "phase": "phase:endgame",
+      "fen_before": "8/5k2/8/3P4/8/8/5K2/8 w - - 0 1",
+      "student_move_san": "Ke3",
+      "best_move_san": "Kf3",
+      "classification": "good",
+      "eval_drop_cp": 29,
+      "coach_feedback": "Great job with Ke3 \u2014 it's a solid, safe move that keeps your king protected. The engine suggests Kf3 as a slight improvement, helping you reposition your king closer to the action and improve its safety. Focus on moving your king toward the center and supporting your passed pawn on d5. This builds a strong foundation for the endgame. Keep looking for ways to activate your king and support your pawns \u2014 it's a key principle in endgames.",
+      "latency_s": 5.35,
+      "fidelity_kinds": {}
+    },
+    {
+      "ply": 1003,
+      "phase": "phase:endgame",
+      "fen_before": "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+      "student_move_san": "Ra8#",
+      "best_move_san": "Ra8#",
+      "classification": "good",
+      "eval_drop_cp": 0,
+      "coach_feedback": "Great job choosing Ra8# \u2014 it's the best move and leads to a quick win! This move uses your rook's full power by attacking the enemy king directly. The key idea is to use your rook actively in the endgame, especially when you're ahead. Remember: in endgames, kings become powerful, so aim to bring yours forward and use your pieces to attack. This moment was critical because the best move wins instantly, while other options give Black a chance to survive.",
+      "latency_s": 5.67,
+      "fidelity_kinds": {}
+    }
+  ]
+}
