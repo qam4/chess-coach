@@ -52,6 +52,11 @@ v53_seed13	history	1	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64	100	0	0	6
 v53_seed17	history	1	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37	89	2	2	63	100	0	0	0	0	65	12	3	16
 v53_seed23	history	1	qwen3:14b	23	French	29cc3f3a751b	40	20	50	100	0	0	90	89	1	5	0	0	62	10	0	0
 v53_seed7	history	1	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41	100	0	0	72	100	0	0	0	0	63	12	2	11
+v54_seed11	history	1	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35	100	0	0	75	100	0	0	0	0	62	12	0	0
+v54_seed13	history	1	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64	100	0	0	69	100	0	0	0	0	72	12	0	0
+v54_seed17	history	1	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37	95	1	1	63	100	0	0	0	0	65	12	3	16
+v54_seed23	history	1	qwen3:14b	23	French	29cc3f3a751b	40	20	50	100	0	0	90	94	1	5	0	0	65	10	0	0
+v54_seed7	history	1	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41	100	0	0	72	92	0	0	0	0	62	12	2	11
 gemma12_seed11	matrix	1	gemma4:12b-it-qat	11	Italian	29cc3f3a751b	23	8	35	100	0	0	75	100	0	0	0	0	86	12	0	0
 gemma12_seed13	matrix	1	gemma4:12b-it-qat	13	Queen's Gambit	29cc3f3a751b	25	16	64	100	0	0	69	100	0	0	0	0	92	31	0	0
 gemma12_seed17	matrix	1	gemma4:12b-it-qat	17	Sicilian	29cc3f3a751b	51	19	37	100	0	0	63	92	0	0	0	0	76	12	3	16
