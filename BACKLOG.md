@@ -43,7 +43,7 @@ item cannot be added without saying what it gives.
 
 | P | Category | Action | What it gives |
 |---|---|---|---|
-| P1 | decision | Coach the good moves, or decide not to (2026-09-21, v54 reviews) | 40+ of 81 coached turns currently say nothing. Seed 17 is 32 of 51 empty, seed 11 is 15 of 23. Four times the reach of any other open item. |
+| P1 | coaching | The coach has no memory across turns (2026-09-21, measured on v54) | 24 of 183 turns. 17 of 81 spoken turns (21%) re-recommend a move the coach already recommended earlier in the same game, at full length, with no sign it knows; and 7 turns are silent at the moment the student finally plays the move the coach asked for. |
 | P1 | engine | the engine's numbers are not the truth (2026-08-20) | the ~18 turns per game where the coach speaks would be about moves that are actually bad. Today 7 of those 18 criticise a move the reference scores good or nearly good, and best-move agreement is 4 of 18. No prompt change reaches this. |
 | P1 | instrumentation | Repeat each arm, because 60% of the coach's text is not reproducible | the ability to tell a real change from noise. Without it no P1 above can be accepted or rejected. Measured: 32 of 81 spoken turns byte-identical across two runs of the same seed, same model, temperature 0; mean character similarity 0.70-0.83. |
 | P2 | coaching | The closing lesson names a theme the turn never taught (2026-09-21, v54 reviews) | ~9 of 81 turns stop closing on an irrelevant theme (measured on v53; the nine plies are listed below). Deterministic, so the fix is measurable despite the model's churn. |
@@ -95,12 +95,68 @@ the LLM produced is true. That stays.
 When those land, `engine_trust.capability_gaps()` is the list to re-measure, and
 each entry already names what would make us believe it again.
 
-## TOP — Coach the good moves, or decide not to (2026-09-21, v54 reviews)
+## TOP — The coach has no memory across turns (2026-09-21, measured on v54)
 
-- **Category:** decision
-- **Gives:** 40+ of 81 coached turns currently say nothing. Seed 17 is 32 of 51 empty, seed 11
-  is 15 of 23. Four times the reach of any other open item.
+- **Category:** coaching
+- **Gives:** 24 of 183 turns. 17 of 81 spoken turns (21%) re-recommend a move the coach already
+  recommended earlier in the same game, at full length, with no sign it knows; and 7 turns are
+  silent at the moment the student finally plays the move the coach asked for.
 - **Priority:** P1
+
+**The largest genuine coaching item on this list, and it has been raised six times without
+being built** — lines 2590, 2715, 2783, 2864, 2922 and 3004 of this file, under five different
+priority numbers (#1, then sixth, then third, then split by cost). It has never once been an
+actionable heading, which is why the generated table above did not show it until now. Recording
+that plainly: the index added on 2026-09-21 does not surface an item buried in narrative prose,
+and the most-recurring item in the file was exactly that.
+
+The worked case, seed 23. The coach recommended `Nxc7+` on plies 17, 19, 21 and 23 — at 36,
+583, 523 and 613cp — in four near-identical full-length paragraphs. On ply 25 the student played
+it. The coach said nothing.
+
+Both halves are one capability, and seed 23's own v54 review says so: cross-turn awareness
+"attacks the repetition, the missed reinforcement at ply 25, and the loop at plies 19-23 all at
+once."
+
+Measured, per game, on v54:
+
+| | count |
+|---|---|
+| spoken turns re-recommending a move already recommended | 17 of 81 (21%) |
+| moves asked for on 3+ spoken turns in one game | `Nxc7+` x4, `a3` x4, `dxe5` x3, `gxf3` x3 |
+| silent turns where the student played a move we had asked for | 7 |
+
+What the second half must NOT become: praise for playing a good move. The information is "that
+is the move I asked for on ply 17", which the student does not already have. It is not "you
+played a fork", which they do.
+
+## DECIDED — Do not coach good moves in general (2026-09-21, owner's call)
+
+A record, not an action, so it carries no priority. Here so the 40+ empty turns are not
+re-proposed as a gap for a seventh time.
+
+Two of five v54 reviews called the empty turns the single highest-leverage gap ("coach the good
+moves too", seed 17; "making the good-but-suboptimal turns speak", seed 11). **The owner's
+ruling: teaching the player about forks when what he just played was a fork is not teaching.**
+
+Measured after the ruling, which is what makes it safe to close. Of 102 empty turns across the
+five v54 games:
+
+| | count | |
+|---|---|---|
+| student played the engine's top move | 53 | silence correct — the ruling applies |
+| of those, we had already asked for that move | 7 | the real case, now its own P1 item above |
+| not the top move, drop 1-25cp (`equal` band) | 44 | deliberate silence, see the band item |
+| not the top move, drop 26-50cp | 3 | opening leniency |
+| not the top move, drop over 50cp | 2 | opening leniency: seed 17 ply 7 at 57cp, seed 7 ply 8 at 69cp |
+
+Seed 11's own v54 review agrees with the ruling: "Some are correct (ply 5, 9, 19: student played
+the engine's top move — silence is fine)." So the judges are 2-2-1 on this, not 2-2.
+
+The 5 turns in the last two rows are the opening leniency working as designed, and seed 7's
+review calls them a miss: "Eight of ten opening turns are empty, including real teaching
+moments: ply 6 (Ng5, 46cp drop), ply 8 (b3, 69cp drop) got nothing." That is a threshold
+question, not a praise question, and it belongs with the band item rather than here.
 
 Two of the five v54 reviews name this as their single highest-leverage change, in their own
 words: "coach the good moves too" (seed 17), "making the good-but-suboptimal turns speak"
