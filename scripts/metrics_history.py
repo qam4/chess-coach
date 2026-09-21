@@ -825,6 +825,22 @@ def guard(rows: list[dict[str, Any]]) -> tuple[int, list[str]]:
         f"guard: {failures} regression(s) beyond {GUARD_TOLERANCE_PP:.0f}pp"
         + ("" if failures else " — nothing got worse")
     )
+    if failures:
+        # Do NOT let the next reader do what I did on 2026-09-21: dismiss a real 8-point drop as
+        # noise because another measurement said the metric was jumpy. That other measurement was
+        # the cross-OPENING spread, which says nothing about a paired cell. The only way to know
+        # whether a flagged difference is noise is to check whether the PROMPT changed on the turns
+        # that moved, so the guard now names the command that answers it.
+        for cell in shared[:3]:
+            a_run, b_run = before[cell]["run"], after[cell]["run"]
+            out.append(
+                f"  attribute it: python scripts/eval_repeat_budget.py --compare "
+                f"output/coach_review_{a_run} output/coach_review_{b_run}"
+            )
+        out.append(
+            "  A difference is only noise if the prompt was IDENTICAL on the turns that moved. "
+            "If the prompt changed, the difference is your code."
+        )
     return (1 if failures else 0), out
 
 
