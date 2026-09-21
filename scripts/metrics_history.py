@@ -103,11 +103,37 @@ def _version_key(name: str) -> tuple[int, str]:
     return (int(m.group(1)) if m else 10**6, name)
 
 
-#: The seed -> opening map, mirroring SEED_OPENINGS in eval_coach_review.py. Duplicated rather
-#: than imported because importing that module pulls in the engine and chess_coach for a report
-#: generator that needs five strings. Only used as a FALLBACK for runs that predate the `seed`
-#: field in the environment block; anything recorded from 2026-09-18 carries its own label.
-_SEED_FALLBACK = {7: "standard start", 11: "Italian", 13: "Queen's Gambit", 17: "Sicilian", 23: "French"}
+#: The seed -> (opening, starting FEN) map, mirroring SEED_OPENINGS in eval_coach_review.py.
+#: Duplicated rather than imported because importing that module pulls in the engine and
+#: chess_coach for a report generator that needs five strings.
+#:
+#: Used for runs that predate the `seed` field in the environment block (anything before
+#: 2026-09-18). The FEN is how the seed is RECOVERED rather than guessed: the transcript records
+#: the position the game started from, and each seed has a distinct one. That matters because
+#: without it the whole 48-run history has no seed, cannot be paired against a new version, and
+#: `--guard` refuses every comparison.
+_SEED_FALLBACK = {
+    7: ("standard start", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"),
+    11: ("Italian", "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 5 4"),
+    13: ("Queen's Gambit", "rnbqkbnr/ppp2ppp/8/3pp3/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3"),
+    17: ("Sicilian", "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"),
+    23: ("French", "rnbqkbnr/pppp1ppp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 0 2"),
+}
+_FEN_TO_SEED = {fen: seed for seed, (_label, fen) in _SEED_FALLBACK.items()}
+
+
+def _seed_from_first_position(data: dict[str, Any]) -> int | str:
+    """Recover the seed from the game's opening position, or '' if it matches none.
+
+    Evidence, not inference: the first game turn records the FEN it was played from, and the five
+    seeds open from five distinct positions. Verified on v52, whose first ply is 0 from the
+    standard start — seed 7, which is what the whole history used.
+    """
+    game = [t for t in data.get("turns", []) if isinstance(t.get("ply"), int) and t["ply"] < 1000]
+    if not game:
+        return ""
+    return _FEN_TO_SEED.get((game[0].get("fen_before") or "").strip(), "")
+
 
 #: Where runs live, and what kind each group is.
 #:
@@ -130,20 +156,22 @@ def discover(root: Path) -> list[tuple[str, Path]]:
 
 def row_for(path: Path, ehm: Any, group: str = "history") -> dict[str, Any]:
     m = ehm.measure(path)
-    env = json.loads(path.read_text(encoding="utf-8")).get("environment") or {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    env = data.get("environment") or {}
     llm = env.get("llm") or {}
     sha = (env.get("engine") or {}).get("sha256") or ""
     conc = m.lesson_concentration
 
-    # Seed from the environment where recorded, else from the directory name for the runs that
-    # predate the field. Empty if neither — never defaulted to 7, which would silently claim
-    # every unlabelled run was the standard opening.
-    seed = env.get("seed")
+    # Seed, in order of how directly it is known: recorded in the environment, then the directory
+    # name, then RECOVERED from the game's opening position. Never defaulted to 7 — that would
+    # claim every unlabelled run was the standard opening.
+    seed: int | str | None = env.get("seed")
     if seed is None:
-        dirname = path.parent.name
-        mt = re.search(r"seed(\d+)", dirname)
-        seed = int(mt.group(1)) if mt else ""
-    opening = env.get("opening") or (_SEED_FALLBACK.get(seed, "") if isinstance(seed, int) else "")
+        mt = re.search(r"seed(\d+)", path.parent.name)
+        seed = int(mt.group(1)) if mt else _seed_from_first_position(data)
+    opening = env.get("opening") or (
+        _SEED_FALLBACK[seed][0] if isinstance(seed, int) and seed in _SEED_FALLBACK else ""
+    )
 
     return {
         "run": path.parent.name.replace("coach_review_", ""),
@@ -740,18 +768,39 @@ def guard(rows: list[dict[str, Any]]) -> tuple[int, list[str]]:
         return 0, ["guard: need at least two versions; nothing to compare"]
     prev_v, last_v = versions[-2], versions[-1]
 
-    def cells(v: int) -> dict[tuple[Any, Any], dict[str, Any]]:
-        return {(r["seed"], r["model"]): r for r in rows if _version_key(r["run"])[0] == v}
+    # Pair on seed AND model when both versions know their model. When either side does not —
+    # every run before 2026-09-16 — pair on the seed alone and say the model is unverified.
+    # Refusing outright would make the guard useless against the entire recorded history, and
+    # the seed is the variable that actually moves the metrics: 27 points for
+    # `cause_given_pct` across openings, against 0 for the model on that same metric.
+    def known(v: int) -> bool:
+        return all(r["model"] for r in rows if _version_key(r["run"])[0] == v)
+
+    paired_on_model = known(prev_v) and known(last_v)
+
+    def cells(v: int) -> dict[Any, dict[str, Any]]:
+        return {
+            ((r["seed"], r["model"]) if paired_on_model else r["seed"]): r
+            for r in rows
+            if _version_key(r["run"])[0] == v
+        }
 
     before, after = cells(prev_v), cells(last_v)
     shared = sorted(set(before) & set(after), key=str)
-    out.append(f"guard: v{prev_v} -> v{last_v}, {len(shared)} paired cell(s) (same seed AND model)")
+    how = "same seed AND model" if paired_on_model else "same seed; MODEL UNVERIFIED on one side"
+    out.append(f"guard: v{prev_v} -> v{last_v}, {len(shared)} paired cell(s) ({how})")
     if not shared:
         out.append(
-            f"  REFUSING to compare: v{prev_v} and v{last_v} share no (seed, model) cell. "
+            f"  REFUSING to compare: v{prev_v} and v{last_v} share no cell. "
             "Comparing different games would report game variation as a regression."
         )
         return 1, out
+    if not paired_on_model:
+        out.append(
+            "  NOTE: at least one side does not record its model, so a difference below could be "
+            "a model change. Model affects words_per_turn and cause_voiced_pct; it does not "
+            "affect cause_given_pct, lesson_conc_pct or spoke at all (measured)."
+        )
 
     failures = 0
     for key, label, _unit, _ymax, direction in _PANELS:
