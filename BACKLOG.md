@@ -57,7 +57,18 @@ v43 vs v48 came back 11-6 to v48, the first blind comparison in the project that
 a coin flip. These are the six pairs it LOST, each with a verified cause. Ordered by
 impact, and all three are ours rather than the engine's or the model's.
 
-### OPEN — Multi-model checking existed, and the report card dropped it
+### DONE — Multi-model checking existed, and the report card dropped it
+
+**Closed 2026-09-18.** `eval_coach_review.py` still takes `--model` singular — that was left
+alone deliberately, because one invocation producing one transcript is what makes a run
+identifiable. Multi-model is now the WORKFLOW: `output/matrix.ps1` sweeps models x seeds, each
+run records its own model, and `scripts/metrics_history.py` groups them.
+
+First sweep, 4 models x 5 openings on one build, answered the question this item was really
+asking (ledger row 141): **`cause_given_pct`, `lesson_conc_pct` and `spoke` do not vary by model
+at all** — they are computed from our prompt, so they are coach-side by construction.
+`words_per_turn` is dominated by the model (60 to 181). `cause_voiced_pct` swings 50 points and
+was never a coaching signal.
 
 Raised by the product owner as "I thought we discussed testing multiple models". We did, and
 we built for it — then stopped:
@@ -241,6 +252,41 @@ a duplicated "The opponent's reply after your move is exd4" at ply 30 that the j
 marked down. The reply and what it wins should LEAD, as the old wording had it, with the
 composed clause as the only permitted source.
 
+## TOP — we hand the model a bare category LABEL and it restates it (2026-09-18, ledger 146)
+
+Found while measuring why five turns let the model pick its own lesson. The five were a
+dead end; this is what was behind them.
+
+**On 11 of 81 spoken turns in the v53 five-game sweep, `_move_effect` returns nothing for
+the recommended move.** The prompt then falls back to the engine's category label as the
+ONLY reason the model is permitted to give, and instructs it to put that in its own words.
+It complies:
+
+- `The best move (c5) does this: pawn structure — improving pawn position.`
+  → "The better move was c5, which improves your pawn structure."
+- `The best move (Ke2) does this: king safety — repositioning the king.`
+  → "The stronger move is Ke2, which improves king safety by repositioning the king."
+
+`_quiet_move_effect` exists precisely to replace these labels with facts a student can
+check on the board — its own docstring says a label is the NAME of an idea and the clause
+is the thing the name stands for. That work covered the quiet moves it could; this is the
+14% residue where it has nothing, and on those turns the label goes straight through.
+
+**The choice is between two principles we already hold**, which is why this is a decision
+and not a task:
+
+1. *No fact, no claim.* Where nothing about the move is verifiable, say nothing about why
+   it is better — name the move and stop. Costs the student an explanation on 14% of turns.
+2. Keep the label, and accept that on those turns the coach restates a category name.
+
+Measured first, per row 87: 11 of 81 turns, 9 of 32 in the endgame. Both options touch all
+of them, so either is worth doing — unlike the passed-pawn detector this investigation
+started with, which reached 1.
+
+**Rejected already:** a generic maxim for quiet moves. That recreates the padding the
+substitution work removed, and a lesson keyed on nothing is the thing row 140's `open`
+column was built to count.
+
 ## TOP — the engine's numbers are not the truth (2026-08-20)
 
 Measured, not suspected. Blunder at depth 8 (our shipping config) disagrees with
@@ -367,7 +413,15 @@ the exact defect BUG-008 and row 53 exist to prevent. Someone should confirm the
 side is committed. The probe to check with is in ledger row 67: the KPK position at depth
 16 reads 178 normalized, 355 raw.
 
-### NEXT, small — Record the engine's identity in every measurement artefact
+### DONE — Record the engine's identity in every measurement artefact
+
+**Closed 2026-09-18** (`f0d785d`, ledger row 138). `transcript.json` carries an `environment`
+block: engine path, size, mtime, sha256, plus depth, model, base_url, temperature, seed and the
+opening the seed selects. `scripts/eval_coach_review.py:_run_environment`, 5 tests.
+
+The first version read the model from `config["llm"]` rather than the `--model` actually used, so
+both gemma arms of a two-model comparison wrote `qwen3:14b` into their own transcripts. Caught
+within the hour by the comparison itself. Wrong provenance is worse than none.
 
 v31 and v32 ran against **different engines** and nothing in either transcript said so. It
 took forensics on source-file and binary timestamps to establish it, after the numbers had
@@ -527,7 +581,20 @@ by roughly the silence rate. Either report it over spoken turns or rename it.
   standing bands — a position at -102 units reads "clear advantage" where deflated it is
   a slight edge. Recorded in `engine_trust` under `top_lines` and `eval_cp`.
 
-### NEXT, small — The judge is graded against numbers we no longer trust
+### DONE — The judge is graded against numbers we no longer trust
+
+**Closed 2026-09-16** (`9218e4a`, ledger row 137 area). `eval/judge.py` no longer calls the
+engine's analysis "authoritative" or tells the judge to "TREAT AS GROUND TRUTH". The heading
+names whose numbers they are, says to trust the DIRECTION and the material count, and states that
+different magnitude language is not an error. Per-line centipawns dropped — line ORDER already
+carries the engine's preference, which is the part we trust.
+
+The instruction was two claims and only one was wrong: "do not use your own chess calculation" is
+what makes the judge's factual flags checkable, and is kept. Four tests updated, and they now
+assert "ground truth" and "authoritative" are ABSENT so the framing cannot return quietly.
+
+**Not yet measured.** This changes what the judge reads, so nothing moves until the next report
+card. Run it before reading the next verdict.
 
 `eval/judge.py` builds a prompt section headed `--- Evaluation (ground truth) ---`
 carrying `eval_cp`, the eval-term breakdown and per-line `eval_cp`. The heading is now
@@ -1610,7 +1677,36 @@ describes, and worth separating from it.
   20-40 across phases/levels once the annotation guard (Task 9) makes
   authoring safe.
 
-## TOP — Coach progress tracker: a committed time series (2026-09-16)
+### OPEN — A substituted lesson has no repeat limit (ledger row 141)
+
+Found by the first matrix sweep, in a change reported as a clean win. `lesson_conc_pct` is 14% at
+v52 and 25% at HEAD on the same seed.
+
+Row 136's anchoring fix did two good things — it filled the 2 previously-silent turns and raised
+distinct lessons from 9 to 12 — but it substitutes **"isolated pawn" four times**, where nothing
+previously repeated more than twice.
+
+Cause: `_build_takeaway_instruction` receives `lesson_times_taught` for the COMPOSED lesson and
+runs the teach / reframe / retire ladder on it. The SUBSTITUTED lesson from `_guidance_takeaway`
+has no such counter, so once an anchored guidance entry qualifies it can be reused without limit.
+
+Fix shape: track how often each substituted lesson has closed a turn in this game, and put it on
+the same ladder — or at minimum refuse to substitute a lesson already substituted twice. Measure
+with `metrics_history.py --guard`, which pairs the same seed and model so the comparison is clean.
+
+## DONE — Coach progress tracker: a committed time series (2026-09-16)
+
+**Closed 2026-09-18** (`3491ecb`, ledger rows 141-142). `scripts/metrics_history.py` emits
+`docs/coach-metrics-history.tsv`, `docs/coach-metrics.md` and a self-contained HTML dashboard.
+`--check` catches staleness, `--guard` fails on a regression by pairing cells with the same seed
+AND model. 14 tests.
+
+Everything below stands as the reasoning, and two parts are still open: the transcripts remain
+gitignored, so nobody else can regenerate the artefacts; and the pairwise-against-a-frozen-
+reference half is not built, which is the only half that could measure quality rather than the
+absence of defects.
+
+## Superseded reasoning, kept for the decisions in it
 
 **Not to be confused with the cross-game *student* tracker below.** That one measures the
 student improving. This one measures whether WE are improving, across runs, games and models.
