@@ -21,6 +21,36 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _spawn(cmd: list[str]) -> subprocess.Popen[str]:
+    """Start the engine with its stdout decoded as UTF-8.
+
+    One function for both protocol classes, so the decoding cannot be right in one and
+    wrong in the other.
+
+    The engine writes UTF-8. ``text=True`` on its own decodes with the LOCALE encoding,
+    which on this Windows machine is cp1252, so every em dash the engine sent came back
+    as ``â€”``. That text goes straight into the prompt as the ONLY reason the model is
+    allowed to give for the engine's move — "the best move (Ke2) does this: king safety
+    â€” repositioning the king" — so the corruption reached the model on 72 of the 81
+    spoken turns in the v53 five-game sweep, and is present in transcripts as far back
+    as v13.
+
+    ``errors="replace"`` because a protocol reader must not die on one bad byte. Losing
+    a character from a label is cosmetic; an exception in the reader thread loses the
+    whole analysis.
+    """
+    return subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+    )
+
+
 def _reply_punishes(before_reply: "chess.Board", reply: "chess.Move") -> bool:  # type: ignore[name-defined] # noqa: F821
     """Does the opponent's ``reply`` do something the student needs to hear about?
 
@@ -119,15 +149,7 @@ class XboardEngine(EngineProtocol):
 
     def start(self) -> None:
         """Launch the engine and perform the Xboard ``protover 2`` handshake."""
-        cmd = [self._path] + self._args
-        self._proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            bufsize=1,
-        )
+        self._proc = _spawn([self._path] + self._args)
         self._stdin = self._proc.stdin
         self._stdout = self._proc.stdout
         self._send("xboard")
@@ -358,15 +380,7 @@ class UciEngine(EngineProtocol):
 
     def start(self) -> None:
         """Launch the engine and complete the UCI ``uci``/``isready`` handshake."""
-        cmd = [self._path] + self._args
-        self._proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            bufsize=1,
-        )
+        self._proc = _spawn([self._path] + self._args)
         self._stdin = self._proc.stdin
         self._stdout = self._proc.stdout
 

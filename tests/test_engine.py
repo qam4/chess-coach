@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from unittest.mock import MagicMock, patch
 
-from chess_coach.engine import AnalysisLine, AnalysisResult, XboardEngine
+from chess_coach.engine import AnalysisLine, AnalysisResult, XboardEngine, _spawn
 
 # ---------------------------------------------------------------------------
 # AnalysisLine / AnalysisResult dataclass tests
@@ -448,3 +449,52 @@ class TestWithRefutation:
         report = _comparison(before_mate, "d8h4", None)
         out = _fill(report, _position_with_best("e1f2"))
         assert out.refutation_line is None
+
+
+# ---------------------------------------------------------------------------
+# Engine stdout decoding
+# ---------------------------------------------------------------------------
+
+
+class TestSpawnDecoding:
+    """The engine writes UTF-8; we must not decode it with the machine's locale.
+
+    ``text=True`` on its own decodes with ``locale.getpreferredencoding()``, which is
+    cp1252 on a Windows dev box, so every em dash the engine sent arrived as ``â€”``.
+    That text is handed to the model as the only permitted reason for the engine's
+    move, and it was corrupt on 72 of the 81 spoken turns in the v53 five-game sweep.
+
+    Asserts the CONFIGURATION, not just the result. A round-trip assertion would pass
+    before the fix on any UTF-8 runner (the whole of CI), so it would have protected
+    nothing there; ``errors`` is ``"strict"`` under bare ``text=True`` on every
+    platform, so checking it fails before the fix everywhere.
+    """
+
+    def test_stdout_is_decoded_as_utf8_regardless_of_locale(self):
+        proc = _spawn([sys.executable, "-c", "pass"])
+        try:
+            assert proc.stdout is not None
+            assert proc.stdout.encoding.lower().replace("-", "") == "utf8"
+            assert proc.stdout.errors == "replace"
+        finally:
+            if proc.stdin is not None:
+                proc.stdin.close()
+            proc.wait(timeout=10)
+
+    def test_engine_em_dash_survives_the_pipe(self):
+        # chr() rather than an escape, so nothing is re-interpreted on the way into
+        # the child's source.
+        child = (
+            "import sys;"
+            "sys.stdout.buffer.write(('king safety ' + chr(8212) + ' repositioning the king'"
+            " + chr(10)).encode('utf-8'));"
+            "sys.stdout.buffer.flush()"
+        )
+        proc = _spawn([sys.executable, "-c", child])
+        try:
+            assert proc.stdout is not None
+            assert proc.stdout.readline().rstrip("\r\n") == "king safety \u2014 repositioning the king"
+        finally:
+            if proc.stdin is not None:
+                proc.stdin.close()
+            proc.wait(timeout=10)
