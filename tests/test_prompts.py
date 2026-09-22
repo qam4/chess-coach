@@ -501,14 +501,30 @@ def test_best_move_achievement_is_position_specific() -> None:
     assert out in build_rich_move_evaluation_prompt(report, "intermediate")
 
 
-def test_best_move_achievement_falls_back_to_label_without_invention() -> None:
-    # Nothing verifiable about a quiet move -> return the label unchanged rather
-    # than inventing a concrete-sounding reason.
+def test_nothing_verifiable_means_no_reason_at_all() -> None:
+    """Replaces the label fallback, on the owner's ruling of 2026-09-22.
+
+    This test used to assert the opposite: with nothing verifiable, return the engine's category
+    label unchanged. The label is not a reason — it is a category name, and there were only 10
+    distinct values across a 44-turn game — so the model could only restate it, which it did on 11
+    of 81 spoken turns: "c5, which improves your pawn structure".
+
+    The ruling: do not invent a reason, and say nothing rather than offer one we do not have. So the
+    achievement is empty, the line is omitted rather than left as a dangling header, and the prompt
+    switches to `_REASON_WITHHELD`, which forbids reasoning one out from the position facts. The
+    "without invention" half of the old test's name is now carried by that instruction rather than
+    by the label.
+    """
     from chess_coach.prompts import _best_move_achievement
 
     report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
     report = dataclasses.replace(report, best_move_idea="pawn structure — improving pawn position")
-    assert _best_move_achievement(report) == "pawn structure — improving pawn position"
+    assert _best_move_achievement(report) == ""
+
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    assert "pawn structure — improving pawn position" not in prompt, "the label must not reach the model"
+    assert "does this:" not in prompt, "no dangling header for the model to fill in"
+    assert "is NOT established in the data above" in prompt, "the withheld-reason instruction must fire"
 
 
 # White Kf2, pawn d5, black Ke7 — a king-and-pawn endgame by the shared phase
@@ -559,12 +575,22 @@ def test_endgame_keeps_the_verified_clause_and_drops_only_the_label() -> None:
 
 
 def test_king_safety_label_kept_outside_the_endgame() -> None:
-    # Same label, middlegame position: here it is correct advice and stays.
+    """The label survives outside the endgame — but only alongside a verified clause.
+
+    The guard here is `_label_wrong_for_phase` not being over-eager: a king-safety label is correct
+    advice in a middlegame and must not be stripped. That is unchanged.
+
+    What changed is the carrier. The label is no longer returned on its OWN when nothing is
+    verifiable (see `test_nothing_verifiable_means_no_reason_at_all`), so this now uses a move with a
+    composed clause — castling, which yields one — and checks the label rides along with it.
+    """
     from chess_coach.prompts import _best_move_achievement
 
-    report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
+    report = _move_eval_report(CASTLE_FEN, "d2d3", "e1g1")
     report = dataclasses.replace(report, best_move_idea="king safety — castling to a safer position")
-    assert "king safety" in _best_move_achievement(report)
+    achievement = _best_move_achievement(report)
+    assert "castling" in achievement, f"castling should compose a clause: {achievement!r}"
+    assert "king safety" in achievement, "the phase-appropriate label must survive alongside it"
 
 
 def test_pedagogy_block_does_not_plant_king_safety_every_turn() -> None:
@@ -605,13 +631,31 @@ def test_equal_tier_withholds_the_alternative_entirely() -> None:
 
 
 def test_just_above_equal_still_offers_the_refinement() -> None:
-    # The band has to have an upper edge, and above it the old behaviour stands:
-    # a genuinely better move may be named as a refinement (BUG-016).
+    """BUG-016: above the equal band a genuinely better move may still be named as a refinement.
+
+    The `does this:` assertion this test used to carry was incidental — d2d3 composes no clause, so
+    that line is now correctly absent. What BUG-016 is about is whether the refinement is OFFERED at
+    all, which is the move being named and the sound-move framing being kept, so those are what is
+    asserted. A move that DOES compose a clause is covered separately below.
+    """
     report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
     report = dataclasses.replace(report, eval_drop_cp=EQUAL_MAX_DROP_CP + 1)
     prompt = build_rich_move_evaluation_prompt(report, "intermediate")
     assert "sound, reasonable move" in prompt
+    assert "d3" in prompt, "the better move must still be named"
+
+
+def test_a_refinement_with_a_verifiable_clause_still_states_it() -> None:
+    """The other half of the one above: when a clause CAN be composed, it is still supplied.
+
+    Without this, the change that stopped passing bare labels could have silenced the reason on every
+    refinement turn and both tests would still pass.
+    """
+    report = _move_eval_report(CASTLE_FEN, "d2d3", "e1g1")
+    report = dataclasses.replace(report, eval_drop_cp=EQUAL_MAX_DROP_CP + 1)
+    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
     assert "does this:" in prompt
+    assert "castling" in prompt
 
 
 def test_equal_tier_takeaway_is_about_the_move_played() -> None:

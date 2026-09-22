@@ -880,7 +880,11 @@ class Coach:
                         prompt,
                         report,
                         # Per-tier ceiling (lever 4): a serious mistake gets room
-                        # to be specific; a sound move is kept short.
+                        # to be specific; a sound move is kept short. Deliberately NOT
+                        # reduced on a repeated recommendation — v57 tried that and the
+                        # outputs were byte-identical, because the model writes ~70 words
+                        # here and the ceiling was never binding. See
+                        # `repeat_shortened_word_limit`.
                         max_tokens=min(self.max_tokens, move_feedback_max_tokens(report)),
                         trace=_trace,
                         lesson_times_taught=times_taught,

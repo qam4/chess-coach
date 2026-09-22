@@ -300,6 +300,10 @@ class Metrics:
     cause_own_piece: int = 0
     cause_irrelevant: int = 0
     cause_materialised: int = 0
+    repeat_rec: int = 0
+    repeat_rec_words: int = 0
+    repeat_rec_names_move: int = 0
+    repeat_rec_has_lesson: int = 0
     mind_reading: int = 0
     magnitude: int = 0
     words: int = 0
@@ -384,6 +388,55 @@ class Metrics:
         return 100.0 * self.cause_materialised / self.cause_own_piece
 
     @property
+    def repeat_rec_rate(self) -> float:
+        """Share of spoken turns re-recommending a move already recommended in this game.
+
+        The POPULATION, not an outcome: the coach has no memory across turns, so when the student
+        misses the same move four times it gets four full-length explanations. Measured on v55 at 17
+        of 81 spoken turns. `Nxc7+` was recommended on plies 17, 19, 21 and 23, then played on 25.
+
+        This number does NOT move when the repetition is fixed — the student still misses the move
+        the same number of times, because the simulated student's move is chosen before the coach
+        speaks and cannot respond to it. What should move is `repeat_rec_words_per_turn`, and what
+        must NOT move are the two guardrails below.
+        """
+        return 0.0 if not self.spoken else 100.0 * self.repeat_rec / self.spoken
+
+    @property
+    def repeat_rec_words_per_turn(self) -> float:
+        """Mean length of a re-recommending turn. Measured at 64.5 words against 65.2 overall.
+
+        A teacher shortens on the fourth telling. Treat a fall here as the mechanism firing rather
+        than as a benefit: an instruction that says "be brief" makes this fall by construction, and
+        shorter is not automatically better.
+        """
+        return 0.0 if not self.repeat_rec else self.repeat_rec_words / self.repeat_rec
+
+    @property
+    def repeat_rec_names_move_rate(self) -> float | None:
+        """GUARDRAIL. Of the re-recommending turns, how many still name the move. Must stay at 100%.
+
+        The whole point of the turn is that the student has not yet played the move we want. A
+        shortening instruction that drops the move name would leave the student with a nudge and no
+        subject, which is worse than the repetition it replaced.
+        """
+        if not self.repeat_rec:
+            return None
+        return 100.0 * self.repeat_rec_names_move / self.repeat_rec
+
+    @property
+    def repeat_rec_has_lesson_rate(self) -> float | None:
+        """GUARDRAIL. Of the re-recommending turns, how many still close on a composed lesson.
+
+        Separate from the move name because they can fail independently: an escalation that becomes
+        "Still there. Nxc7+." keeps the move and loses the teaching. Recorded so a fall shows up as
+        a cost rather than as brevity.
+        """
+        if not self.repeat_rec:
+            return None
+        return 100.0 * self.repeat_rec_has_lesson / self.repeat_rec
+
+    @property
     def words_per_turn(self) -> float:
         return 0.0 if not self.spoken else self.words / self.spoken
 
@@ -410,8 +463,11 @@ def measure(path: Path) -> Metrics:
     turns = [t for t in data.get("turns", []) if isinstance(t.get("ply"), int)]
     m = Metrics(name=path.parent.name.replace("coach_review_", ""))
     m.plies = len(turns)
+    # Moves already recommended on an earlier SPOKEN turn of this game. Walked in ply order, not
+    # file order, so a transcript storing curated positions after the game still keys correctly.
+    already_recommended: set[str] = set()
 
-    for t in turns:
+    for t in sorted(turns, key=lambda x: x["ply"]):
         text = (t.get("coach_feedback") or "").strip()
         if not text:
             continue
@@ -473,6 +529,20 @@ def measure(path: Path) -> Metrics:
             m.lesson_open += 1
         else:
             m.lesson_silent += 1
+
+        # Cross-turn repetition: are we recommending a move we already recommended? Counted on
+        # curated positions too — they are standalone so a move can never repeat there, but
+        # excluding them would make this denominator disagree with `spoken`.
+        best = (t.get("best_move_san") or "").strip()
+        if best:
+            if best in already_recommended:
+                m.repeat_rec += 1
+                m.repeat_rec_words += len(text.split())
+                if best in text:
+                    m.repeat_rec_names_move += 1
+                if lesson:
+                    m.repeat_rec_has_lesson += 1
+            already_recommended.add(best)
 
     return m
 

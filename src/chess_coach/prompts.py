@@ -493,6 +493,23 @@ square it does not name. State the reply ONCE, not again as a separate sentence,
 continue past that one move.
 """
 
+#: How much of the tier's word budget a repeated recommendation keeps, and the floor below which it
+#: cannot fall. 0.55 of a 120-word blunder budget is 66, and of an 80-word budget is 44 — enough for
+#: the move, its reason and a short hook, which are the three things the guardrails check for.
+#: The floor exists so a tight tier cannot be squeezed to nothing.
+_REPEAT_WORD_FACTOR = 0.55
+_REPEAT_WORD_FLOOR = 35
+
+#: Said ONLY when the same recommendation has already been given and not taken. Names what to drop
+#: rather than asking for brevity in the abstract, because "be concise" has been in the tone block
+#: since v2 and the repeats still came back longer than the first telling.
+_RECOMMENDATION_REPEATED = """\
+- YOU HAVE ALREADY RECOMMENDED THIS MOVE earlier in this game and the student has not played it. \
+Do NOT build the case again from the start. Name the move, say in a few words that it is still \
+available, and stop. Skip the general principle behind it, skip what it wins in detail, and do not \
+re-describe the position — the student has had all of that. Shorter than your earlier turn on it.
+"""
+
 _REPLY_WITHHELD = """\
 - THE OPPONENT'S ANSWER is NOT given above, so you do not know it. Do NOT name a \
 move for the opponent, do not write "the opponent plays ...", and do not work one out \
@@ -658,6 +675,26 @@ def _move_feedback_tier(report: ComparisonReport) -> str:
     if report.eval_drop_cp <= DUBIOUS_MAX_DROP_CP:
         return "inaccuracy"
     return "serious"
+
+
+def repeat_shortened_word_limit(word_limit: int) -> int:
+    """The reduced budget for a turn re-recommending a move the student has not taken.
+
+    Measured: the stated limit alone moved the median repeat from 1.23 to 0.93 times the length of
+    the first telling of the same recommendation.
+
+    NOT paired with a reduced generation ceiling, and that was tried. v57 scaled `_TIER_MAX_TOKENS`
+    by the same factor on these turns and the outputs came back BYTE-IDENTICAL — the ceiling was
+    never the binding constraint, because the model produces roughly 70 words (about 100 tokens) here
+    and even the reduced ceiling was 165. The reasoning that led to trying it — that the margin above
+    the word target is what lets the instruction be ignored — was simply wrong, and the ceiling
+    change was reverted rather than kept as an unmeasured knob.
+
+    What remains is that the model does not obey a word count precisely: told 66 words it writes 73.
+    `Ke2` still comes back at 1.55x and `Nxc7+` at 1.28-1.55x. Closing that means composing the short
+    form ourselves instead of asking for it, which is a larger change than this one.
+    """
+    return max(_REPEAT_WORD_FLOOR, int(word_limit * _REPEAT_WORD_FACTOR))
 
 
 def move_feedback_max_tokens(report: ComparisonReport) -> int:
@@ -2036,7 +2073,24 @@ def _move_achievement(report: ComparisonReport, uci: str, *, rival_uci: str = ""
         # say nothing.
         label = ""
     if not effect:
-        return label
+        # No verifiable clause means no reason. The engine's label alone used to be returned here,
+        # and the model can only restate it: "c5, which improves your pawn structure", "Ke2, which
+        # improves king safety by repositioning the king". Measured at 11 of 81 spoken turns, 9 of
+        # 32 in the endgame.
+        #
+        # The owner's ruling, 2026-09-22: do not invent a reason, and say nothing rather than offer
+        # one we do not have. Returning "" makes `_best_move_achievement_line` omit the line
+        # entirely — not leave a dangling header, which is how "closer to the center" once appeared
+        # on a turn that supplied nothing — and makes `move_instructions` select `_REASON_WITHHELD`,
+        # which forbids reasoning one out from the position facts.
+        #
+        # The risk, recorded because it is documented rather than hypothetical: v37 retired a reason
+        # on three turns and the model invented replacements instead of going quiet ("a3 addresses
+        # the isolated pawn on a2", which advancing a pawn cannot do). That is why
+        # `_achievement_line`'s own ladder no longer withholds. The difference here is that
+        # `_REASON_WITHHELD` was written afterwards and prohibits it explicitly. Watch fabrication
+        # on these turns; if it rises, this is the reason.
+        return ""
     concrete = effect.removeprefix(", ").strip()
     return f"{concrete} ({label})" if label else concrete
 
@@ -2733,6 +2787,19 @@ def build_rich_move_evaluation_prompt(
     if focus_instruction:
         move_instructions += focus_instruction
     word_limit = _TIER_WORD_LIMIT[tier]
+    # A recommendation the student has already been given, and not taken, gets LESS room, not the
+    # same. The achievement clause has flagged the recurrence since v37 ("does the same thing here
+    # as it did earlier in the game") and it changed nothing about length: measured over 673 repeat
+    # turns the median repeat is 0.97x the first telling, and on the sharpest streak — Nxc7+
+    # recommended on four consecutive turns — it went 47 words to 75, 74, 81. Told the idea is a
+    # repeat, the model elaborates.
+    #
+    # The budget is cut rather than the facts withheld. Withholding is the mistake `_achievement_line`
+    # records: when the reason was retired the model invented three replacements. So the clause and
+    # the move name stay, and only the room to restate them shrinks.
+    if achievement_times_shown >= ACHIEVEMENT_REFRAME_AFTER and tier not in _OWN_MOVE_TIERS:
+        word_limit = repeat_shortened_word_limit(word_limit)
+        move_instructions += _RECOMMENDATION_REPEATED
     # ``lesson_times_taught`` comes from the caller's per-game memory: the coach used to
     # treat every turn as if it were the first, and taught one lesson five times.
     # Guidance goes in so a retired lesson has somewhere to fall back to. Without it, the
