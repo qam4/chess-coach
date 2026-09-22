@@ -1,0 +1,7 @@
+{
+  "name": "judge-opus5",
+  "description": "Frontier judge for chess-coach evaluation runs. Pins the model, because kiro-cli's --model flag is a no-op in 2.22.1 and every run silently used the 'auto' default while the ledger recorded claude-opus-5.",
+  "model": "claude-opus-5",
+  "tools": [],
+  "allowedTools": []
+}

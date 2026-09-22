@@ -15,10 +15,51 @@ live in the driver so the assembly + stats stay unit-testable with fakes.
 
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+
+def resolve_judge_agent(agent: str, expected_model: str, *, repo_root: Path | None = None) -> str:
+    """The model a `--agent` run will actually use, or raise if it cannot be guaranteed.
+
+    Judge provenance in this project was wrong for every run until 2026-09-21. The harness
+    passed `kiro-cli chat --no-interactive --model claude-opus-5` and recorded "claude-opus-5"
+    in the ledger, but `--model` is a NO-OP in kiro-cli 2.22.1 — it warns "failed to set
+    model: Method not found" for any value, including a deliberately invalid one, and
+    `--list-models` reports the default as `auto`. So every review was written by whatever
+    `auto` selected, while the ledger named a specific model. The ledger's own warning that
+    one judge was wrong on 5 of 5 per-ply claims and another right on 2 of 2 rests on that
+    distinction.
+
+    The agent route is used instead because it FAILS rather than falls back: an agent naming
+    an unavailable model exits 1 with "Error: Internal error". This function closes the
+    remaining hole — that the agent file and the recorded label could drift apart — by
+    reading the file and refusing when they disagree.
+    """
+    root = repo_root or Path(__file__).resolve().parents[3]
+    path = root / ".kiro" / "agents" / f"{agent}.json"
+    if not path.exists():
+        raise SystemExit(
+            f"judge agent {agent!r} not found at {path}. The agent file is what pins the model; "
+            "kiro-cli's --model flag is a no-op and cannot be relied on."
+        )
+    try:
+        declared = (json.loads(path.read_text(encoding="utf-8")) or {}).get("model")
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"judge agent {path} is not valid JSON: {exc}") from exc
+    if not declared:
+        raise SystemExit(f"judge agent {path} declares no 'model', so the run would use the 'auto' default.")
+    if declared != expected_model:
+        raise SystemExit(
+            f"judge provenance mismatch: agent {agent!r} pins {declared!r} but the run would record "
+            f"{expected_model!r}. Fix one of them rather than recording a model that did not answer."
+        )
+    return str(declared)
+
 
 # Phase tags (mirror pedagogy.features so the report speaks the same language).
 PHASE_OPENING = "phase:opening"
@@ -813,6 +854,26 @@ Answer these, concretely and in priority order:
 5. MEASUREMENT: is our evaluation approach (this report card + deterministic
    fidelity counts) actually measuring the right thing? How would you measure
    teaching quality better?
+
+MANDATORY FOR EVERY DEFECT AND EVERY CHANGE YOU PROPOSE IN 2, 3 AND 4: say how
+to MEASURE it. Give, in one or two sentences each:
+
+  (a) THE COUNT — what exactly to count, per turn, precisely enough that two
+      people would compute the same number;
+  (b) its EXPECTED CURRENT VALUE on the turns you can see, or "cannot tell" if
+      you genuinely cannot;
+  (c) WHAT WOULD COUNT AS FIXED — a threshold — and what value would mean the
+      change made things WORSE;
+  (d) what the measure would MISS.
+
+Every measure must obey the anchoring constraint listed under CONSTRAINTS: the
+board, our composed text, move tokens, squares, eval drop, phase, earlier turns.
+Not phrase or wording matching in the coach's output.
+
+If a defect you want to raise cannot be measured that way, SAY SO EXPLICITLY and
+raise it anyway, flagged as unmeasurable. That is a useful answer, and far more
+useful than a plausible-sounding measure we cannot compute. Do not weaken a real
+criticism to make it measurable.
 
 Be blunt and specific. If our whole premise (a small local model as the
 teaching voice over engine-composed facts) is the limiting factor, say so and

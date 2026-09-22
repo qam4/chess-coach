@@ -46,7 +46,12 @@ from chess_coach.cli import _resolve_engine_path, load_config  # noqa: E402
 from chess_coach.coach import Coach  # noqa: E402
 from chess_coach.coaching_phrases import build_move_menu, uci_to_san  # noqa: E402
 from chess_coach.engine import CoachingEngine  # noqa: E402
-from chess_coach.eval.coach_review import ReviewTurn, aggregate_review, build_coach_review_prompt  # noqa: E402
+from chess_coach.eval.coach_review import (  # noqa: E402
+    ReviewTurn,
+    aggregate_review,
+    build_coach_review_prompt,
+    resolve_judge_agent,
+)
 from chess_coach.eval.game_coaching import TurnRecord, play_game, student_moves  # noqa: E402
 from chess_coach.llm import create_provider  # noqa: E402
 from chess_coach.llm.ollama import OllamaProvider  # noqa: E402
@@ -265,10 +270,14 @@ def main() -> None:
     # credits and ~2 minutes are cheap next to a wrong finding — we spent two
     # investigations on the phantom one.
     parser.add_argument("--judge-model", default="claude-opus-5")
+    # The agent file is what actually pins the model — see the comment at the call site.
+    # `--judge-model` remains only as the label recorded in the transcript, and the two are
+    # cross-checked below so they cannot silently disagree.
+    parser.add_argument("--judge-agent", default="judge-opus5")
     parser.add_argument(
         "--judge-command",
         default=None,
-        help="judge command; defaults to kiro-cli with --judge-model (prompt on stdin)",
+        help="judge command; defaults to kiro-cli with --judge-agent (prompt on stdin)",
     )
     parser.add_argument("--judge-base-url", default="http://localhost:11434")
     parser.add_argument(
@@ -285,7 +294,22 @@ def main() -> None:
     # both named a model and could silently disagree — and the COMMAND is what
     # actually decides, so `--judge-model opus-5` with a sonnet command would have
     # recorded the wrong model against the run.
-    judge_command = args.judge_command or f"kiro-cli chat --no-interactive --model {args.judge_model}"
+    #
+    # Via --agent, NOT --model. `--model` is a no-op in kiro-cli 2.22.1: it prints
+    # "[warn] failed to set model '<x>': Method not found" for ANY value — verified by
+    # passing a nonsense name and getting the identical warning, and by omitting the flag
+    # and getting no warning at all. Meanwhile `kiro-cli chat --list-models --format json`
+    # reports "default_model":"auto", so every judge run this project has made went to
+    # `auto` ("models chosen by task") while the ledger recorded claude-opus-5.
+    #
+    # The agent route is checkable, which is why it is used: an agent naming an available
+    # model runs clean, and one naming an unavailable model exits 1 with "Error: Internal
+    # error" rather than falling back silently. So a run either used the pinned model or
+    # failed outright. `--model` offered no such guarantee.
+    judge_command = args.judge_command or f"kiro-cli chat --no-interactive --agent {args.judge_agent}"
+    if not args.no_judge and args.judge_command is None:
+        resolved = resolve_judge_agent(args.judge_agent, args.judge_model)
+        print(f"judge: agent {args.judge_agent} pins {resolved}")
     judge = create_provider(
         "cli", model=args.judge_model, base_url=args.judge_base_url, api_key="", command=shlex.split(judge_command)
     )
