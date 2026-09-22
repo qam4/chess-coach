@@ -95,6 +95,32 @@ def _loose(board: chess.Board, colour: chess.Color, square: chess.Square) -> boo
     return bool(board.attackers(not colour, square)) and not board.attackers(colour, square)
 
 
+def _contested(board: chess.Board, square: chess.Square, by: chess.Color) -> bool:
+    """Can ``by`` attack ``square`` now, or after any one of its legal moves? Pure geometry.
+
+    Generous on purpose. A stricter test — attacked right now — would drop a warning about a
+    piece the opponent is one tempo from winning, which is worth hearing. This only rules out the
+    squares with no threat at all, which is where the coaching was useless rather than merely
+    early.
+
+    Returns True on anything it cannot determine, so an odd position can never invent a defect by
+    making this say False.
+    """
+    if board.attackers(by, square):
+        return True
+    probe = board.copy(stack=False)
+    if probe.turn != by:
+        if probe.is_check():
+            return True  # a null move is illegal in check; do not claim the square is safe
+        probe.push(chess.Move.null())
+    for move in probe.legal_moves:
+        nxt = probe.copy(stack=False)
+        nxt.push(move)
+        if nxt.attackers(by, square):
+            return True
+    return False
+
+
 def _defended_squares(board: chess.Board, colour: chess.Color) -> set[chess.Square]:
     """Squares holding ``colour``'s pieces that ``colour`` also defends."""
     return {
@@ -194,10 +220,24 @@ def diagnose(fen: str, user_move_uci: str, best_move_uci: str = "") -> list[Erro
 
     # 4. The move stopped defending something that stays on the board. Weaker than 2 (the
     #    piece is not necessarily loose now) so it ranks below.
+    #
+    #    AND the opponent has to be able to do something about it. This class diffs DEFENDER
+    #    sets, so without a relevance test it fires on any piece that merely lost a defender —
+    #    and measured over 85 stored runs, 48 of 252 such causes named a square the opponent
+    #    could not attack at all. On v54 not ONE of the 16 named a square that was actually
+    #    attacked after the move, and one of them discussed an undefended pawn on the move that
+    #    delivered checkmate.
+    #
+    #    Those turns pass every fidelity check, because the claim is true. That is what makes
+    #    the class dangerous: nothing else in this project can see it, and a student who acts on
+    #    it defends squares nothing attacks. "No fact, no claim" has a sibling — no threat, no
+    #    warning.
     lost_defence = _defended_squares(board, us) - _defended_squares(after, us) - {played.from_square}
     for square in sorted(lost_defence):
         piece = after.piece_at(square)
         if piece is None or piece.color != us:
+            continue
+        if not _contested(after, square, not us):
             continue
         sq_name = chess.square_name(square)
         out.append(
