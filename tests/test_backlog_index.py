@@ -1,10 +1,9 @@
-"""The backlog's own checks: every actionable item says what it gives, and the table is current.
+"""The backlog's own checks: every open item has a stable id and says what it gives.
 
-Runs against the REAL committed `BACKLOG.md`, not a fixture. That is deliberate: the failure this
-repo keeps repeating is a check whose inputs come from somewhere the check does not actually
+Runs against the REAL committed `BACKLOG.md` and `BUGS.md`, not fixtures. That is deliberate: the
+failure this repo keeps repeating is a check whose inputs come from somewhere it does not actually
 guard — `tests/test_clause_snapshot.py` globbed gitignored `output/` and passed on the dev machine
-while failing on every clean checkout. `BACKLOG.md` is committed, so this test guards the thing it
-claims to guard.
+while failing on every clean checkout. Both files are committed, so this guards what it claims to.
 """
 
 from __future__ import annotations
@@ -33,48 +32,61 @@ def _load():
 bi = _load()
 
 
-def test_every_actionable_item_declares_category_gives_and_priority() -> None:
-    items, problems = bi.parse(BACKLOG.read_text(encoding="utf-8"))
-    assert not problems, "BACKLOG.md items missing metadata:\n  " + "\n  ".join(problems)
-    assert items, "no actionable items parsed — the heading pattern has probably drifted"
+def test_every_open_item_declares_id_category_gives_and_priority() -> None:
+    items, problems = bi.parse_all()
+    assert not problems, "open items missing metadata:\n  " + "\n  ".join(problems)
+    assert items, "no actionable items parsed — the heading patterns have probably drifted"
 
 
 def test_the_generated_index_is_current() -> None:
     text = BACKLOG.read_text(encoding="utf-8")
-    items, problems = bi.parse(text)
+    items, problems = bi.parse_all()
     assert not problems
-    assert bi.replace_block(text, bi.render(items)) == text, (
-        "BACKLOG.md index is stale. Run: python scripts/backlog_index.py"
-    )
+    assert bi.replace_block(text, bi.render(items)) == text, "the index is stale. Run: python scripts/backlog_index.py"
+
+
+def test_ids_are_unique_across_both_files() -> None:
+    items, _ = bi.parse_all()
+    idents = [it.ident for it in items]
+    assert len(idents) == len(set(idents)), "duplicate ids: an id is a permanent handle"
+
+
+def test_open_bugs_appear_in_the_index() -> None:
+    """The point of spanning two files. If this reads zero, BUGS.md has fallen out of the index."""
+    items, _ = bi.parse_all()
+    assert any(it.source == "bugs" for it in items), "no open bugs indexed — is BUGS.md still parsed?"
 
 
 def test_priority_is_impact_so_every_p1_states_a_reach() -> None:
     """A P1 must say how much it reaches. "Refactor X" is not a priority-1 justification.
 
     Weak by design — it checks for a digit, not for a good argument. It exists because the thing
-    that actually went wrong was a P3 proposed ahead of two P1s, and the tell was that its
-    "gives" had no number in it at all.
+    that actually went wrong was a P3 proposed ahead of two P1s, and the tell was that its "gives"
+    had no number in it at all.
     """
-    items, _ = bi.parse(BACKLOG.read_text(encoding="utf-8"))
+    items, _ = bi.parse_all()
     p1 = [it for it in items if it.priority == "P1"]
     assert p1, "no P1 items — if that is genuinely true, delete this test rather than weakening it"
     for it in p1:
-        assert any(ch.isdigit() for ch in it.gives), f"P1 {it.title!r} gives no number: {it.gives!r}"
+        assert any(ch.isdigit() for ch in it.gives), f"P1 {it.ident} gives no number: {it.gives!r}"
 
 
 @pytest.mark.parametrize(
     "bad",
     [
-        # Missing Priority entirely.
-        "## TOP — Do a thing\n\n- **Category:** coaching\n- **Gives:** 3 of 81 turns\n\nprose\n",
-        # A category outside the closed list.
-        "## TOP — Do a thing\n\n- **Category:** cleanup\n- **Gives:** 3 turns\n- **Priority:** P1\n",
+        # Priority missing entirely.
+        "## TOP — Do a thing\n\n- **Id:** B-900\n- **Category:** coaching\n- **Gives:** 3 turns\n",
+        # Category outside the closed list.
+        "## TOP — Do a thing\n\n- **Id:** B-900\n- **Category:** cleanup\n- **Gives:** x\n- **Priority:** P1\n",
+        # Id not in the B-nnn / BUG-nn form.
+        "## TOP — Do a thing\n\n- **Id:** nine\n- **Category:** coaching\n- **Gives:** x\n- **Priority:** P1\n",
         # Fields below the first prose paragraph, where a reader would not find them.
-        "## OPEN — Do a thing\n\nprose first\n\n- **Category:** coaching\n- **Gives:** x\n- **Priority:** P2\n",
+        "## OPEN — Do a thing\n\nprose first\n\n- **Id:** B-900\n- **Category:** coaching\n"
+        "- **Gives:** x\n- **Priority:** P2\n",
     ],
 )
-def test_malformed_items_are_reported_not_ignored(bad: str) -> None:
-    _items, problems = bi.parse(bad)
+def test_malformed_backlog_items_are_reported_not_ignored(bad: str) -> None:
+    _items, problems = bi.parse_backlog(bad)
     assert problems, f"should have been rejected:\n{bad}"
 
 
@@ -84,8 +96,44 @@ def test_a_record_heading_needs_no_metadata() -> None:
         "## DONE — Something we finished\n\nprose\n\n"
         "### Closed by measurement, do not reopen\n\nprose\n\n"
         "## TOP — A real action\n\n"
-        "- **Category:** instrumentation\n- **Gives:** 5 of 81 turns\n- **Priority:** P2\n"
+        "- **Id:** B-900\n- **Category:** instrumentation\n- **Gives:** 5 of 81 turns\n- **Priority:** P2\n"
     )
-    items, problems = bi.parse(text)
+    items, problems = bi.parse_backlog(text)
     assert not problems, problems
     assert [it.title for it in items] == ["A real action"]
+
+
+def test_a_fixed_bug_is_a_record_but_an_unannotated_open_one_is_an_error() -> None:
+    fixed = "### BUG-900: Something\n- **Status**: FIXED — done in Phase 3.\n- **Observed**: x\n"
+    items, problems = bi.parse_bugs(fixed)
+    assert not problems and not items
+
+    open_bug = "### BUG-901: Something\n- **Observed**: x\n- **Not fixed**: needs a decision\n"
+    items, problems = bi.parse_bugs(open_bug)
+    assert problems and "carries no metadata" in problems[0]
+
+
+def test_partially_fixed_is_not_treated_as_fixed() -> None:
+    """BUG-006 is 'PARTIALLY FIXED' and still open.
+
+    A rule keying on the word FIXED anywhere in the status would have filed it as done and hidden
+    it from the index, which is exactly the class of silent omission this index exists to prevent.
+    """
+    partial = (
+        "### BUG-902: Slow\n"
+        "- **Id:** BUG-902\n- **Category:** infra\n- **Gives:** 1 thing\n- **Priority:** P2\n"
+        "- **Status**: PARTIALLY FIXED — half of it.\n"
+    )
+    items, problems = bi.parse_bugs(partial)
+    assert not problems, problems
+    assert [it.ident for it in items] == ["BUG-902"]
+
+
+def test_a_bug_whose_declared_id_disagrees_with_its_heading_is_refused() -> None:
+    text = (
+        "### BUG-903: Something\n"
+        "- **Id:** BUG-999\n- **Category:** infra\n- **Gives:** x\n- **Priority:** P3\n"
+        "- **Not fixed**: no\n"
+    )
+    _items, problems = bi.parse_bugs(text)
+    assert problems and "they must match" in problems[0]

@@ -69,6 +69,12 @@ Tracked issues discovered during development and testing.
 ## Performance Issues
 
 ### BUG-006: Play mode takes 6-8 minutes per move
+- **Id:** BUG-006
+- **Category:** infra
+- **Gives:** interactive play at all. Every coached turn in the report card now costs ~2-5s, but
+  the PLAY path was last measured at ~480s per move and has not been re-measured since the UCI
+  migration, so the size of what remains is unknown.
+- **Priority:** P2
 - **Observed**: Full pipeline per move:
   - `evaluate_move`: ~290s (2 engine analyses + 1 LLM call)
   - `engine.play`: ~1s
@@ -406,6 +412,13 @@ surfaced one clear regression (BUG-016) and two issues worth tracking.*
   (no dependency on the engine's classification label).
 
 ### BUG-017: Ungrounded positional justifications persist (broader than BUG-013)
+- **Id:** BUG-017
+- **Category:** coaching
+- **Gives:** unknown, and that is the finding. This was called "the single most damaging problem"
+  on 2026-08-05, before the gating checks, the composed clause pipeline and the ownership,
+  relation, intent and confinement checks existed. Clean% now reads 89-100% across five games, so
+  the claim needs re-measuring before it is worked on. Re-measure first, then price it.
+- **Priority:** P2
 - **Observed**: The losing arm still invented ungrounded *positional* claims on
   eval-drop-0 moves — "opening lines for the bishop", "far superior to
   alternatives" (g1p12, g2p12) — distinct from the invented *move
@@ -557,6 +570,12 @@ was what settled it: the serializer's assumptions document the intended contract
   and it was wrong.
 
 ### BUG-021: `eval_drop_cp` reports mate scores as centipawns (OPEN, low priority)
+- **Id:** BUG-021
+- **Category:** instrumentation
+- **Gives:** zero coached turns today — the coach is forbidden from stating centipawn numbers, so
+  no student sees it. It becomes real the moment anything averages or plots eval drops, and
+  `metrics_history` now plots per-run numbers, so the day is closer than when this was filed.
+- **Priority:** P3
 - **Observed**: a move that allows mate yields `eval_drop_cp` of ~100046, since
   `eval_drop_cp = best_eval - (-mate_score)` and the mate score is ~99999.
 - **Impact**: cosmetic for now. The classification (`blunder`) is correct, our
@@ -567,6 +586,12 @@ was what settled it: the serializer's assumptions document the intended contract
   it needs a deliberate decision on how to express mate distance separately.
 
 ### BUG-022: `critical_moment` cannot see catastrophic alternatives (OPEN, by design?)
+- **Id:** BUG-022
+- **Category:** decision
+- **Gives:** nothing until the definition is settled, which is why it sits here rather than in a
+  queue. `critical_moment` gates nothing the student sees today; ledger row 52 measured gating
+  speech on it and rejected it. So this is a naming and semantics question, not a defect.
+- **Priority:** P3
 - **Observed**: in a position where the student's move loses to mate but the
   engine's top three moves are all roughly equal (evals 47 / 26 / -29),
   `critical_moment` is false, because it measures only the spread between the
