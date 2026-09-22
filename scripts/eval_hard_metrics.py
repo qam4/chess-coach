@@ -172,6 +172,93 @@ def _cause_squares(prompt: str) -> set[str] | None:
     return set(_SQUARE_STRICT.findall(" ".join(m.group(1).split())))
 
 
+#: The one cause class this measure applies to: OUR piece lost a defender. Matched on the
+#: composed frame, which is our own deterministic text, not the model's prose — the frame is
+#: emitted verbatim by `error_diagnosis` so its shape is fixed.
+#:
+#: Deliberately NOT applied to "their piece on X was attacked and undefended, and <move> does not
+#: take it". That is a missed capture, about the OPPONENT's piece, where "can the opponent attack
+#: this square" is a meaningless question. Asking it anyway was the first version of this check and
+#: it flagged five turns that were not defects.
+_CAUSE_OWN_PIECE = re.compile(
+    r"Before \S+ your (?:\w+) on ([a-h][1-8]) was defended; after it, it is not",
+    re.IGNORECASE,
+)
+
+
+def _cause_own_piece_square(prompt: str) -> str:
+    """The square of OUR piece that the composed cause says lost its defender; "" if none."""
+    m = _CAUSE_OWN_PIECE.search(prompt)
+    return m.group(1).lower() if m else ""
+
+
+def _square_is_contested(fen: str, student_san: str, square: str) -> bool:
+    """After the student's move, can the opponent attack ``square`` now or in one move?
+
+    Rules geometry only — `board.attackers` and legal move generation. No piece values, no
+    assessment of whether the capture would be good, so it stays on our side of the line with the
+    engine. Returns True on anything it cannot determine, so an unparseable position can never
+    manufacture a defect.
+    """
+    try:
+        board = chess.Board(fen)
+        move = board.parse_san(student_san)
+    except Exception:
+        return True
+    after = board.copy(stack=False)
+    after.push(move)
+    sq = chess.parse_square(square)
+    them = not board.turn
+    if after.attackers(them, sq):
+        return True
+    probe = after.copy(stack=False)
+    if probe.turn != them:
+        if probe.is_check():
+            return True  # cannot null-move out of check; do not claim the square is safe
+        probe.push(chess.Move.null())
+    for cand in probe.legal_moves:
+        nxt = probe.copy(stack=False)
+        nxt.push(cand)
+        if nxt.attackers(them, sq):
+            return True
+    return False
+
+
+def _threat_materialises(turns: list[dict[str, object]], turn: dict[str, object], square: str) -> bool:
+    """Did the opponent ever attack ``square`` later in the game as it was actually played?
+
+    Deliberately NOT the detector's own test. `_square_is_contested` asks what the opponent could do
+    next move, which is the predicate the detector applies, so a measure built on it cannot
+    contradict the detector. This reads the continuation instead: the positions that really followed.
+
+    Returns False when there is no continuation, which is why curated puzzle positions are filtered
+    out by the caller rather than scored here.
+    """
+    try:
+        us = chess.Board(turn["fen_before"]).turn
+        sq = chess.parse_square(square)
+    except Exception:
+        return False
+    for later in sorted(turns, key=lambda x: x.get("ply") or 0):
+        ply = later.get("ply")
+        if not isinstance(ply, int) or ply <= turn["ply"] or ply >= 1000:
+            continue
+        try:
+            board = chess.Board(later.get("fen_before") or "")
+        except Exception:
+            continue
+        # Stop once our piece is no longer there. `attackers` is about the SQUARE, so without this
+        # a pawn that got traded off and a square attacked twenty plies later would score as the
+        # warning coming true. A first version did exactly that and read 75% where a scan that
+        # stopped at the capture read 69%.
+        piece = board.piece_at(sq)
+        if piece is None or piece.color != us:
+            return False
+        if board.attackers(not us, sq):
+            return True
+    return False
+
+
 def _voices_the_cause(text: str, cause_sq: set[str]) -> bool:
     """Does the turn name a square the composed cause is about?
 
@@ -210,6 +297,9 @@ class Metrics:
     cause_given: int = 0
     cause_anchorable: int = 0
     cause_voiced: int = 0
+    cause_own_piece: int = 0
+    cause_irrelevant: int = 0
+    cause_materialised: int = 0
     mind_reading: int = 0
     magnitude: int = 0
     words: int = 0
@@ -242,6 +332,56 @@ class Metrics:
         rather than expecting gains.
         """
         return 0.0 if not self.cause_anchorable else 100.0 * self.cause_voiced / self.cause_anchorable
+
+    @property
+    def cause_irrelevant_rate(self) -> float | None:
+        """Of the causes about OUR OWN piece losing a defender, how many name a square the
+        opponent cannot attack. Lower is better; ``None`` when no such cause was composed.
+
+        A cause of the form "before Kd1 your pawn on f2 was defended; after it, it is not" passes
+        every fidelity check, because it is TRUE. `error_diagnosis` diffs DEFENDER sets and never
+        asks whether anything attacks the square. Measured on v54: 16 such causes, and NONE of the
+        16 named a square that was actually attacked after the move — four named one the opponent
+        could not reach in a single move, including on the move that delivered checkmate.
+
+        So this counts the thing no other instrument here can see: coaching that is true and
+        useless. A student who follows it defends squares nothing attacks.
+
+        Relevance is judged generously on purpose — attacked now, OR attackable after any one
+        enemy move. A stricter test would flag a piece the opponent is a tempo away from winning,
+        which is worth warning about. The aim is to catch the cases with no threat at all.
+        """
+        if not self.cause_own_piece:
+            return None
+        return 100.0 * self.cause_irrelevant / self.cause_own_piece
+
+    @property
+    def cause_materialised_rate(self) -> float | None:
+        """Of the "you stopped defending X" warnings, how many named a square the opponent went on
+        to attack IN THIS GAME. Higher is better; ``None`` when no such cause was composed.
+
+        This is the only counter here that does not share a predicate with the thing it judges.
+        `cause_irrelevant_rate` asks "can the opponent attack this square now or in one move",
+        which is exactly the test the detector applies — so when the detector was fixed, that rate
+        went to zero by construction and demonstrated nothing. This one reads the CONTINUATION,
+        which the detector never sees, so it can come out against us.
+
+        Measured when the relevance gate went in: 11 of 16 (69%) before, 10 of 12 (83%) after. The
+        concrete fact behind those percentages, which is worth more than they are on 12 samples:
+        the gate dropped four warnings, three about threats that never arrived and one that arrived
+        28 plies later.
+
+        Curated puzzle positions are excluded — they have no continuation, so a cause on one can
+        never materialise, and counting them would push the rate down for a reason that has nothing
+        to do with the detector.
+
+        Known limit: the continuation is the line the opponent actually chose, not the best one.
+        A square nobody attacked may still have been a real weakness they failed to exploit. So a
+        low rate is a reason to look, not proof the warning was wrong.
+        """
+        if not self.cause_own_piece:
+            return None
+        return 100.0 * self.cause_materialised / self.cause_own_piece
 
     @property
     def words_per_turn(self) -> float:
@@ -307,6 +447,17 @@ def measure(path: Path) -> Metrics:
                 m.cause_anchorable += 1
                 if _voices_the_cause(text, cause_sq):
                     m.cause_voiced += 1
+        # Is the cause about something the opponent can actually do anything about? See
+        # `cause_irrelevant_rate`. Separate from voicing: a cause can be composed, faithfully
+        # voiced, and still be about a piece nobody is attacking.
+        own = _cause_own_piece_square(t.get("prompt") or "")
+        if own and fen and t["ply"] < 1000:
+            m.cause_own_piece += 1
+            if not _square_is_contested(fen, t.get("student_move_san") or "", own):
+                m.cause_irrelevant += 1
+            # And the check that can disagree with the detector: did the threat arrive?
+            if _threat_materialises(turns, t, own):
+                m.cause_materialised += 1
         if _mind_reads(low):
             m.mind_reading += 1
         if any(p in low for p in MAGNITUDE):

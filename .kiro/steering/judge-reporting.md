@@ -45,6 +45,19 @@ measure that reads flat across the whole history, or saturates at 0% or 100%, is
 not measuring anything. Both have happened, and both were caught by checking the
 measure against the recorded arc before trusting it.
 
+**The measure must not share its predicate with the fix.** If the count is computed
+from the same test the change applies, it cannot disagree with the change and its
+movement is arithmetic, not evidence. This has happened: a detector was gated on
+"can the opponent attack this square now or in one move", the metric asked the same
+question, and the count went to zero the moment the gate went in — demonstrating
+only that the code ran. Find at least one quantity that could come out against you.
+Game history, a later position, the actual continuation, an independently derived
+number. Run it BEFORE the change, not after someone asks.
+
+**Say which of your checks could have failed.** When reporting, separate the counter
+that had to move from the one that might not have. A reader cannot tell the
+difference and will otherwise credit both.
+
 **State the coverage before spending the afternoon.** How many coached turns can
 this change touch at all? Say the number up front, and say it when it is small.
 
