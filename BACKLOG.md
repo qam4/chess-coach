@@ -46,7 +46,6 @@ item cannot be added without saying what it gives.
 | P1 | coaching | The error cause names pieces nobody is attacking (2026-09-21, architecture review D2) | 16 of 81 spoken turns (20%). Measured over all five v54 games: **0 of those 16 name a square that is actually attacked** after the student's move, and 4 name a square the opponent cannot reach in one move. |
 | P1 | coaching | The coach has no memory across turns (2026-09-21, measured on v54) | 24 of 183 turns. 17 of 81 spoken turns (21%) re-recommend a move the coach already recommended earlier in the same game, at full length, with no sign it knows; and 7 turns are silent at the moment the student finally plays the move the coach asked for. |
 | P1 | engine | the engine's numbers are not the truth (2026-08-20) | the ~18 turns per game where the coach speaks would be about moves that are actually bad. Today 7 of those 18 criticise a move the reference scores good or nearly good, and best-move agreement is 4 of 18. No prompt change reaches this. |
-| P2 | coaching | A quiet opponent reply bypasses the punishment gate (2026-09-21, architecture review D3) | 7 of 47 turns that render a reply (15%). Measured on v54: the rendered reply is neither a capture nor a check, and `_reply_punishes` returns False for every one of them. |
 | P2 | coaching | Our clause names the smallest thing the move wins (2026-09-21, architecture review D1) | 55 turns of 4672 (1.2%), firing in 11 of 119 stored runs. Severe where it lands and rare overall — recorded at P2 for that reason, not P1. |
 | P2 | coaching | The closing lesson names a theme the turn never taught (2026-09-21, v54 reviews) | ~9 of 81 turns stop closing on an irrelevant theme (measured on v53; the nine plies are listed below). Deterministic, so the fix is measurable despite the model's churn. |
 | P2 | coaching | we hand the model a bare category LABEL and it restates it (2026-09-18, ledger 146) | 11 of 81 turns (9 of 32 in the endgame) stop offering a category name as the reason a move is better. Either option below touches all of them. |
@@ -54,6 +53,7 @@ item cannot be added without saying what it gives.
 | P2 | decision | Structural options, blocked on the engine answer above | would close the 4-of-18 best-move agreement gap directly rather than waiting on Blunder's NNUE work. Costs a runtime dependency, which is the owner's call. |
 | P2 | instrumentation | The judge is shown a metric we retired | removes a wrong number from the input to every future review. 3 of 5 v54 reviews quote it, and one of them calls it "the number to trust". |
 | P2 | instrumentation | Re-run the breadth sweep against the reference engine | tells us whether the 20-of-44 engine disagreement is one game or the general case. That decides whether the P1 engine item above is as large as it looks. |
+| P3 | coaching | A quiet opponent reply bypasses the punishment gate (2026-09-21, architecture review D3) | **nothing measurable. Do not build this without new evidence.** The code inconsistency is real — `_reply_punishes` is skipped for an engine-supplied refutation — but every consequence the review attributed to it failed to reproduce. Four measurements below. |
 | P3 | instrumentation | Guard tolerances from the measured noise floor, not one 3pp rule | zero coached turns. Stops `--guard` false-alarming on every run. |
 
 <!-- END BACKLOG INDEX -->
@@ -129,9 +129,34 @@ so is not a defect; the corpus count is far larger than the two it could see.
 ## OPEN — A quiet opponent reply bypasses the punishment gate (2026-09-21, architecture review D3)
 
 - **Category:** coaching
-- **Gives:** 7 of 47 turns that render a reply (15%). Measured on v54: the rendered reply is
-  neither a capture nor a check, and `_reply_punishes` returns False for every one of them.
-- **Priority:** P2
+- **Gives:** **nothing measurable. Do not build this without new evidence.** The code
+  inconsistency is real — `_reply_punishes` is skipped for an engine-supplied refutation — but
+  every consequence the review attributed to it failed to reproduce. Four measurements below.
+- **Priority:** P3
+
+**Measured before building, and the measurements said no.** Kept at P3 rather than closed because
+the bypass is a genuine inconsistency that will confuse the next reader of `with_refutation`.
+
+The review claimed the reply slot is filled with a non-punishing move and an effect is then
+demanded of it that the supplied line does not carry. Checked on v55, five games:
+
+| claim | measured |
+|---|---|
+| the gate is bypassed | **true.** `_reply_punishes` returns False for 7 of 47 rendered replies, and they render anyway |
+| "an effect is demanded that the line does not carry" | **1 of 47, not 7.** 46 reply lines DO carry a clause. Only ply 19's bare `Kf8` matches |
+| quiet replies are non-events | **no separation.** Student's piece count falls within 6 plies after 43% of quiet replies against 54% of punishing ones, n=7 against n=35 — and the loss need not be caused by the reply at all |
+| the clauses on those replies are vacuous | **0 of 24.** Every "defending their X on `sq`" clause names a square we really do attack after the reply |
+
+So the fix on offer would drop the reply on 7 turns for no measured gain, against row 125's
+finding that supplying the reply WON a pairwise 28-20. That is a trade with a known cost and an
+unmeasured benefit.
+
+What would reopen it: a judge complaint about a specific turn where a quiet reply demonstrably
+buried the lesson, or a pairwise run showing turns with quiet replies lose. Not another argument
+from the mechanism.
+
+If the bypass is ever fixed for tidiness, the number to watch is the count of turns where a
+capture-or-check reply EXISTS and none is rendered — it must stay at zero.
 
 Row 124 built `_reply_punishes` precisely to stop the coach leading with a non-event, after a
 blind judge marked down five turns for it. The gate works — and it is only reached half the time.
