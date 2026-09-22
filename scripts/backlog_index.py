@@ -217,8 +217,18 @@ def replace_block(text: str, block: str) -> str:
     return text[:start] + block + text[end + len(END) :]
 
 
-def next_free_id(items: list[Item]) -> str:
-    used = {int(it.ident.split("-")[1]) for it in items if it.ident.startswith("B-")}
+def next_free_id() -> str:
+    """The lowest unused B-nnn, scanning the whole FILE rather than the open items.
+
+    An id is a permanent handle and must never be reused, so a closed item's id is still taken. A
+    first version derived this from the parsed OPEN items only, and the moment B-007 was closed it
+    offered B-007 again — which would have made every citation of the closed item resolve to a
+    different one.
+    """
+    text = BACKLOG.read_text(encoding="utf-8")
+    if BUGS.exists():
+        text += BUGS.read_text(encoding="utf-8")
+    used = {int(m) for m in re.findall(r"\*\*Id:\*\*\s*B-(\d{3})", text)}
     n = 1
     while n in used:
         n += 1
@@ -255,7 +265,7 @@ def main() -> int:
     print(f"wrote {BACKLOG.name} index ({len(items)} open actions)")
     for p in PRIORITIES:
         print(f"  {p}: {sum(1 for it in items if it.priority == p)}")
-    print(f"  next free backlog id: {next_free_id(items)}")
+    print(f"  next free backlog id: {next_free_id()}")
     return 0
 
 

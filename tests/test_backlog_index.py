@@ -137,3 +137,15 @@ def test_a_bug_whose_declared_id_disagrees_with_its_heading_is_refused() -> None
     )
     _items, problems = bi.parse_bugs(text)
     assert problems and "they must match" in problems[0]
+
+
+def test_a_closed_items_id_is_not_offered_for_reuse() -> None:
+    """An id is a permanent handle. A closed item still owns its number.
+
+    The first version of `next_free_id` derived the answer from the OPEN items, so the moment B-007
+    was closed it offered B-007 again — and every citation of the closed item would then have
+    resolved to a different one.
+    """
+    suggested = bi.next_free_id()
+    text = (bi.BACKLOG.read_text(encoding="utf-8")) + (bi.BUGS.read_text(encoding="utf-8") if bi.BUGS.exists() else "")
+    assert f"**Id:** {suggested}" not in text, f"{suggested} is already used somewhere in the files"
