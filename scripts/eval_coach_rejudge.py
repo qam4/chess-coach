@@ -38,6 +38,7 @@ from chess_coach.eval.coach_review import (  # noqa: E402
     ReviewStats,
     ReviewTurn,
     build_coach_review_prompt,
+    resolve_judge_agent,
 )
 from chess_coach.llm import create_provider  # noqa: E402
 
@@ -75,6 +76,7 @@ def main() -> None:
     p.add_argument("--rubric", default="v2", help=f"comma-separated, from {RUBRIC_VERSIONS}")
     p.add_argument("--out", default="output/coach_rejudge")
     p.add_argument("--judge-model", default="claude-opus-5")
+    p.add_argument("--judge-agent", default="judge-opus5")
     p.add_argument("--judge-command", default=None, help="defaults to kiro-cli with --judge-model")
     p.add_argument("--judge-base-url", default="http://localhost:11434")
     args = p.parse_args()
@@ -88,7 +90,13 @@ def main() -> None:
     turns, stats = _load(Path(args.transcript))
     print(f"Loaded {len(turns)} coached turns from {args.transcript}")
 
-    command = args.judge_command or f"kiro-cli chat --no-interactive --model {args.judge_model}"
+    # Via --agent, not --model: `--model` is a no-op in kiro-cli 2.22.1 and every run recorded as
+    # claude-opus-5 was served by the `auto` default. Third caller of this pattern; the other two
+    # were fixed on 2026-09-22 and this one was missed.
+    if args.judge_command is None:
+        resolved = resolve_judge_agent(args.judge_agent, args.judge_model)
+        print(f"judge: agent {args.judge_agent} pins {resolved}")
+    command = args.judge_command or f"kiro-cli chat --no-interactive --agent {args.judge_agent}"
     judge = create_provider(
         "cli",
         model=args.judge_model,
