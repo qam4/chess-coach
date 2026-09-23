@@ -39,13 +39,87 @@ Every piece of coaching should be a *bridge* with two ends:
    development, king safety, piece protection, piece coordination,
    a tactic, an endgame technique). The words the student may already
    know in the abstract.
-2. **A concrete, sound way to do it *here*** — the specific move or
-   plan in *this* position, at the student's level.
+2. **A concrete, sound way to do it *here*** — the specific thing on
+   *this* board that the principle points at, at the student's level.
 
 The gap the student feels is the bridge between these two. Coaching is
 that bridge. Pure analysis ("Nf3 is best, +0.4") is only the second
 end; a lecture on principles is only the first. Neither alone is
 teaching.
+
+### The cue is coaching. The move is a hint.
+
+**Settled 2026-09-22. This section exists because the document
+contradicted itself for months and the build followed the wrong half.**
+
+End 2 is *concrete*, and concrete is not the same as *the move*. There
+are three levels, and only the middle one is teaching:
+
+| | example | verdict |
+|---|---|---|
+| principle | "protect your undefended pieces" | too abstract to act on |
+| **cue** | **"your pawn on f2 is attacked twice and defended once — count before you commit"** | **this is the coaching** |
+| move | "play Nxc7+" | this is the answer |
+
+**The coaching names the cue and not the move. A named move appears only
+behind the hint, revealed when the student asks for it.**
+
+#### What was contradictory
+
+This file said end 2 was "the specific move or plan", and it also said
+we are **not** the thing that "reports evals and best moves — Lichess
+and Stockfish already do that". Both cannot hold. `grounded-move-advice`
+faithfully quoted the first, and `prompts.py` then hardened "or plan"
+into "name the stronger move" on two severity tiers, which nobody
+decided. Nine judge runs graded the result.
+
+#### Why the cue, and not silence
+
+The owner's first instinct was to withhold the square too, on the
+grounds that naming f2 still tells the student where to look. The
+external standard disagrees, and this file says the external standard
+wins (see "How we know it's working"). One of the eight categories a
+frontier model derived when asked, blind, what makes coaching good in
+this medium is **Attention-First Order**:
+
+> Does it point the student's eyes at the cue before delivering the
+> conclusion (and then still deliver it)? … it's the only way to get any
+> generative work out of a medium with no dialogue. "Look at f2 — count
+> attackers and defenders" gives them a two-second chance to see it
+> themselves; the answer arrives in the next clause regardless, so
+> nothing is lost if they don't.
+
+So the cue is the mechanism, not a leak to be minimised. Withholding it
+leaves a maxim, and the same derivation files "position-describing plus a
+best-move announcement" as the *useless* product and an on-tap hint
+stream as the *harmful* one. Both of those are about the move.
+`docs/audit/blind-derivation-a.md` and `-b.md` are the source.
+
+#### Where the coach still may not name the move
+
+The feedback is retrospective — it comments on a move already played —
+so a post-mortem naming a move is not in itself a spoiler. The problem is
+persistence: measured on five games, **on 53 of the 73 turns where the
+coach names a better move, that move is still legal on the student's next
+turn.** Telling them is then prospective advice however it is phrased,
+and `Nxc7+` was handed over on four consecutive turns that way.
+
+Hence the rule is about the move, not about timing. If the move has
+become unplayable the post-mortem may name it; while it is still
+available it belongs behind the hint.
+
+#### The hard case, recorded rather than hidden
+
+On captures the cue *is* the move: only one legal move reaches c7, so
+"take the free pawn on c7" and "play Nxc7+" are the same sentence. That
+is 30 of those 53 turns. There the cue is the class rather than the
+square — "there is material available for nothing here, look for free
+captures before anything else" — and the move is one click away. It is
+the weakest part of this policy and the place to look first if teaching
+gets worse.
+
+This is a product decision, which is why the owner makes it even though
+this file puts *chess* quality outside their remit.
 
 ## How we ground it
 

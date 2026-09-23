@@ -3,6 +3,61 @@
 Grounded move advice — the coach may name concrete moves, but only
 engine-confirmed sound ones, and an objective checker verifies the output.
 
+> ## AMENDED 2026-09-22 — WHERE a named move may appear
+>
+> Source of truth: `VISION.md`, "The cue is coaching. The move is a hint."
+>
+> **The coaching text names the cue — a square, a piece, a fact — and not
+> the move. A named move appears only behind the hint, on request.**
+>
+> This spec is faithful to the VISION wording of its time, and that wording
+> was self-contradictory. Nothing below says the coaching text *must* name a
+> move: Requirement 3.1 constrains *which* moves may be named, and 3.2
+> explicitly permits plan-level advice instead. The implementation in
+> `prompts.py` hardened it into "name the stronger move" on two severity
+> tiers anyway, and nine judge runs graded that.
+>
+> **What still stands, unchanged:** Requirements 1, 2, 4, 5, 6, 7, 8. The
+> widened candidate menu, the soundness tagging, the theme pairing, the
+> fidelity checker and its `illegal_move` / `unsound_move` categories are all
+> still needed. They now guard the move shown in the *hint* rather than one
+> asserted in the prose — the same job on the same data.
+>
+> **What is re-scoped:** Requirement 3.1's "when it names a concrete move"
+> now applies to the hint. The prose may not name one at all while the move
+> remains playable.
+>
+> Measured before the change, on five games: the coach names a better move on
+> 73 turns, and on **53 of those the move is still legal on the student's next
+> turn** — so naming it is prospective advice, not a post-mortem. On 30 of the
+> 53 the cue and the move are the same sentence, because only one legal move
+> reaches the square; `VISION.md` records that as the weak point of the policy.
+>
+> Not rewritten in place: the acceptance criteria below shipped and were
+> tested against. This note is the amendment.
+
+> **AMENDED 2026-09-22 — where a named move may APPEAR.** See
+> `VISION.md`, "The move goes behind the hint, not in the coaching".
+>
+> This spec is faithful to the VISION wording of its time, and that
+> wording was self-contradictory. Requirement 3 below constrains *which*
+> moves may be named (engine-confirmed sound ones) and explicitly permits
+> plan-level advice instead. It does not say the coaching text must name a
+> move — but the prompt implementation hardened it into exactly that on
+> two severity tiers, and nine judge runs graded against the result.
+>
+> The ruling: **the coaching text names no move. A named move appears only
+> behind the hint, on the student's request.**
+>
+> What that changes here: nothing in Requirements 1, 2, 4-8. The candidate
+> menu, the soundness tagging, and the `illegal_move` / `unsound_move`
+> checks are all still needed — they now guard the move shown in the hint
+> instead of one asserted in the prose, which is the same job. Requirement
+> 3.1's "when it names a concrete move" is now scoped to the hint.
+>
+> Not rewritten in place, because the acceptance criteria below shipped and
+> were tested against. This note is the amendment.
+
 ## Introduction
 
 The coach's job (VISION) is a **bridge**: a named theme (*what to focus

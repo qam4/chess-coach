@@ -561,17 +561,31 @@ def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
 # The teaching standard the reviewer grades against — a compact restatement of
 # the VISION "bridge" so the review is anchored to the product's own north star,
 # not the reviewer's ad-hoc taste.
+#: Kept in step with VISION.md by hand. Amended 2026-09-22 when the owner settled a contradiction
+#: that had been in the north star for months: end 2 used to read "the specific move or plan", while
+#: the same document said we are not the thing that reports best moves. Every review before this
+#: date graded against the old reading, so their scores are not comparable with later ones.
 _BRIDGE_STANDARD = """\
 The product is a TEACHER for a player trying to improve — not a position
 analyst. Every piece of coaching should be a BRIDGE with two ends:
   1. WHAT TO FOCUS ON — a named principle/theme the student may know in the
      abstract (center control, development, king safety, a tactic, an endgame
      technique).
-  2. A CONCRETE, SOUND WAY TO DO IT HERE — the specific move or plan in THIS
-     position, at the student's level.
-Pure analysis ("Nf3 is best, +0.4") is only end 2; a principle lecture is only
-end 1. Good coaching connects both, grounded in the engine truth shown, at the
-student's level, warm but concise.\
+  2. THE CUE ON THIS BOARD — the specific square, piece or fact that the
+     principle points at here, at the student's level. "Your pawn on f2 is
+     attacked twice and defended once" is end 2. Naming the MOVE is not:
+     the move belongs behind a hint the student can ask for, and a coach
+     that announces the engine's best move every turn is the thing Lichess
+     already does for free.
+Pure analysis ("Nf3 is best, +0.4") is only end 2 and not even the right half
+of it; a principle lecture is only end 1. Good coaching connects both,
+grounded in the engine truth shown, at the student's level, warm but concise.
+
+DO NOT mark the coach down for failing to name the better move, and DO NOT
+recommend that it name one. That is a settled product decision, not an
+oversight. DO mark it down for naming a move that is still playable, for
+withholding the cue and leaving only a maxim, or for a cue the board
+contradicts.\
 """
 
 _REVIEW_TASK = """\
