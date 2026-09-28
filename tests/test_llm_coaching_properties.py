@@ -508,7 +508,7 @@ def test_move_prompt_contains_instructions_and_data(report: ComparisonReport, le
         # under every conversion tried, so the distinction they used to draw ("a small
         # inaccuracy" vs "a serious mistake") sat inside the noise. They still differ
         # in what they lead with, and in word limit.
-        assert "there was a stronger move here" in prompt_lower
+        assert "there was something better available here" in prompt_lower
     else:
         assert "lead with what went wrong" in prompt_lower
 

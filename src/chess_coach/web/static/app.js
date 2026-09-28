@@ -358,13 +358,23 @@
           coachingText.innerHTML = engineHeader + renderMarkdown(data.coaching_text || '');
         }
 
-        // Show hint button if hint available
+        // Two different moves can sit behind this button, and they are not the same
+        // thing. `better_move_san` is retrospective — the alternative to the move just
+        // played, which the coaching used to hand over in its prose (B-012). `hint_san`
+        // is prospective — what to play next. The retrospective one goes first because it
+        // answers the feedback shown directly above it.
+        var hintParts = [];
+        if (data.better_move_san) {
+          hintParts.push('Better than your move was: ' + data.better_move_san);
+        }
         if (data.hint_san) {
-          var hintContent = 'Consider playing: ' + data.hint_san;
+          hintParts.push('Consider playing: ' + data.hint_san);
           if (data.hint_alternatives) {
-            hintContent += '\n' + data.hint_alternatives;
+            hintParts.push(data.hint_alternatives);
           }
-          hintText.textContent = hintContent;
+        }
+        if (hintParts.length) {
+          hintText.textContent = hintParts.join('\n');
           hintText.style.whiteSpace = 'pre-line';
           hintText.hidden = true;
           hintBtn.textContent = '💡 Show hint';

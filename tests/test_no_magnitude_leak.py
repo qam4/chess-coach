@@ -233,13 +233,138 @@ def test_equal_tier_withholds_the_engine_move_itself() -> None:
     template. The tier instruction then read "Do NOT offer an alternative — there
     isn't one" three lines below a named alternative, which is a negative constraint
     over data we supplied — the one shape this model reliably ignores.
+
+    What this test still owns after B-012 is the TIER: `equal` says the move was as good as
+    anything else, which is a different claim from "there was something better and it is
+    behind the hint". The withhold itself is now universal and is asserted by
+    `test_the_prompt_never_names_the_engines_move_on_a_comparison_tier`.
     """
     equal = _comparison(10)
     prompt = build_rich_move_evaluation_prompt(equal)
     assert "as good as anything else here" in prompt
     assert "Best move:" not in prompt
     assert "Nd5" not in prompt, "the withheld alternative was named anyway"
-    # And above the band, the comparison is offered again.
+    # Above the band the framing changes to a comparison — but still no move token. 80cp is
+    # past the dubious band with the halved thresholds, so this is the `serious` tier; the
+    # cue instruction is what both comparison tiers share.
     above = build_rich_move_evaluation_prompt(_comparison(80))
-    assert "Best move:" in above
-    assert "Nd5" in above
+    assert "as good as anything else here" not in above
+    assert "Lead with what went wrong" in above
+    assert "Do NOT name a move" in above
+    assert "Best move:" not in above
+    assert "Nd5" not in above
+
+
+def test_the_prompt_never_names_the_engines_move_on_a_comparison_tier(repeatable_lesson_comparison) -> None:  # type: ignore[no-untyped-def]
+    """B-012: the coaching names the CUE; the move goes behind the hint.
+
+    VISION, settled 2026-09-22: "The coaching names the cue and not the move. A named
+    move appears only behind the hint." Measured across 145 stored transcripts, the coach
+    names the engine's best move on 2261 spoken turns, and on 1407 of them the move is
+    still legal when the student moves again — so it is prospective advice however it is
+    phrased.
+
+    This asserts on the PROMPT rather than on the prose, because an instruction not to
+    mention something we supplied has never worked on this model while withholding it
+    has. It enumerates every offending line, because the sibling test above records a
+    withhold that was reported complete while two other renderings still carried the
+    move.
+    """
+    from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP
+
+    # TWO fixtures on purpose. `_comparison` exercises the `Best move:` line and the
+    # top-lines section but produces no composed achievement, so on its own it would let a
+    # withhold look complete while "The best move (Bc3)" and "Bc3 was stronger here" still
+    # carried the token — which is precisely how row 28 came to be retracted by row 64.
+    cases: list[tuple[str, object, tuple[str, ...]]] = [
+        ("synthetic", _comparison, ("Nd5", "c3d5")),
+        ("repeatable-lesson", repeatable_lesson_comparison, ("Bc3", "d4c3")),
+    ]
+    # Collected across every case rather than asserted per case, so the failure lists all
+    # the renderings at once instead of stopping at the first and hiding the rest.
+    leaks: list[str] = []
+    for name, factory, tokens in cases:
+        for drop in (SOUND_MAX_DROP_CP + 1, 80, _DROP_CP):
+            prompt = build_rich_move_evaluation_prompt(factory(drop))  # type: ignore[operator]
+            leaks += [
+                f"{name} drop={drop}cp: {ln.strip()}" for ln in prompt.splitlines() if any(tok in ln for tok in tokens)
+            ]
+    assert not leaks, "the engine's move reaches the prompt in these places:\n" + "\n".join(
+        f"    {leak}" for leak in sorted(set(leaks))
+    )
+
+
+def test_the_better_move_is_available_for_the_hint_on_comparison_tiers(repeatable_lesson_comparison) -> None:  # type: ignore[no-untyped-def]
+    """B-012: the move has to land somewhere before it leaves the prose.
+
+    The existing `hint_uci` in `server.py` is the best move to play NEXT, from the PV. The
+    move the coaching used to name is retrospective — the better alternative to the move
+    just played — and it had no slot. This is that slot, and it deliberately reuses the
+    prompt's own tier predicate so the UI cannot offer an alternative on a turn the coach
+    is treating as "your move was fine".
+    """
+    from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP
+    from chess_coach.prompts import hint_better_move_san
+
+    # Comparison tiers: the better move is available, in SAN, for the hint.
+    for drop in (SOUND_MAX_DROP_CP + 1, 80, _DROP_CP):
+        assert hint_better_move_san(_comparison(drop)) == "Nd5", drop
+        assert hint_better_move_san(repeatable_lesson_comparison(drop)) == "Bc3", drop
+
+    # No-comparison tiers: nothing to hint, because no alternative is being claimed.
+    assert hint_better_move_san(_comparison(10)) == ""
+
+    # And when the student played the engine's move there is no alternative either.
+    import dataclasses
+
+    played_best = dataclasses.replace(_comparison(_DROP_CP), user_move="c3d5")
+    assert hint_better_move_san(played_best) == ""
+
+
+def test_no_student_facing_surface_names_the_engines_move(repeatable_lesson_comparison) -> None:  # type: ignore[no-untyped-def]
+    """B-012 on the surfaces the student reads, not just the prompt.
+
+    The prompt test above is necessary and not sufficient. When the fidelity gate fires the
+    student gets `compose_safe_move_feedback`, and with the LLM off entirely they get
+    `generate_move_coaching` — both of which said "Nd5 was stronger here." A withhold that
+    covers the prompt and leaves these two is the same shape as ledger row 28, recorded as
+    complete and retracted by row 64 when two other renderings turned out to carry the move.
+    """
+    from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP
+    from chess_coach.coaching_templates import generate_move_coaching
+    from chess_coach.prompts import compose_safe_move_feedback
+
+    cases = [("synthetic", _comparison, ("Nd5",)), ("repeatable-lesson", repeatable_lesson_comparison, ("Bc3",))]
+    leaks: list[str] = []
+    for name, factory, tokens in cases:
+        for drop in (SOUND_MAX_DROP_CP + 1, 80, _DROP_CP):
+            report = factory(drop)  # type: ignore[operator]
+            for surface, text in (
+                ("compose_safe_move_feedback", compose_safe_move_feedback(report)),
+                ("generate_move_coaching", generate_move_coaching(report)),
+            ):
+                leaks += [
+                    f"{name} drop={drop}cp {surface}: {ln.strip()}"
+                    for ln in text.splitlines()
+                    if any(tok in ln for tok in tokens)
+                ]
+    assert not leaks, "the engine's move reaches the student here:\n" + "\n".join(
+        f"    {leak}" for leak in sorted(set(leaks))
+    )
+
+
+def test_no_instruction_tries_to_arbitrate_between_two_composed_facts(repeatable_lesson_comparison) -> None:  # type: ignore[no-untyped-def]
+    """The reverted v59 lever, pinned so it is not rebuilt.
+
+    Withholding the move made the model substitute a different composed fact for the cue
+    (cue-voiced 95.9% -> 93.2%, twice the isolated-pawn guidance entry). An instruction
+    binding the cue as the subject was the obvious answer and it measured as nothing:
+    93.2% -> 93.2%, with `off_menu` 6 -> 10. Both facts are ours, so prompt text cannot
+    arbitrate between them — the fix is in selection, which is B-013.
+    """
+    from chess_coach.coaching_phrases import SOUND_MAX_DROP_CP
+
+    for drop in (SOUND_MAX_DROP_CP + 1, 80, _DROP_CP):
+        prompt = build_rich_move_evaluation_prompt(repeatable_lesson_comparison(drop))
+        assert "THE SUBJECT OF THIS TURN" not in prompt, drop
+        assert "for the CLOSING takeaway only" not in prompt, drop

@@ -249,7 +249,9 @@ class TestMoveEvaluationUsesSan:
         report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6")
         prompt = build_rich_move_evaluation_prompt(report, "beginner")
         assert "Ke7" in prompt  # student's move, named
-        assert "Nc6" in prompt  # best move, named
+        # The ENGINE's move is not named at all (B-012) — it reaches the student through the
+        # hint. What survives here is SAN for the move the student actually played.
+        assert "Nc6" not in prompt
         assert "e8e7" not in prompt  # raw UCI gone
         assert "b8c6" not in prompt
 
@@ -270,10 +272,11 @@ class TestPlayedBestMove:
         assert "there is no better move here" in prompt
         assert 'Do NOT suggest a different or "better" move' in prompt
         assert "No motivational sign-off" in prompt  # severity/verbosity fix (lever 3)
-        # Lever 9, v36 form: the supplied clause is the ONLY reason the model may
-        # give. The reference is a description rather than a quoted label, because the
-        # model copied every label it was given (echoes 0 -> 6 -> 8 across 3 runs).
-        assert "is the ONLY reason you may give" in prompt
+        # Lever 9, v36 form: the supplied clause is the ONLY thing the model may claim. The
+        # reference is a description rather than a quoted label, because the model copied
+        # every label it was given (echoes 0 -> 6 -> 8 across 3 runs). The wording moved from
+        # "the ONLY reason you may give" to the cue framing with B-012.
+        assert "is the ONLY description you may give" in prompt
         # Not the mistake-tier framing.
         assert "serious mistake" not in prompt
         assert "slightly missed the mark" not in prompt
@@ -291,13 +294,16 @@ class TestPlayedBestMove:
         assert "serious mistake" not in prompt
 
     def test_inaccuracy_uses_brief_redirect(self) -> None:
-        # drop in (SOUND, DUBIOUS] -> inaccuracy tier: a brief redirect that names a
-        # stronger move WITHOUT grading the one played. It used to open "slightly
-        # missed the mark"; the band separating this tier from `serious` is narrower
-        # than the measured error, so neither tier states a size any more.
+        # drop in (SOUND, DUBIOUS] -> inaccuracy tier: a brief redirect pointing at the CUE,
+        # WITHOUT grading the move played. It used to open "slightly missed the mark"; the
+        # band separating this tier from `serious` is narrower than the measured error, so
+        # neither tier states a size any more. And with B-012 it redirects to the cue rather
+        # than to a named move.
         report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=SOUND_MAX_DROP_CP + 1)
         prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-        assert "There was a stronger move here" in prompt
+        assert "There was something better available here" in prompt
+        assert "point at the CUE" in prompt
+        assert "Do NOT name a move" in prompt
         assert "BRIEF redirect" in prompt
         assert "sound, reasonable move" not in prompt
         assert "Do NOT grade the move" in prompt
@@ -550,9 +556,11 @@ def test_king_safety_label_dropped_in_the_endgame() -> None:
     # And with no clause to voice, the model is told it does not know why the move is
     # better — a dangling reference, or a redirect to the raw facts, is an invitation to
     # invent what it would have said. That redirect is what v36 ply 38 walked through.
-    assert "is the ONLY reason you may give" not in prompt
+    assert "is the ONLY description you may give" not in prompt
     assert "the position facts above" not in prompt
-    assert "Name the move and stop there" in prompt
+    # B-012 changed the withheld-case wording: there is no move to name, so it says not to
+    # claim what was available and to lead with the cause instead.
+    assert "Do NOT say what was available" in prompt
     # The only surviving mention is the instruction telling it NOT to close on
     # king safety; nothing asserts king safety as a fact about this position.
     assert "king safety — repositioning" not in prompt
@@ -627,22 +635,24 @@ def test_equal_tier_withholds_the_alternative_entirely() -> None:
     assert "Your move does this:" in prompt
     assert "What your move achieves" not in prompt
     # And the instruction must point at the line that is actually there.
-    assert "is the ONLY reason you may give" in prompt
+    assert "is the ONLY description you may give" in prompt
 
 
 def test_just_above_equal_still_offers_the_refinement() -> None:
-    """BUG-016: above the equal band a genuinely better move may still be named as a refinement.
+    """BUG-016: above the equal band a refinement is still OFFERED — as a cue, not as a move.
 
     The `does this:` assertion this test used to carry was incidental — d2d3 composes no clause, so
-    that line is now correctly absent. What BUG-016 is about is whether the refinement is OFFERED at
-    all, which is the move being named and the sound-move framing being kept, so those are what is
-    asserted. A move that DOES compose a clause is covered separately below.
+    that line is now correctly absent. What BUG-016 is about is whether the refinement is offered at
+    all, which is the sound-move framing plus permission to point at one. B-012 changed what gets
+    pointed at: the cue, never the move token. A move that DOES compose a clause is covered
+    separately below.
     """
     report = _move_eval_report(CASTLE_FEN, "e1g1", "d2d3")
     report = dataclasses.replace(report, eval_drop_cp=EQUAL_MAX_DROP_CP + 1)
     prompt = build_rich_move_evaluation_prompt(report, "intermediate")
     assert "sound, reasonable move" in prompt
-    assert "d3" in prompt, "the better move must still be named"
+    assert "point at the CUE for it" in prompt, "the refinement must still be offered"
+    assert "d3" not in prompt, "the refinement's move token belongs behind the hint"
 
 
 def test_a_refinement_with_a_verifiable_clause_still_states_it() -> None:
@@ -702,7 +712,10 @@ def test_safe_fallback_teaches_without_numbers() -> None:
     report = _move_eval_report(fen, "c4c5", "a2a3")
     report = dataclasses.replace(report, eval_drop_cp=50, classification="inaccuracy")
     out = compose_safe_move_feedback(report)
-    assert "a3 was stronger here" in out
+    # B-012: the cue leads and the move token is gone — it used to read "a3 was stronger
+    # here — attacking their undefended bishop on b4".
+    assert "There was something better here" in out
+    assert "a3" not in out
     # A board-verified clause, not a category label.
     assert "bishop on b4" in out
     # And the lesson, so the fallback keeps the teaching shape.
@@ -780,18 +793,21 @@ def test_numbered_san_marks_whose_move_it_is() -> None:
 
 
 def test_top_lines_section_names_which_side_is_the_opponent() -> None:
-    # The fixture needs a real line: the header is only emitted when at least one
-    # line renders. It used to be printed unconditionally, which is how 19 of 44
-    # prompts ended up carrying a header with nothing under it while the
-    # instructions told the coach to use only facts from that section.
+    # Tests the FORMATTER directly. B-012 stopped composing engine lines into the
+    # move-evaluation prompt at all — they named the engine's move in SAN, which is the thing
+    # that now goes behind the hint — so asserting through the prompt would assert nothing.
+    # The formatter is retained for its base-position logic; see the comment at its former
+    # call site in prompts.py.
+    from chess_coach.prompts import _format_comparison_top_lines
+
     report = dataclasses.replace(
         _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300),
         top_lines=[PVLine(depth=8, eval_cp=120, moves=["b8c6", "h5e5"], theme="material win")],
     )
-    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+    section = _format_comparison_top_lines(report)
     # Student is Black here, so White is the opponent — stated explicitly.
-    assert "White = your opponent" in prompt
-    assert "Black = you" in prompt
+    assert "White = your opponent" in section
+    assert "Black = you" in section
 
 
 def test_line_theme_is_scoped_to_the_line_not_to_its_first_move() -> None:
@@ -803,39 +819,54 @@ def test_line_theme_is_scoped_to_the_line_not_to_its_first_move() -> None:
     Re4. The theme describes where the whole line ends up, so the prompt now says so and names
     the move it is NOT a claim about.
     """
+    from chess_coach.prompts import _format_comparison_top_lines
+
     report = dataclasses.replace(
         _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300),
         top_lines=[PVLine(depth=8, eval_cp=120, moves=["b8c6", "h5e5"], theme="material win")],
     )
-    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-    assert "where the whole line ends up" in prompt
-    assert "material win" in prompt
+    section = _format_comparison_top_lines(report)
+    assert "where the whole line ends up" in section
+    assert "material win" in section
     # The first move of the line is named as the thing the theme is not about.
-    assert "not a claim about Nc6 on its own" in prompt
-    assert "— theme: material win" not in prompt
+    assert "not a claim about Nc6 on its own" in section
+    assert "— theme: material win" not in section
 
 
-def test_top_lines_section_is_omitted_entirely_when_nothing_renders() -> None:
-    # No header without content. An empty section is worse than no section: the
-    # grounding instructions point at it, so the coach was told to rely on facts
-    # that were not there.
-    report = _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300)
-    assert "Top Engine Lines" not in build_rich_move_evaluation_prompt(report, "intermediate")
+def test_the_move_eval_prompt_carries_no_engine_lines_on_any_tier() -> None:
+    """B-012: engine lines never reach the coaching prompt, whatever the tier.
+
+    This used to assert only that an EMPTY section was omitted — a header with nothing under
+    it, while the instructions told the coach to rely on facts from it. The guarantee is now
+    stronger and the reason is different: a rendered line names the engine's move in SAN, and
+    that move belongs behind the hint. Row 64 of the ledger is the retraction of a withhold
+    that missed exactly this rendering, so it is asserted across the tiers rather than on one.
+    """
+    for drop in (0, 10, EQUAL_MAX_DROP_CP + 1, SOUND_MAX_DROP_CP + 1, 300):
+        report = dataclasses.replace(
+            _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=drop),
+            top_lines=[PVLine(depth=8, eval_cp=120, moves=["b8c6", "h5e5"], theme="material win")],
+        )
+        prompt = build_rich_move_evaluation_prompt(report, "intermediate")
+        assert "Top Engine Lines" not in prompt, drop
+        assert "Nc6" not in prompt, drop  # the engine's move, in SAN
 
 
 def test_top_lines_say_which_position_they_start_from() -> None:
     # The engine's lines are relative to the position BEFORE the student's move
     # (they include the student's own alternatives), so the coach is told that —
     # otherwise a line of alternatives and a line of refutation read identically.
+    from chess_coach.prompts import _format_comparison_top_lines
+
     report = dataclasses.replace(
         _move_eval_report(BLACK_TO_MOVE_FEN, "e8e7", "b8c6", eval_drop_cp=300),
         top_lines=[PVLine(depth=8, eval_cp=120, moves=["b8c6", "h5e5"], theme="material win")],
     )
-    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-    assert "from the position you were in" in prompt
+    section = _format_comparison_top_lines(report)
+    assert "from the position you were in" in section
     # Rendered as SAN, from the right base — never coordinates.
-    assert "Nc6" in prompt
-    assert "b8c6" not in prompt
+    assert "Nc6" in section
+    assert "b8c6" not in section
 
 
 def test_comparison_top_lines_render_san_not_uci() -> None:
@@ -860,9 +891,11 @@ def test_comparison_top_lines_render_san_not_uci() -> None:
         critical_moment=False,
         critical_reason=None,
     )
-    prompt = build_rich_move_evaluation_prompt(report, "intermediate")
-    assert "Nfg4" in prompt  # SAN, from the post-move position
-    assert "f6g4" not in prompt  # raw coordinates gone
+    from chess_coach.prompts import _format_comparison_top_lines
+
+    section = _format_comparison_top_lines(report)
+    assert "Nfg4" in section  # SAN, from the post-move position
+    assert "f6g4" not in section  # raw coordinates gone
 
 
 def test_refutation_clause_describes_non_captures() -> None:
@@ -1389,10 +1422,11 @@ def test_third_telling_says_nothing() -> None:
     prompt = build_rich_move_evaluation_prompt(_repeatable_report(), lesson_times_taught=LESSON_RETIRE_AFTER)
     assert "CLOSE" not in prompt
     assert "SAME idea as earlier" not in prompt
-    # Retiring the takeaway must not gut the rest: the move, the stronger option and
-    # what it achieves all still have to be there, or "no repetition" is bought with
-    # no coaching at all.
-    assert "Bc3" in prompt
+    # Retiring the takeaway must not gut the rest: the cue and what was available there still
+    # have to be present, or "no repetition" is bought with no coaching at all. B-012: the
+    # move token is not among them — it belongs behind the hint.
+    assert "undefended bishop on b4" in prompt
+    assert "Bc3" not in prompt
     assert "does this:" in prompt
     assert "COACHING INSTRUCTIONS" in prompt
     assert len(prompt) > 800

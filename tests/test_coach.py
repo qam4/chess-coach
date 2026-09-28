@@ -533,9 +533,14 @@ class TestAchievementClauseMemory:
             assert "does the same thing here as it did earlier" in later
             assert "undefended bishop on b4" in later
             # And the model is still bound to it rather than told it has no reason.
-            assert "is the ONLY reason you may give" in later
-            assert "Name the move and stop there" not in later
-        assert "Bc3" in prompts[2]
+            assert "is the ONLY description you may give" in later
+            assert "Do NOT say what was available" not in later
+        # B-012: what must survive the reframing is the CLAUSE, which is the cue. The move
+        # token does not, on any telling — it reaches the student through the hint. The v37
+        # failure this guards against was the FACT being withheld and the model inventing a
+        # replacement, and the fact is "the undefended bishop on b4".
+        assert "undefended bishop on b4" in prompts[2]
+        assert "Bc3" not in prompts[2]
 
     def test_the_reason_is_never_withheld_however_often_it_recurs(self):
         # The clause binds the model for as long as the engine keeps wanting the move.
@@ -547,12 +552,12 @@ class TestAchievementClauseMemory:
 
         report = _comparison_with_repeatable_lesson(drop=SOUND_MAX_DROP_CP + 1)
         shown = build_rich_move_evaluation_prompt(report, achievement_times_shown=0)
-        assert "is the ONLY reason you may give" in shown
+        assert "is the ONLY description you may give" in shown
 
         for times in (1, 2, 10):
             later = build_rich_move_evaluation_prompt(report, achievement_times_shown=times)
             assert "undefended bishop on b4" in later, times
-            assert "is the ONLY reason you may give" in later, times
+            assert "is the ONLY description you may give" in later, times
             # The redirect that invited invention in v36 stays gone.
             assert "the position facts above" not in later, times
 
@@ -599,6 +604,9 @@ def test_composed_fallback_honours_the_lesson_ladder():
     retired = compose_safe_move_feedback(report, lesson_times_taught=LESSON_RETIRE_AFTER)
     assert "Worth remembering:" not in retired
     assert "Same idea as earlier" not in retired
-    # Still a complete piece of feedback: the stronger move and what it does.
-    assert "Bc3" in retired
+    # Still a complete piece of feedback: the cue and what was available there. B-012 took the
+    # move token out of every student-facing surface, so what has to survive the retirement is
+    # the composed clause, not the SAN.
+    assert "undefended bishop on b4" in retired
+    assert "Bc3" not in retired
     assert len(retired) > 30

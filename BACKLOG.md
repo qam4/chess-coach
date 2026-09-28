@@ -62,7 +62,7 @@ Generated — edit the fields under each heading, not this table.
 
 | Id | P | Category | Action | What it gives |
 |---|---|---|---|---|
-| B-012 | P1 | coaching | Move the named move behind the hint (2026-09-22, ledger 162) | 53 of 73 turns where the coach names a better move stop handing over a move that is still playable on the student's next turn. The largest single change to the coaching this project has made. |
+| B-013 | P1 | coaching | Do not offer a lesson theme that points away from the cue | closes the one criterion B-012 missed, and removes a coin flip affecting **1167 of 2683 spoken turns (43.5%)** with a saved prompt. |
 | B-008 | P1 | engine | the engine's numbers are not the truth (2026-08-20) | the ~18 turns per game where the coach speaks would be about moves that are actually bad. Today 7 of those 18 criticise a move the reference scores good or nearly good, and best-move agreement is 4 of 18. No prompt change reaches this. |
 | B-002 | P2 | coaching | Our clause names the smallest thing the move wins (2026-09-21, architecture review D1) | 55 turns of 4672 (1.2%), firing in 11 of 119 stored runs. Severe where it lands and rare overall — recorded at P2 for that reason, not P1. |
 | B-003 | P2 | coaching | The coach has no memory across turns (2026-09-21, measured on v54) | the shorten-on-repeat half is DONE (median length ratio 1.23 -> 0.93, criterion 0.70 missed). What remains: 7 turns still silent at the moment the student finally plays the move we asked for, and the repeat turns still run 1.28-1.55x on four of seventeen. |
@@ -155,17 +155,81 @@ show up as that figure falling while this one drops.
 neighbouring position. Checked properly, one of its two (a2, ply 29) is reachable in one move and
 so is not a defect; the corpus count is far larger than the two it could see.
 
-## TOP — Move the named move behind the hint (2026-09-22, ledger 162)
+## DONE — Move the named move behind the hint (2026-09-22, ledger 162; closed 2026-09-24, ledger 164)
 
 - **Id:** B-012
 - **Category:** coaching
-- **Gives:** 53 of 73 turns where the coach names a better move stop handing over a move that is
-  still playable on the student's next turn. The largest single change to the coaching this project
-  has made.
+- **Gives:** delivered. Turns naming the engine's best move **70 -> 1 of 81 spoken**, across five
+  seeds. The survivor is the hard case VISION already records: seed 17 ply 25 says "putting a pawn
+  on d5, one of the four centre squares", where the cue IS the move because only one legal move
+  reaches the square.
+- **Priority:** closed
+
+**Four of the five agreed criteria pass; the fifth is a measured 2-turn regression, recorded
+rather than smoothed over.**
+
+| criterion | result |
+|---|---|
+| no prompt for a comparison turn names the engine's move | pass, 70 -> 1 of 81 |
+| every affected turn with a cue available still voices one | **FAIL: 95.9% -> 93.2%** (71/74 -> 69/74) |
+| the move is reachable through the hint | pass — `better_move_san` in the play payload |
+| five seeds | pass — 7, 11, 13, 17, 23 |
+| attribution proved | checked with `run_compare`: 81 of 81 turns changed prompt, 0 comparable, so none of the delta is model noise |
+
+Side effects, all measured: spoken turns 81 -> 81 and silence 102 -> 102, so nothing was bought
+with silence; `off_menu` 12 -> 6, `unsound_move` 8 -> 5, `move_claim` 1 -> 0; `placement` 0 -> 1.
+
+**The withhold had to cover FIVE renderings, not the two listed here originally** — the
+`Best move:` line, the achievement subject, the engine-lines section, `compose_safe_move_feedback`
+and `generate_move_coaching`. The last two are student-facing and a prompt-only withhold would
+have left them, which is exactly how ledger row 28 came to be retracted by row 64.
+
+The pairwise against v57 was NOT run. With four criteria passing on deterministic counters and a
+known 2-turn regression, a judge ranking would add less than the counters already say.
+
+### The 2-turn regression, and the fix that did not work
+
+With the move token gone the model substitutes the nearest other composed fact for the cue —
+twice of three times the isolated-pawn guidance entry. Seed 23 ply 39 is the clearest: the
+composed cue is their undefended pawn on f3, and the coach wrote "you missed a discovered attack
+by the bishop on c6".
+
+**v59 tried an instruction binding the cue as the subject and it measured as nothing:** 93.2% ->
+93.2%, `off_menu` 6 -> 10. It changed WHICH two turns fail, not how many. Reverted on the standard
+that a change with no measured effect goes, and pinned by
+`test_no_instruction_tries_to_arbitrate_between_two_composed_facts` so it is not rebuilt.
+
+Why it cannot work: the cue and the isolated pawn are BOTH facts we composed, so prompt text has
+no basis on which to arbitrate. The remedy is in selection — see B-013.
+
+## TOP — Do not offer a lesson theme that points away from the cue
+
+- **Id:** B-013
+- **Category:** coaching
+- **Gives:** closes the one criterion B-012 missed, and removes a coin flip affecting **1167 of
+  2683 spoken turns (43.5%)** with a saved prompt.
 - **Priority:** P1
 
-The docs are settled — `VISION.md` "The cue is coaching. The move is a hint.", the spec amendment,
-and `_BRIDGE_STANDARD`. This item is the code.
+Two guidance entries — `pattern.isolated_pawn` and `pattern.rook_behind_passed_pawn` — hand the
+model an unresolved choice in their `how_to_apply`: "if the isolated pawn is yours, use the open
+files to attack; if it is the opponent's, blockade the square in front of it". **We already know
+whose pawn it is** — it is rules geometry, and we compose it correctly two lines above ("White:
+isolated pawns: d4", "HERE: your d-file pawn is isolated"). Then we hand over the choice anyway.
+
+Verified instance: v54 seed 23 ply 39 took the opponent branch about the student's OWN isolated
+pawn — "what matters here is the isolated pawn on d4 — it's a key target". Ply 35 got the same
+entry and took the right branch. A coin flip.
+
+Two parts, and the first is the one that closes B-012's miss:
+
+1. **Do not select a theme whose square differs from the cue's square.** The composed cue owns the
+   turn; a theme pointing elsewhere is what the model substituted in the three v58 turns.
+2. **Resolve the ours/theirs branch before injecting**, so only the applicable half is rendered.
+
+Measure it with the cue-voiced rate already built for B-012 (square-level overlap between the
+composed cue and the coach's text, so rewording still counts). Criterion: back to v57's 95.9% or
+better, with turns naming the engine's move staying at 1 of 81. That measure does not share the
+fix's predicate — it reads the model's output, not the selection rule.
 
 **Do it in this order, because the reverse leaves the product worse than either end state.**
 

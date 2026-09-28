@@ -365,9 +365,9 @@ _MOVE_EVAL_INSTRUCTIONS_SOUND = """\
 COACHING INSTRUCTIONS:
 - The student played a sound, reasonable move — do NOT call it a mistake or \
 invent a correction the data does not support.
-- Keep it SHORT (2-3 sentences): affirm it. If the engine's top move differs, \
-you may briefly name it as a refinement — affirm first, never imply the move \
-was bad. No motivational sign-off.
+- Keep it SHORT (2-3 sentences): affirm it. If there was a refinement available, \
+you may briefly point at the CUE for it — the piece or square named above — but do \
+NOT name a move. Affirm first, never imply the move was bad. No motivational sign-off.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -395,13 +395,14 @@ placements, tactics, or "and then..." continuations.
 #: no threats section, and "what it wins" on a reply that wins nothing.
 _MOVE_EVAL_INSTRUCTIONS_INACCURACY = """\
 COACHING INSTRUCTIONS:
-- There was a stronger move here. Give a BRIEF redirect (2-3 sentences): name the \
-stronger move and what it does. Do NOT say what the student was trying, aiming, \
-hoping or looking to do, and do NOT open by guessing at a plan — nothing above tells \
-you why the move was played. No motivational sign-off.
+- There was something better available here. Give a BRIEF redirect (2-3 sentences): \
+point at the CUE — the piece, square or fact named in the data above — and say what \
+was available there. Do NOT name a move. Do NOT say what the student was trying, \
+aiming, hoping or looking to do, and do NOT open by guessing at a plan — nothing \
+above tells you why the move was played. No motivational sign-off.
 - Do NOT grade the move or say how much it cost. Do not call it an \
 inaccuracy, a mistake or a blunder, and do not quantify what was lost. \
-Describe what the stronger move does; that is the lesson.
+The cue is the lesson.
 - Stay grounded: only facts in the data above; no invented analysis, \
 placements, tactics, or "and then..." continuations.
 """
@@ -411,8 +412,8 @@ COACHING INSTRUCTIONS:
 - This move let something concrete happen. Do NOT open with praise or "great \
 job". Lead with what went wrong, using only what is given above. Do NOT list a \
 sequence of moves.
-- Then name the concrete better move. Be direct, not generic. No motivational \
-sign-off.
+- Then point at the CUE: the specific piece or square the data above names as what \
+was available. Be direct, not generic. Do NOT name a move. No motivational sign-off.
 - Do NOT grade the move or say how much it cost. Do not call it an \
 inaccuracy, a mistake or a blunder, and do not quantify what was lost. The \
 reply and what it wins are the cost, stated as a fact the student can check.
@@ -516,10 +517,30 @@ move for the opponent, do not write "the opponent plays ...", and do not work on
 from the position. Lead with what is above instead.
 """
 
+# TRIED AND REVERTED (v59). When the move token came out, the cue-voiced rate fell 95.9% ->
+# 93.2% because the model substituted a different composed fact for the cue — twice the
+# isolated-pawn guidance entry. The obvious fix was an instruction binding the cue as the
+# subject: "THE SUBJECT OF THIS TURN is the piece or square in that line, and nothing else
+# … the 'what to focus on' themes are for the CLOSING takeaway only".
+#
+# It did nothing. v59 came back at 93.2%, identical, and `off_menu` went 6 -> 10. It changed
+# WHICH two turns lose the cue, not how many, and `run_compare` attributes that to the change
+# rather than to noise (0 of the comparable turns differ). Reverted on the standard that a
+# change with no measured effect goes (ledger rows 160, 164, 165).
+#
+# What this says about the remedy: the competition is between two composed facts, and an
+# instruction cannot arbitrate it because both are things we supplied. The fix belongs in
+# selection — do not offer a guidance theme that names a different square from the cue — and
+# that is B-013, with a measured population of 1167 of 2683 spoken turns.
+
+#: Deliberately tier-neutral. The line it points at reads "Your move does this: …" on the
+#: tiers that make no comparison and "What was available here does this: …" on the tiers
+#: that do, so naming either header here would be wrong on half the turns.
 _REASON_SUPPLIED = """\
-- WHY it is the better move: the one line above describing what that move does is \
-the ONLY reason you may give. Put it in your own words. Do NOT add a second reason \
-of your own, and do NOT name a square, piece, file or threat that line does not name.
+- THE ONE CLAIM YOU MAY MAKE: the line above naming a piece, square or fact is the \
+ONLY description you may give. Put it in your own words, as the point of the turn. Do \
+NOT add a reason of your own, and do NOT name a square, piece, file or threat that line \
+does not name.
 """
 
 # The withheld case is a negative instruction, which this model reliably ignores, and
@@ -637,10 +658,11 @@ def _our_hanging(position: PositionReport, our_fen: str) -> str:
 
 
 _REASON_WITHHELD = """\
-- WHY it is the better move is NOT established in the data above, so you do not \
-know it. Name the move and stop there. Do NOT say what it attacks, defends, \
-controls, wins, prevents or prepares, and do NOT reason one out from the position \
-facts. The takeaway principle carries the lesson on this turn.
+- WHAT WAS AVAILABLE instead is NOT established in the data above, so you do not \
+know it. Do NOT say what was available, and do NOT reason it out from the position \
+facts — no claim about what something attacks, defends, controls, wins, prevents or \
+prepares. Lead with the cause and the check that was skipped, and let the takeaway \
+principle carry the lesson on this turn.
 """
 
 # one sentence; a serious mistake gets room to be specific.
@@ -657,6 +679,27 @@ _TIER_MAX_TOKENS = {"best": 120, "equal": 120, "sound": 150, "inaccuracy": 200, 
 #: Tiers where the coach describes the STUDENT's move rather than the engine's,
 #: because no comparison is being made.
 _OWN_MOVE_TIERS = frozenset({"best", "equal"})
+
+
+def hint_better_move_san(report: ComparisonReport) -> str:
+    """The engine's better move for the position BEFORE the student moved, in SAN, or ``''``.
+
+    B-012: the coaching names the cue, and this move is what goes behind the hint instead
+    of into the prose. Exposed as one function because the web server needs exactly the
+    predicate ``build_rich_move_evaluation_prompt`` uses to decide whether an alternative
+    exists at all — a second, similar-looking rule in `server.py` is how four defects were
+    created in one week, and it would let the UI offer a hint on a turn the coach is
+    treating as "your move was fine".
+
+    Returns ``''`` on the tiers that make no comparison (`best`, `equal`), and ``''`` when
+    the best move cannot be rendered — never the raw UCI, because a hint is student-facing
+    and `e2c4` is not something a 1200 reads.
+    """
+    if _move_feedback_tier(report) in _OWN_MOVE_TIERS:
+        return ""
+    if not report.best_move or report.best_move == report.user_move:
+        return ""
+    return uci_to_san(report.fen, report.best_move) or ""
 
 
 def _move_feedback_tier(report: ComparisonReport) -> str:
@@ -2196,14 +2239,18 @@ def compose_safe_move_feedback(report: ComparisonReport, lesson_times_taught: in
         category, clause = _move_effect(board, report.user_move, target_possessive="their ")
     else:
         category, clause = _move_effect(board, report.best_move, target_possessive="their ", rival_uci=report.user_move)
-        best_san = uci_to_san(report.fen, report.best_move)
-        if best_san:
-            detail = clause.removeprefix(", ").strip()
-            parts.append(f"{best_san} was stronger here{' — ' + detail if detail else ''}.")
+        # B-012: the CLAUSE leads, not the move. "Bc3 was stronger here — attacking their
+        # undefended bishop on b4" becomes "There was something better here — attacking
+        # their undefended bishop on b4", which keeps the cue and drops the answer. This is
+        # the gate's fallback, so it is student-facing: withholding the move from the prompt
+        # and leaving it here would move the leak rather than close it.
+        detail = clause.removeprefix(", ").strip()
+        if detail:
+            parts.append(f"There was something better here — {detail}.")
         elif not opening:
             # Nothing nameable and no opener would leave the student with only a
             # takeaway and no idea what prompted it.
-            parts.append("There was a stronger move here.")
+            parts.append("There was something better here.")
     if tier in _OWN_MOVE_TIERS and clause:
         parts.append(f"Your move is {clause.removeprefix(', ').strip()}.")
     # The CAUSE, on the one path that most needs it. Measured on v43: 13 of 18 turns carried a
@@ -2447,7 +2494,12 @@ def _achievement_line(report: ComparisonReport, tier: str, times_shown: int = 0)
         subject = "Your move"
     else:
         achievement = _best_move_achievement(report)
-        subject = f"The best move ({uci_to_san(report.fen, report.best_move) or report.best_move})"
+        # B-012: the achievement IS the cue ("attacking their undefended bishop on b4"), so
+        # the clause stays and only the move token goes. Naming the subject "The best move
+        # (Bc3)" put the answer in front of the model on every comparison turn, and the
+        # move now reaches the student through the hint instead. See
+        # `hint_better_move_san` and VISION "The cue is coaching. The move is a hint."
+        subject = "What was available here"
     if not achievement:
         return ""
     if times_shown >= ACHIEVEMENT_REFRAME_AFTER:
@@ -2640,11 +2692,14 @@ def build_rich_move_evaluation_prompt(
     """
     sections: list[str] = []
 
-    # The tier is needed while assembling the sections, not just after: on the tiers
-    # that make no comparison it decides whether the engine's alternative is put in
-    # front of the model at all.
+    # The tier is needed while assembling the sections, not just after: it selects the
+    # instruction block and the word limit, and decides whether the achievement clause
+    # describes the student's move or what was available instead.
+    #
+    # It no longer decides whether the engine's move is put in front of the model —
+    # nothing does. Under B-012 the move token is withheld on every tier and reaches the
+    # student through the hint instead (`hint_better_move_san`).
     tier = _move_feedback_tier(report)
-    compares = tier not in _OWN_MOVE_TIERS
 
     # Curated guidance (the "what to focus on" half of the teaching bridge),
     # level-filtered. Inserted first so the move feedback LEADS with the
@@ -2675,18 +2730,22 @@ def build_rich_move_evaluation_prompt(
     if refutation_section is not None:
         sections.append(refutation_section)
 
-    # Top lines for context — but ONLY on the tiers that compare. On the
-    # no-comparison tiers this section was the remaining half of a withhold that the
-    # ledger already recorded as complete: with `Best move:` suppressed, the engine's
-    # preferred move still arrived here as "Line 1 (from the position you were in):
-    # 3.Nd5", three lines above an instruction reading "Do NOT offer an alternative —
-    # there isn't one". Caught by a cross-surface test, not by review, which is the
-    # argument for having one. On the `best` tier the top line IS the student's move,
-    # so nothing is lost; on `equal` the whole point is that no alternative is named.
-    if compares:
-        top_lines_section = _format_comparison_top_lines(report)
-        if top_lines_section:
-            sections.append(top_lines_section)
+    # Top lines: NEVER rendered, as of B-012. It was already suppressed on the
+    # no-comparison tiers, where it had been the surviving half of a withhold the ledger
+    # recorded as complete — "Line 1 (from the position you were in): 3.Nd5" three lines
+    # above an instruction reading "Do NOT offer an alternative — there isn't one" (row 64).
+    # The comparison tiers had the same leak for the opposite reason: there the section was
+    # meant to supply context, and what it actually supplied was the answer in SAN.
+    #
+    # Nothing replaces it. Engine lines are position-analyst material — evaluations and
+    # continuations — and VISION's division is that we teach the cue rather than report the
+    # best line, which Lichess already does. The facts the turn needs are in the sections
+    # above: the cause, the missed tactic, what is loose, and the achievement clause.
+    # `_format_comparison_top_lines` now has no caller. It is kept, and tested directly,
+    # because `_line_base_fen` encodes which position each PV line replays from — before
+    # the student's move in some cases and after it in others — and getting that wrong
+    # dumped whole lines as raw UCI into the coaching. That knowledge is expensive to
+    # re-derive. If nothing composes it again, delete it then; do not assume it is live.
 
     # Critical moment. The engine's ``critical_reason`` is DELIBERATELY not passed
     # on: its only format is "eval spread between best and 3rd-best line is 107cp"
@@ -2816,7 +2875,11 @@ def build_rich_move_evaluation_prompt(
     # supplied ourselves, the one pattern this model reliably ignores, and it means
     # the tier was never the clean withhold the ledger recorded (row 28): only the
     # achievement line and the engine's label were withheld, never the move.
-    alternative_line = f"Best move: {uci_to_san(report.fen, report.best_move)}\n" if compares else ""
+    # B-012: never rendered. It used to be suppressed only on the no-comparison tiers, and
+    # row 64 of the ledger is the retraction of the claim that THAT was a clean withhold —
+    # `Best move: d4` stayed here while two other renderings also carried the token. The
+    # move is now student-facing only, behind the hint (`hint_better_move_san`).
+    alternative_line = ""
 
     return RICH_MOVE_EVALUATION_PROMPT_V2.format(
         system=SYSTEM_PROMPT_V2,

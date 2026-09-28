@@ -63,10 +63,16 @@ def test_the_repeat_instruction_appears_only_on_a_repeat() -> None:
     assert marker in build_rich_move_evaluation_prompt(_report(), achievement_times_shown=ACHIEVEMENT_REFRAME_AFTER)
 
 
-def test_the_move_and_its_reason_survive_the_shortening() -> None:
-    """The guardrail, in prompt form. Withholding the fact is what produced invention before."""
+def test_the_cue_and_its_reason_survive_the_shortening() -> None:
+    """The guardrail, in prompt form. Withholding the fact is what produced invention before.
+
+    This asserted "the move must still be named" until B-012 moved the move behind the
+    hint. The guardrail itself is unchanged in substance — cutting the word budget must not
+    cut the FACT, because that is what v37 showed produces invented replacements. What the
+    fact is has changed: the cue and its square, not the move token.
+    """
     repeat = build_rich_move_evaluation_prompt(_report(), achievement_times_shown=ACHIEVEMENT_REFRAME_AFTER)
-    assert "Nxc7+" in repeat, "the move must still be named"
+    assert "Nxc7+" not in repeat, "the move token belongs behind the hint, not in the prompt"
     assert "does the same thing here as it did earlier" in repeat, "the achievement clause must still be stated"
     assert "c7" in repeat, "the composed reason must still name its square"
 

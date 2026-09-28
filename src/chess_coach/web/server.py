@@ -561,6 +561,19 @@ def create_app(coach: Coach) -> FastAPI:
                         except (ValueError, AssertionError):
                             hint_san = hint_uci
 
+                    # B-012: the RETROSPECTIVE better move — the alternative to the move
+                    # the student just played. Distinct from `hint_san` above, which is the
+                    # best move to play NEXT. This is the slot the coaching prose used to
+                    # occupy, and it exists so the prompt change relocates the move rather
+                    # than deleting it. `hint_better_move_san` is the prompt's own tier
+                    # predicate, so the UI cannot offer an alternative on a turn the coach
+                    # is treating as "your move was fine".
+                    from chess_coach.prompts import hint_better_move_san
+
+                    better_move_san = None
+                    if evaluation._comparison is not None:
+                        better_move_san = hint_better_move_san(evaluation._comparison) or None
+
                     return {
                         "engine_move": engine_move_san,
                         "engine_move_uci": engine_move_uci,
@@ -574,6 +587,7 @@ def create_app(coach: Coach) -> FastAPI:
                         "opening_name": opening_name,
                         "hint_uci": hint_uci,
                         "hint_san": hint_san,
+                        "better_move_san": better_move_san,
                     }
                 except Exception as exc:
                     return exc

@@ -424,15 +424,11 @@ def generate_move_coaching(
         # and here is what it does. The sections below supply that from the board.
         sections.append("There was a stronger move here.")
 
-    # What was stronger
-    if report.best_move and cls != "good":
-        try:
-            board = chess.Board(report.fen)
-            move = chess.Move.from_uci(report.best_move)
-            best_san = board.san(move)
-        except (ValueError, chess.InvalidMoveError):
-            best_san = report.best_move
-        sections.append(f"{best_san} was stronger here.")
+    # What was stronger used to be named here as SAN ("Nd5 was stronger here."), directly
+    # after the line above already saying a stronger move existed. B-012 removed the move
+    # token from every student-facing surface — it reaches the student through the hint
+    # instead — and this section said nothing else, so it goes entirely rather than
+    # becoming a second copy of the sentence above it.
 
     # Missed tactics — composed from structured data (never engine prose),
     # de-duplicated by motif identity.
