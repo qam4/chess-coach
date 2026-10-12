@@ -9,6 +9,24 @@ The procedure is in the global `work-loop.md`. This file only says what each ste
 and the thresholds measured on this codebase. If a step below disagrees with the global file,
 the global file is the procedure and this one is out of date.
 
+## Step 0 — the budget, and what the handoff must contain here
+
+One backlog item per session. The handoff lives in `docs/coach-report-card.md` and
+`BACKLOG.md`, and for this project it has to carry:
+
+- the ledger row, with the counters and how each was measured — a number without its
+  instrument is not a handoff;
+- which sweep versions the numbers came from, and their transcripts committed, so the next
+  session can re-derive them (`output/coach_review_v*/transcript.json` is tracked on purpose);
+- anything retracted, marked as such in the row it corrects. Rows 164 and 165 carry
+  amendments of exactly this kind;
+- whether a measure is comparable across the change. B-014 exists because two counters are
+  not, and that fact belongs with the numbers rather than in someone's memory.
+
+A long sweep is a natural session boundary: launch it, end the session with the handoff
+written, read the result in a fresh one. The sweeps take 14 minutes and the reading takes two,
+so the context spent waiting is pure cost.
+
 ## Step 1 — the decision record
 
 Search all of these, and report what came back including "nothing found":
