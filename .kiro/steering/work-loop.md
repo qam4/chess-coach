@@ -27,6 +27,12 @@ A long sweep is a natural session boundary: launch it, end the session with the 
 written, read the result in a fresh one. The sweeps take 14 minutes and the reading takes two,
 so the context spent waiting is pure cost.
 
+The opener for the next session is the item id alone — "take B-014 through the loop" — or
+"where did we leave off?", which is answered from `docs/coach-report-card.md` and `BACKLOG.md`.
+Both must work without the previous conversation. If a sweep is mid-flight when a session ends,
+the handoff names the job id so the next one can read
+`~/.kiro-monitor/runs/<job-id>/status.json` instead of relaunching it.
+
 ## Step 1 — the decision record
 
 Search all of these, and report what came back including "nothing found":
