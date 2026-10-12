@@ -479,6 +479,11 @@ def _check_named_moves(
         if move is None:
             out.append(Violation("illegal_move", m.group(0), f"{frm}-{to} is not legal here"))
             continue
+        # Same exclusion as the SAN branch below, applied here so the two halves cannot
+        # disagree about whether naming the played move is a recommendation (row 113's rule
+        # that both halves share one predicate).
+        if played_uci and move.uci() == played_uci:
+            continue
         violation = _classify_named_move(move, m.group(0), by_uci, _warned_against(text, m.start()))
         if violation is not None:
             out.append(violation)
@@ -505,6 +510,22 @@ def _check_named_moves(
         except (chess.InvalidMoveError, chess.AmbiguousMoveError, ValueError):
             continue
         if not clearly_a_move:
+            continue
+        # The move the student PLAYED is not a recommendation, so the menu rule does not apply
+        # to it. "By moving Be2, you left your pawn on g5 undefended" is the coach naming what
+        # just happened, and it was being charged `off_menu` because Be2 is absent from the
+        # best/sound menu — absent precisely because the student had just played a mistake.
+        # Measured before fixing: 20 such turns at v57, 11 at v58, 16 at v60, which made
+        # `off_menu` and `unsound_move` incomparable across any change altering how often the
+        # coaching names a move (B-014).
+        #
+        # Scoped to THIS classification only, following row 113: that was a routing fix rather
+        # than an exemption, and the same applies here. Legality above, the piece-reference
+        # check, `_check_our_move_claims` and every other check still see this token — only the
+        # question "was the coach allowed to RECOMMEND this" is skipped, because it was not a
+        # recommendation. Keyed on `played_uci` rather than on "any legal move the coach names",
+        # which would disable the check altogether.
+        if played_uci and move.uci() == played_uci:
             continue
         violation = _classify_named_move(move, token, by_uci, _warned_against(text, m.start()))
         if violation is not None:
