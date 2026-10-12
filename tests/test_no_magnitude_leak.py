@@ -368,3 +368,53 @@ def test_no_instruction_tries_to_arbitrate_between_two_composed_facts(repeatable
         prompt = build_rich_move_evaluation_prompt(repeatable_lesson_comparison(drop))
         assert "THE SUBJECT OF THIS TURN" not in prompt, drop
         assert "for the CLOSING takeaway only" not in prompt, drop
+
+
+def test_a_guidance_theme_pointing_away_from_the_cue_is_not_injected() -> None:
+    """B-013: the prompt must not offer a second, competing subject.
+
+    Measured on v58 across five seeds: 23 of 74 turns carry a guidance fact whose squares do
+    not intersect the cue's, and on 4 of the 5 turns that lost the cue the coach voiced the
+    THEME instead — "the passed pawn on the a-file" where the cue was g7. Before B-012 removed
+    the engine's move the same mechanism cost 1 turn; with the move gone the theme became the
+    most concrete thing left in the prompt.
+
+    Prompt wording cannot arbitrate this: both are facts we composed, which is what v59
+    measured (no change to the headline). So the fix is selection, and this test asserts the
+    selection, not the model's behaviour.
+    """
+    import dataclasses
+
+    from chess_coach.pedagogy.resource import GuidanceEntry
+    from chess_coach.prompts import build_rich_move_evaluation_prompt
+
+    away = GuidanceEntry(
+        id="pattern.passed_pawn_probe",
+        type="pattern",
+        theme="passed pawn",
+        focus="A passed pawn has no enemy pawn ahead of it on its file or either neighbour.",
+        how_to_apply="Push it with support.",
+        levels=frozenset({"intermediate"}),
+        features=frozenset({"passed_pawn"}),
+        eco_codes=frozenset(),
+        citation="probe",
+        example=None,
+    )
+    report = _comparison(_DROP_CP)  # cue is on c1/d2 for this fixture
+    # A fact pointing at a file the cue has nothing to do with.
+    prompt = build_rich_move_evaluation_prompt(
+        report,
+        guidance=[away],
+        guidance_facts={"passed_pawn": "your a-file pawn is passed"},
+    )
+    assert "a-file pawn is passed" not in prompt, "a competing concrete fact must not be offered"
+    assert "passed pawn" not in prompt, "and the entry goes with it rather than becoming abstract prose"
+
+    # The control: the SAME entry whose fact lands on the cue's own square stays.
+    on_cue = dataclasses.replace(away, features=frozenset({"undefended_piece"}))
+    kept = build_rich_move_evaluation_prompt(
+        report,
+        guidance=[on_cue],
+        guidance_facts={"undefended_piece": "your bishop on c1 is undefended"},
+    )
+    assert "bishop on c1 is undefended" in kept, "a fact about the cue's square must survive"

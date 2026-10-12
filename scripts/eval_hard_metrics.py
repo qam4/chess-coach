@@ -186,6 +186,112 @@ _CAUSE_OWN_PIECE = re.compile(
 )
 
 
+#: Every section that hands the turn a concrete board fact it could point at. The CUE, in
+#: VISION's sense, is any of these — not only the cause — and B-012's criterion was about the
+#: cue: with the engine's move withheld, does the turn still name something concrete?
+#:
+#: `Background (NOT the cause)` is deliberately ABSENT. That header exists to demote a loose
+#: piece when the cause names a different square, and the prompt tells the model it is not the
+#: subject; counting it would score a turn as voicing the cue for naming the thing we said to
+#: ignore.
+_CUE_SECTIONS = (
+    "How this came about",
+    "Missed Tactics",
+    "Undefended AFTER your move",
+    "Already undefended before your move (your move did not cause this)",
+    "Threats AFTER your move",
+    "Threats",
+    "Hanging Pieces",
+)
+
+#: The achievement clause. This is where "attacking their undefended bishop on b4" lives, and
+#: after B-012 it is the only place the alternative is described at all — so a cue measure that
+#: omitted it would miss the clause the change left carrying the turn.
+#:
+#: `The best move (Bc3)` is the PRE-B-012 subject and is matched on purpose. Omitting it read 66
+#: anchorable turns on v57 against 74 on v58 and reported the change as a 2-turn regression when
+#: it was a 5-turn improvement — the measure has to be identical on both sides of the change it
+#: is used to judge, or it is just another wrong comparison group.
+_ACHIEVEMENT_CLAUSE = re.compile(
+    r"^(?:What was available here|The best move \([^)]*\)|Your move) does "
+    r"(?:this|the same thing here[^:]*): (.+)$",
+    re.MULTILINE,
+)
+
+
+def _cue_squares(prompt: str) -> set[str] | None:
+    """Squares of every concrete fact we supplied, or None when we supplied none.
+
+    Union over `_CUE_SECTIONS` plus the achievement clause. Distinct from `_cause_squares`,
+    which asks the narrower question "did the CAUSE reach the student" and has its own series
+    in this ledger — both are kept because they answer different questions, and they share this
+    module's square extraction so they cannot drift apart.
+
+    Same strict/loose asymmetry as the cause: strict here because this is our own composed
+    text, loose in `_voices_the_cause` because the model writes `Bxc3` where we wrote `c3`.
+    """
+    blobs: list[str] = []
+    for header in _CUE_SECTIONS:
+        m = re.search(rf"--- {re.escape(header)} ---\s*\n(.+?)(?=\n---|\n\n|\Z)", prompt, re.DOTALL)
+        if m:
+            blobs.append(" ".join(m.group(1).split()))
+    blobs.extend(_ACHIEVEMENT_CLAUSE.findall(prompt))
+    if not blobs:
+        return None
+    return {s.lower() for s in _SQUARE_STRICT.findall(" ".join(blobs))}
+
+
+#: The instantiated half of an injected guidance entry — `pedagogy/instantiate.py` renders the
+#: board fact that made the theme fire, as " HERE: your d-file pawn is isolated". Matched on our
+#: own composed frame, like the cause above, never on the model's prose.
+_THEME_FACT = re.compile(r"^\s*HERE:\s*(.+)$", re.MULTILINE)
+
+#: A file reference in a theme fact ("your d-file pawn is isolated", "the e-file is open"). The
+#: isolated-pawn and open-file facts name a FILE rather than a square, so a square-only anchor
+#: would score them as pointing nowhere — and those two entries are exactly the ones B-012
+#: measured displacing the cue.
+_THEME_FILE = re.compile(r"\b([a-h])-file\b")
+
+
+def _theme_files(prompt: str) -> set[str]:
+    """File letters an injected guidance fact names, e.g. {"a"} for "your a-file pawn".
+
+    Separate from `_theme_squares` because the model answers in the SAME vocabulary the theme
+    used: handed "your a-file pawn is isolated" it writes "the passed pawn on the a-file", with
+    no square anywhere in the sentence. Square-only matching scored two such turns as
+    unexplained and made the theme look like a 1-turn problem when it is the whole of it.
+    """
+    return {f.lower() for fact in _THEME_FACT.findall(prompt) for f in _THEME_FILE.findall(fact)}
+
+
+#: "the a-file", "your a-file pawn", "on the a file". Matched on the MODEL's text, so it is
+#: deliberately loose about the separator the way `_SQUARE_LOOSE` is about case.
+_SAID_FILE = re.compile(r"\b([a-h])[- ]file\b", re.IGNORECASE)
+
+
+def _voices_the_theme(text: str, theme_sq: set[str], theme_files: set[str]) -> bool:
+    """Did the turn point at the injected theme, by square OR by file?"""
+    if _voices_the_cause(text, theme_sq):
+        return True
+    return bool(theme_files & {f.lower() for f in _SAID_FILE.findall(text)})
+
+
+def _theme_squares(prompt: str) -> set[str]:
+    """Squares an injected guidance fact points at, expanded from files where it names one.
+
+    A file expands to all eight of its squares because the cause names a square and the theme
+    often names only its file; comparing them needs one vocabulary. This OVERSTATES agreement —
+    a cause on d4 counts as agreeing with a theme about the d-file even if the isolated pawn is
+    on d7 — which is the safe direction: it undercounts the competition rather than inventing it.
+    """
+    out: set[str] = set()
+    for fact in _THEME_FACT.findall(prompt):
+        out |= {s.lower() for s in _SQUARE_STRICT.findall(fact)}
+        for file_name in _THEME_FILE.findall(fact):
+            out |= {f"{file_name}{rank}" for rank in range(1, 9)}
+    return out
+
+
 def _cause_own_piece_square(prompt: str) -> str:
     """The square of OUR piece that the composed cause says lost its defender; "" if none."""
     m = _CAUSE_OWN_PIECE.search(prompt)
@@ -299,6 +405,18 @@ class Metrics:
     cause_voiced: int = 0
     cause_own_piece: int = 0
     cause_irrelevant: int = 0
+    #: The CUE series, wider than the cause: any concrete fact we supplied, including the
+    #: achievement clause. This is B-012's fifth criterion — with the engine's move withheld,
+    #: does the turn still name something on the board?
+    cue_anchorable: int = 0
+    cue_voiced: int = 0
+    #: B-013. Turns where we composed a cause AND injected a guidance fact, and the two name
+    #: different squares — so the prompt offers the model two subjects and lets it choose.
+    theme_competes: int = 0
+    #: Of those, the turns where the model voiced the THEME's square and not the cause's. This
+    #: is the one that can come out against the fix: if it stays near zero, the competition is
+    #: harmless and B-013 is not worth building.
+    theme_won: int = 0
     cause_materialised: int = 0
     repeat_rec: int = 0
     repeat_rec_words: int = 0
@@ -326,6 +444,52 @@ class Metrics:
         composition gap, fixable here, not something to push the model harder about.
         """
         return 0.0 if not self.spoken else 100.0 * self.cause_given / self.spoken
+
+    @property
+    def cue_voiced_rate(self) -> float:
+        """Of the turns where we supplied a concrete fact, how many named one.
+
+        Read it alongside `cause_voiced_rate`, never instead of it: this one is the wider
+        question and the two can move in opposite directions. On v57 -> v58 they did — cause
+        96.4% -> 98.2% while this was the series B-012 was judged against.
+
+        Undercounts for the same reason `_voices_the_cause` does: a turn can convey a fact
+        without coordinates ("moving the rook left it undefended"). A figure below 100% means
+        "at least this many", not "exactly this many".
+
+        **Read this as a regression detector, not an improvement detector, and never as a
+        measure of coaching quality.** Measured over 520 anchorable turns across v53-v59:
+
+        * The ceiling is real, not an artefact of a permissive test. The union offers a median
+          of 2 squares per turn (mean 2.2, max 6), and scoring on the SUBJECT clauses alone —
+          cause plus achievement — gives 96.3% against the union's 96.7%. Two turns in 520 pass
+          on the union while failing on the subject. So the width of the union buys almost
+          nothing, and the ~96% is the coach genuinely echoing a square we handed it.
+        * That leaves roughly 3 points of headroom, so a change cannot demonstrate an
+          improvement here however good it is. v58's fall from 98.6% to 93.2% is detectable
+          precisely because the headroom is small.
+        * Passing means THE TEXT IS ANCHORED TO THE BOARD. It does not mean the coach pointed at
+          the right feature: a turn naming a different supplied square still passes. B-012's
+          lost turns failed by naming no supplied square at all — the model invented a feature
+          ("a discovered attack by the bishop on c6", where c6 was never supplied) — which is
+          why the regression was visible at all. Had it reached for another square we supplied,
+          this metric would have called it a pass.
+        """
+        return 0.0 if not self.cue_anchorable else 100.0 * self.cue_voiced / self.cue_anchorable
+
+    @property
+    def theme_won_rate(self) -> float:
+        """Of the turns offering a competing theme, how often the theme displaced the cause.
+
+        B-012 removed the engine's move from the prompt and the cue-voiced rate fell: with the
+        move gone the model reached for the nearest other composed fact, twice the isolated-pawn
+        guidance entry. This asks how often that happens, square-anchored, so it can say whether
+        the competition is a real defect or an artefact of two turns.
+
+        Both sides are text WE composed, which is why prompt wording could not arbitrate between
+        them (v59 measured as nothing) and why the remedy is selection.
+        """
+        return 0.0 if not self.theme_competes else 100.0 * self.theme_won / self.theme_competes
 
     @property
     def cause_voiced_rate(self) -> float:
@@ -496,13 +660,35 @@ def measure(path: Path) -> Metrics:
         # Does the turn account for the failure, or only report it? Two questions, not one:
         # did WE compose a cause, and did it reach the student. Anchored on the squares the
         # composed cause names, so a model that paraphrases scores the same as one that echoes.
+        cue_sq = _cue_squares(t.get("prompt") or "")
+        if cue_sq:
+            m.cue_anchorable += 1
+            voiced_cue = _voices_the_cause(text, cue_sq)
+            if voiced_cue:
+                m.cue_voiced += 1
+            # B-013: does an injected guidance fact point away from the cue, and if so, which
+            # one did the student get? Keyed on the CUE, not the cause: the cue is what B-012's
+            # criterion is about, and keying this to the cause reported 1 displaced turn where
+            # the per-turn reading showed 5 — a turn can keep the cause and still lose the cue.
+            theme_sq = _theme_squares(t.get("prompt") or "")
+            theme_f = _theme_files(t.get("prompt") or "")
+            if theme_sq and not (theme_sq & cue_sq):
+                m.theme_competes += 1
+                if _voices_the_theme(text, theme_sq, theme_f) and not voiced_cue:
+                    m.theme_won += 1
+
         cause_sq = _cause_squares(t.get("prompt") or "")
         if cause_sq is not None:
             m.cause_given += 1
             if cause_sq:  # a cause with no square is given but not scorable
                 m.cause_anchorable += 1
-                if _voices_the_cause(text, cause_sq):
+                voiced_cause = _voices_the_cause(text, cause_sq)
+                if voiced_cause:
                     m.cause_voiced += 1
+                # B-013: does an injected guidance fact point somewhere else, and if so, which
+                # one did the student actually get? Same square anchoring as the cause, so the
+                # two halves are comparable and neither depends on wording.
+
         # Is the cause about something the opponent can actually do anything about? See
         # `cause_irrelevant_rate`. Separate from voicing: a cause can be composed, faithfully
         # voiced, and still be about a piece nobody is attacking.

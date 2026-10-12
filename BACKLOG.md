@@ -62,7 +62,6 @@ Generated — edit the fields under each heading, not this table.
 
 | Id | P | Category | Action | What it gives |
 |---|---|---|---|---|
-| B-013 | P1 | coaching | Do not offer a lesson theme that points away from the cue | closes the one criterion B-012 missed, and removes a coin flip affecting **1167 of 2683 spoken turns (43.5%)** with a saved prompt. |
 | B-008 | P1 | engine | the engine's numbers are not the truth (2026-08-20) | the ~18 turns per game where the coach speaks would be about moves that are actually bad. Today 7 of those 18 criticise a move the reference scores good or nearly good, and best-move agreement is 4 of 18. No prompt change reaches this. |
 | B-002 | P2 | coaching | Our clause names the smallest thing the move wins (2026-09-21, architecture review D1) | 55 turns of 4672 (1.2%), firing in 11 of 119 stored runs. Severe where it lands and rare overall — recorded at P2 for that reason, not P1. |
 | B-003 | P2 | coaching | The coach has no memory across turns (2026-09-21, measured on v54) | the shorten-on-repeat half is DONE (median length ratio 1.23 -> 0.93, criterion 0.70 missed). What remains: 7 turns still silent at the moment the student finally plays the move we asked for, and the repeat turns still run 1.28-1.55x on four of seventeen. |
@@ -73,6 +72,7 @@ Generated — edit the fields under each heading, not this table.
 | BUG-006 | P2 | infra | Play mode takes 6-8 minutes per move | interactive play at all. Every coached turn in the report card now costs ~2-5s, but the PLAY path was last measured at ~480s per move and has not been re-measured since the UCI migration, so the size of what remains is unknown. |
 | B-005 | P2 | instrumentation | The judge is shown a metric we retired | removes a wrong number from the input to every future review. 3 of 5 v54 reviews quote it, and one of them calls it "the number to trust". |
 | B-011 | P2 | instrumentation | Re-run the breadth sweep against the reference engine | tells us whether the 20-of-44 engine disagreement is one game or the general case. That decides whether the P1 engine item above is as large as it looks. |
+| B-014 | P2 | instrumentation | `off_menu` and `unsound_move` count the student's own move | makes two counters mean what their names say. Today they flag 16 turns of 81 at v60, and an unknown share of those are the coach correctly naming the move the student played. |
 | B-001 | P3 | coaching | A quiet opponent reply bypasses the punishment gate (2026-09-21, architecture review D3) | **nothing measurable. Do not build this without new evidence.** The code inconsistency is real — `_reply_punishes` is skipped for an engine-supplied refutation — but every consequence the review attributed to it failed to reproduce. Four measurements below. |
 | BUG-022 | P3 | decision | `critical_moment` cannot see catastrophic alternatives (OPEN, by design?) | nothing until the definition is settled, which is why it sits here rather than in a queue. `critical_moment` gates nothing the student sees today; ledger row 52 measured gating speech on it and rejected it. So this is a naming and semantics question, not a defect. |
 | B-006 | P3 | instrumentation | Guard tolerances from the measured noise floor, not one 3pp rule | zero coached turns. Stops `--guard` false-alarming on every run. |
@@ -202,13 +202,88 @@ that a change with no measured effect goes, and pinned by
 Why it cannot work: the cue and the isolated pawn are BOTH facts we composed, so prompt text has
 no basis on which to arbitrate. The remedy is in selection — see B-013.
 
-## TOP — Do not offer a lesson theme that points away from the cue
+## PART 1 DONE — Do not offer a lesson theme that points away from the cue
 
 - **Id:** B-013
 - **Category:** coaching
-- **Gives:** closes the one criterion B-012 missed, and removes a coin flip affecting **1167 of
-  2683 spoken turns (43.5%)** with a saved prompt.
-- **Priority:** P1
+- **Gives:** part 1 delivered (ledger 167). **Cue voiced 93.2% -> 97.3%**, one turn short of the
+  pre-B-012 98.6%; competing themes offered 23 -> 3; the theme displacing the cue 4 -> 1, its
+  level before B-012. Gating violations 1 -> 0. Part 2 remains, and its population must be
+  re-measured off v60 rather than v58 — see below.
+- **Priority:** P2 (was P1; part 1 took the impact with it)
+
+### Part 1, closed 2026-09-25 (ledger 167)
+
+`_drop_themes_away_from_the_cue` in `prompts.py` drops an injected entry whose instantiated fact
+names squares the turn's subject does not, before `format_guidance_block`. The entry goes rather
+than just its fact: an entry stripped of its board fact is the abstract prose instantiation was
+built to replace (ledger row 14).
+
+Measured side effect, and it is the reason this was worth doing rather than dangerous: turns
+carrying a guidance block fell 81 -> 63, but `lesson_open` stayed at 5 in v57, v58 and v60 and
+concentration moved 12.0% -> 13.5%. The dropped entries were supplying a competing SUBJECT, not
+a takeaway.
+
+**My own recommendation on this item was wrong and is worth keeping as a warning.** I advised
+closing part 1 unbuilt on the strength of `theme_won` reading 0 and 1. Two anchor mismatches:
+the voicing check matched squares while the model answers in FILES ("the passed pawn on the
+a-file" where the theme said "your a-file pawn"), and the counter sat in the cause branch when
+the criterion is about the cue. Corrected, it was 4 of the 5 turns B-012 lost.
+
+### Part 2 — resolve the ours/theirs branch before injecting
+
+Two entries hand the model a choice we have already made. `pattern.isolated_pawn`: "If the
+isolated pawn is yours, use the open files…; if it is the opponent's, blockade the square in
+front of it." `pattern.rook_behind_passed_pawn` has the same shape. We know whose pawn it is —
+it is rules geometry, and the instantiated fact says so two lines above ("your d-file pawn is
+isolated").
+
+Verified instance: v54 seed 23 ply 39 took the opponent branch about the student's OWN isolated
+pawn — "what matters here is the isolated pawn on d4 — it's a key target". Ply 35 got the same
+entry and took the right branch. A coin flip.
+
+**Cost is MEDIUM, not small, and the small version is wrong.** The branches are prose, so
+splitting them at injection means matching "if … is yours / if it is the opponent's", which is
+the phrase-matching this project has repeatedly got wrong. The correct fix is structural:
+`GuidanceEntry` gains two conditional variants, resolved at instantiation where ownership is
+known. That is loader, validation, the guard, both entries, the instantiation path and tests —
+and per ledger row 24, a new required field on `GuidanceEntry` broke 26 tests, so it goes last
+with a default.
+
+**Measure the population off v60, not v58.** Part 1 now drops the isolated-pawn entry entirely
+on turns where it points away from the cue, and the verified instance above is one of them. The
+43.5% figure (1167 of 2683 spoken turns carrying a branchy entry) predates part 1 and is stale.
+If the remaining exposure is small this is a correctness tidy-up rather than a P1.
+
+**No quality gain is promised.** There is no honest output-side measure for "which branch did
+the model take" that does not reduce to matching its prose. This is justified as correctness —
+we are withdrawing an undetermined instruction we authored — the same way the encoding fix was.
+
+## OPEN — `off_menu` and `unsound_move` count the student's own move
+
+- **Id:** B-014
+- **Category:** instrumentation
+- **Gives:** makes two counters mean what their names say. Today they flag 16 turns of 81 at
+  v60, and an unknown share of those are the coach correctly naming the move the student played.
+- **Priority:** P2
+
+`verify._check_named_moves` skips tokens attributed to the opponent, piece references and
+non-moves, then scores everything else against the engine's best/sound menu. It has **no
+exclusion for the played move** — so "By moving Be2, you left your pawn on g5 undefended" is
+read as the coach recommending `Be2`, which is not on the best/sound menu because the student
+just played a mistake.
+
+Found while checking an apparent regression at v60 (`off_menu` 6 -> 9) that turned out not to be
+one: on all five newly-flagged turns the ONLY legal move token in the text was the student's own,
+and `_recommended_tokens` read none of them as advice. Long-standing — 20 such turns at v57, 11
+at v58, 16 at v60 — and non-gating, so nothing has reached a student wrongly.
+
+**Consequence until fixed: these two counters are not comparable across any change that alters
+how often the coaching names a move**, which is exactly what B-012 did. Do not read v57's 12
+against v60's 9 as an improvement or a regression.
+
+Fix shape: pass the played move to `_check_named_moves` and skip it, the way the opponent's
+reply is already skipped. The test writes itself from the five turns above.
 
 Two guidance entries — `pattern.isolated_pawn` and `pattern.rook_behind_passed_pawn` — hand the
 model an unresolved choice in their `how_to_apply`: "if the isolated pawn is yours, use the open

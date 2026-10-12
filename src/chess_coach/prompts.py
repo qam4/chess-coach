@@ -2457,6 +2457,69 @@ def composed_achievement(report: ComparisonReport, tier: str | None = None) -> t
     return f"clause:{clause}", clause
 
 
+#: A square, or a file we expand to its squares, named in an instantiated guidance fact
+#: ("your a-file pawn is passed", "your bishop on c1 is undefended").
+_FACT_SQUARE_RE = re.compile(r"\b([a-h][1-8])\b")
+_FACT_FILE_RE = re.compile(r"\b([a-h])-file\b")
+
+
+def _fact_squares(fact: str) -> set[str]:
+    """Squares an instantiated guidance fact points at; a file expands to all eight."""
+    out = {s.lower() for s in _FACT_SQUARE_RE.findall(fact)}
+    for f in _FACT_FILE_RE.findall(fact):
+        out |= {f"{f.lower()}{rank}" for rank in range(1, 9)}
+    return out
+
+
+def _subject_squares(report: ComparisonReport) -> set[str]:
+    """Squares this turn's subject is about: the composed cause and the achievement clause.
+
+    Derived from the report, not from the rendered prompt, because the filter has to run before
+    the prompt exists. `eval_hard_metrics` measures the SAME property by reading the rendered
+    prompt instead, which is deliberate: the measure must not share the fix's predicate, and
+    reading the finished prompt is an independent check that the filter did what it claims.
+    """
+    blobs: list[str] = [_best_move_achievement(report)]
+    try:
+        blobs += [d.fact for d in diagnose(report.fen, report.user_move, report.best_move)]
+    except (ValueError, KeyError):  # an unparseable position cannot be filtered on
+        return set()
+    return {s.lower() for s in _FACT_SQUARE_RE.findall(" ".join(b for b in blobs if b))}
+
+
+def _drop_themes_away_from_the_cue(
+    report: ComparisonReport,
+    guidance: list[GuidanceEntry] | None,
+    facts: dict[str, str] | None,
+) -> tuple[list[GuidanceEntry] | None, dict[str, str] | None]:
+    """Remove guidance entries whose fact names squares the turn's subject does not.
+
+    Conservative in two directions on purpose. An entry whose fact names NO square is kept —
+    it cannot compete for a subject it does not name. And when we can derive no subject at all,
+    nothing is dropped, because then there is no cue for a theme to point away FROM and the
+    guidance is the only teaching material the turn has.
+    """
+    if not guidance or not facts:
+        return guidance, facts
+    subject = _subject_squares(report)
+    if not subject:
+        return guidance, facts
+
+    dropped: set[str] = set()
+    for feature, fact in facts.items():
+        squares = _fact_squares(fact)
+        if squares and not (squares & subject):
+            dropped.add(feature)
+    if not dropped:
+        return guidance, facts
+
+    kept_facts = {f: v for f, v in facts.items() if f not in dropped}
+    # An entry survives only if it still has an anchoring fact. One whose every feature was
+    # dropped would otherwise render as abstract prose.
+    kept = [e for e in guidance if any(f in kept_facts for f in e.features)]
+    return kept, kept_facts
+
+
 def _achievement_line(report: ComparisonReport, tier: str, times_shown: int = 0) -> str:
     """The rendered achievement line for ``tier``, or '' to omit it.
 
@@ -2707,6 +2770,12 @@ def build_rich_move_evaluation_prompt(
     # An empty selection adds nothing, so feedback is unchanged without guidance.
     # ``guidance_facts`` instantiates each theme with the board fact that fired
     # it, so the model receives a specific reason instead of abstract prose.
+    # B-013: drop any entry whose instantiated fact points somewhere the turn is not about.
+    # Measured on v58: 23 of 74 turns offered such a fact, and on 4 of the 5 turns that lost
+    # the cue the coach voiced the THEME instead of the cue. The entry goes rather than just
+    # its fact, because an entry stripped of its board fact is the abstract prose that
+    # instantiation was built to replace (ledger row 14).
+    guidance, guidance_facts = _drop_themes_away_from_the_cue(report, guidance, guidance_facts)
     guidance_block = format_guidance_block(guidance or [], level=level, facts=guidance_facts)
     if guidance_block:
         sections.append(guidance_block)
