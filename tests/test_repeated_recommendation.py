@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
+from chess_coach.coaching_phrases import DUBIOUS_MAX_DROP_CP, EQUAL_MAX_DROP_CP, SOUND_MAX_DROP_CP
 from chess_coach.models import ComparisonReport
 from chess_coach.prompts import (
     ACHIEVEMENT_REFRAME_AFTER,
@@ -24,14 +27,14 @@ from chess_coach.prompts import (
 FEN = "r1b1k1nr/1ppp1pp1/2n1p3/pN4Bp/2QPP3/8/PP3PPP/2RK1BNR w k - 2 12"
 
 
-def _report() -> ComparisonReport:
+def _report(drop: int = 583) -> ComparisonReport:
     return ComparisonReport(
         fen=FEN,
         user_move="c1b1",
         user_eval_cp=0,
         best_move="b5c7",
-        best_eval_cp=583,
-        eval_drop_cp=583,
+        best_eval_cp=drop,
+        eval_drop_cp=drop,
         classification="blunder",
         nag="??",
         best_move_idea="material gain — winning capture",
@@ -58,7 +61,7 @@ def test_a_repeated_recommendation_gets_a_smaller_budget() -> None:
 
 
 def test_the_repeat_instruction_appears_only_on_a_repeat() -> None:
-    marker = "ALREADY RECOMMENDED THIS MOVE"
+    marker = "ALREADY POINTED THIS OUT"
     assert marker not in build_rich_move_evaluation_prompt(_report(), achievement_times_shown=0)
     assert marker in build_rich_move_evaluation_prompt(_report(), achievement_times_shown=ACHIEVEMENT_REFRAME_AFTER)
 
@@ -75,6 +78,28 @@ def test_the_cue_and_its_reason_survive_the_shortening() -> None:
     assert "Nxc7+" not in repeat, "the move token belongs behind the hint, not in the prompt"
     assert "does the same thing here as it did earlier" in repeat, "the achievement clause must still be stated"
     assert "c7" in repeat, "the composed reason must still name its square"
+
+
+@pytest.mark.parametrize(
+    "drop",
+    [EQUAL_MAX_DROP_CP + 1, SOUND_MAX_DROP_CP + 1, DUBIOUS_MAX_DROP_CP + 1],
+    ids=["sound", "inaccuracy", "serious"],
+)
+def test_the_repeat_instruction_does_not_ask_for_a_move_the_prompt_withholds(drop: int) -> None:
+    """B-019. Every tier that gets the repeat instruction also says not to name a move.
+
+    B-012 took the engine's move out of the prompt and told the coach to name no move, but the
+    repeat instruction kept asking it to "Name the move, say in a few words that it is still
+    available". Told to name a move it had not been given, the model named the only one in front of
+    it, the student's own: "The move Qb6+ is still available" after the student played Qb6+. That
+    happened on 8 of the 18 repeat turns in the five committed v60 games, and 0 of 18 at v56 and v57,
+    while the prompt still carried the engine's move.
+    """
+    repeat = build_rich_move_evaluation_prompt(_report(drop), achievement_times_shown=ACHIEVEMENT_REFRAME_AFTER)
+    assert "do not name a move" in repeat.lower(), "precondition: this tier withholds the move (B-012)"
+    assert "name the move" not in repeat.lower().replace("do not name a move", ""), (
+        "the repeat instruction asks for a move name the prompt does not supply"
+    )
 
 
 def test_the_budget_never_falls_below_the_floor() -> None:

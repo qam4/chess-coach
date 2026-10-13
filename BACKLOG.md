@@ -826,6 +826,37 @@ Two halves:
 2. The checker must flag the played move when it is offered as an alternative ("is still
    available", "was available"), without undoing B-014 for "By moving Be2, you left…".
 
+**BUILT 2026-10-13, outcome pending (ledger row 170).** Both halves are committed, at the owner's
+request, together with the v61 transcripts and BEFORE the result was read. 10 tests (red before,
+green after). The repeat instruction now asks for the
+cue ("Point at the same piece or square again, say in a few words that the same chance came up
+again"); the checker reports `played_offered`, non-gating so it can measure the prompt change.
+Validated on all 108 committed transcripts: 21 hits, all at v58-v60, each one read.
+
+**Correction:** v59 had 8 such turns, not 7 — plies 7/30 and 17/17 ("The move Bc4 was
+available earlier and does the same thing here") were missed. **Sibling, same cause:** v60
+seed 7 ply 58, "The move Re1 was available and still is", Re1 being the rook already on e1. The
+checker does not flag it (it is not the played move); the prompt change should remove it.
+
+**Next session — opener: "read sweep_v61 for B-019".** Job `sweep_v61` ran 2026-10-13
+17:13-17:27 UTC, status COMPLETED, all five seeds exit 0; the transcripts are committed as
+`output/coach_review_v61_seed{7,11,13,17,23}/transcript.json` and have NOT been read. On the 18
+repeat turns, against v60:
+`played_offered` (revert if 3 or more, from 8), cue voiced (revert below 17/18), mean words
+(revert above 54, from 49.3), any other move offered as available (revert above 1). And
+`run_compare` v60 vs v61 must show prompt changes on exactly those 18 turns. How the v60
+baseline was measured: the population is turns whose prompt carries the repeat instruction
+(old marker "ALREADY RECOMMENDED THIS MOVE", new "ALREADY POINTED THIS OUT"); `played_offered`
+is the shipped checker (`eval_hard_metrics.py` counts it in its kinds); cue voiced uses
+`eval_hard_metrics._cue_squares` and `_voices_the_cause` on those turns; "other move offered" is
+any SAN-shaped token followed by "is/was (still) available" that is not the played move and does
+not follow "on" (that is a square, "the undefended piece on e5 is still available", which is the
+shape the fix asks for). v56-v60 on that definition: 0, 0, 1, 2, 1. Scratch script, untracked: `.kiro/tmp/b019_baseline.py v60 v61`. If it passes: the other
+three models, pre and post. If it fails: revert the prompt half (`_RECOMMENDATION_REPEATED` and
+its three prompt tests) and keep the checker, which is how the failure was seen. The one thing
+that would change the plan: 3 or more turns still offering the played move would mean the
+instruction was not the whole cause, and the change is reverted rather than extended.
+
 ### OPEN — Guard tolerances from the measured noise floor, not one 3pp rule
 
 - **Id:** B-006

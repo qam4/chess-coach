@@ -504,11 +504,22 @@ _REPEAT_WORD_FLOOR = 35
 #: Said ONLY when the same recommendation has already been given and not taken. Names what to drop
 #: rather than asking for brevity in the abstract, because "be concise" has been in the tone block
 #: since v2 and the repeats still came back longer than the first telling.
+#:
+#: B-019. This used to say "Name the move, say in a few words that it is still available". B-012
+#: then took the engine's move out of the prompt and told every comparing tier "Do NOT name a move",
+#: and this line was left asking for one. Told to name a move it had not been given, the model named
+#: the only one in front of it, the student's: "The move Qb6+ is still available" after the student
+#: played Qb6+. 8 of the 18 repeat turns at v60, 0 of 18 at v56 and v57 while the prompt still
+#: carried the engine's move. So it now asks for the CUE, which is in the prompt, and says the chance
+#: "came up again" — true by construction, since the same achievement clause recurred in this
+#: position — rather than "is still available", a claim about the position after the move that
+#: nothing here checks.
 _RECOMMENDATION_REPEATED = """\
-- YOU HAVE ALREADY RECOMMENDED THIS MOVE earlier in this game and the student has not played it. \
-Do NOT build the case again from the start. Name the move, say in a few words that it is still \
-available, and stop. Skip the general principle behind it, skip what it wins in detail, and do not \
-re-describe the position — the student has had all of that. Shorter than your earlier turn on it.
+- YOU HAVE ALREADY POINTED THIS OUT earlier in this game and the student did not take it. \
+Do NOT build the case again from the start. Point at the same piece or square again, say in a few \
+words that the same chance came up again, and stop. Skip the general principle behind it, skip what \
+it wins in detail, and do not re-describe the position — the student has had all of that. Shorter \
+than your earlier turn on it.
 """
 
 _REPLY_WITHHELD = """\
@@ -2923,8 +2934,9 @@ def build_rich_move_evaluation_prompt(
     # repeat, the model elaborates.
     #
     # The budget is cut rather than the facts withheld. Withholding is the mistake `_achievement_line`
-    # records: when the reason was retired the model invented three replacements. So the clause and
-    # the move name stay, and only the room to restate them shrinks.
+    # records: when the reason was retired the model invented three replacements. So the clause stays,
+    # and only the room to restate it shrinks. (It also said "the move name stays" until B-012 moved
+    # the move behind the hint; asking for it after that is B-019 — see `_RECOMMENDATION_REPEATED`.)
     if achievement_times_shown >= ACHIEVEMENT_REFRAME_AFTER and tier not in _OWN_MOVE_TIERS:
         word_limit = repeat_shortened_word_limit(word_limit)
         move_instructions += _RECOMMENDATION_REPEATED
