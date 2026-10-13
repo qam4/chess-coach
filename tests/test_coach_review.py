@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import dataclasses
+import importlib.util
+import json
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -13,10 +17,12 @@ from chess_coach.eval.coach_review import (
     ReviewStats,
     ReviewTurn,
     aggregate_review,
+    build_architecture_review_prompt,
     build_coach_review_prompt,
     grades_or_prices_the_move,
-    lesson_concentration,
 )
+
+REPO = Path(__file__).resolve().parent.parent
 
 
 def _turn(
@@ -335,33 +341,6 @@ def test_recycled_phrasing_is_partial_for_a_shared_template() -> None:
     assert 0.2 < rate < 0.9, rate
 
 
-def test_lesson_concentration_is_high_when_the_advice_never_varies() -> None:
-    # Same lesson, deliberately REWORDED each time — which is what the model
-    # actually does, and why counting distinct closing sentences saw nothing.
-    from chess_coach.eval.coach_review import closing_sentence
-
-    turns = [
-        _turn(0, PHASE_OPENING, feedback="Fine. Next time you spot an undefended knight, ask if you can hit it."),
-        _turn(2, PHASE_OPENING, feedback="Careful. When a bishop is undefended, look for a way to attack it."),
-        _turn(4, PHASE_MIDDLEGAME, feedback="Watch out. An undefended rook invites an attack — go after it."),
-        _turn(6, PHASE_MIDDLEGAME, feedback="Good. Undefended pieces are targets, so attack the loose one."),
-    ]
-    assert len({closing_sentence(t) for t in turns}) == 4  # every ending is a different string
-    assert aggregate_review(turns).lesson_concentration_rate == 1.0  # and every one is the same lesson
-
-
-def test_lesson_concentration_falls_when_the_advice_varies() -> None:
-    turns = [
-        _turn(0, PHASE_OPENING, feedback="Develop both knights before the queen comes out."),
-        _turn(2, PHASE_OPENING, feedback="Castle early; the centre is about to open."),
-        _turn(4, PHASE_MIDDLEGAME, feedback="Rooks belong on files without pawns."),
-        _turn(6, PHASE_MIDDLEGAME, feedback="Trade when you are ahead in material."),
-        _turn(8, PHASE_ENDGAME, feedback="Escort the passer with your monarch."),
-        _turn(10, PHASE_ENDGAME, feedback="Cut the enemy monarch off along the rank."),
-    ]
-    assert aggregate_review(turns).lesson_concentration_rate < 0.7
-
-
 def test_repetition_metrics_survive_the_round_trip() -> None:
     from chess_coach.eval.coach_review import ReviewStats
 
@@ -372,7 +351,6 @@ def test_repetition_metrics_survive_the_round_trip() -> None:
     restored = ReviewStats.from_dict(original.to_dict())
     # to_dict rounds to 4 decimal places, so the trip is lossy by design.
     assert restored.recycled_phrase_rate == round(original.recycled_phrase_rate, 4)
-    assert restored.lesson_concentration_rate == round(original.lesson_concentration_rate, 4)
     assert restored.to_dict() == original.to_dict()
 
 
@@ -470,42 +448,65 @@ def test_stats_block_states_which_direction_is_good() -> None:
     assert "LOWER IS BETTER" in block
 
 
-def test_lesson_concentration_is_deterministic_under_ties() -> None:
-    """The same turns must always score the same, whatever the hash seed.
+# ---------------------------------------------------------------------------
+# B-005: the judge is not handed a repetition number, and is not told to trust one
+# ---------------------------------------------------------------------------
 
-    This failed. ``_lesson_terms`` returns a set, set iteration order is randomized
-    per process, and ``Counter.most_common`` left ties in insertion order — so the cut
-    at the third-most-common term fell differently on different runs and one stored
-    transcript scored 72% on one invocation and 83% on another. A number that moves
-    while the data stands still cannot accept or reject a change.
+#: Committed (`.gitignore` un-ignores report-card transcripts), so this reads the same input on
+#: every machine. Seed 23 is the run whose review deferred to the number: "the deterministic 20%
+#: concentration figure is the number to trust".
+_V54_SEED23 = REPO / "output" / "coach_review_v54_seed23" / "transcript.json"
 
-    Constructed so several terms tie at the boundary, which is the case that broke:
-    every closing sentence contributes one distinct content word, so all of them are
-    tied at count 1 and only the tie-break decides which three are "the usual
-    lessons".
+
+def _load_rejudge_script():  # type: ignore[no-untyped-def]
+    path = REPO / "scripts" / "eval_coach_rejudge.py"
+    spec = importlib.util.spec_from_file_location("eval_coach_rejudge", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["eval_coach_rejudge"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.skipif(not _V54_SEED23.exists(), reason="committed v54 seed-23 transcript absent")
+def test_no_judge_surface_shows_a_lesson_repetition_figure() -> None:
+    """The judge counts repetition itself, from the transcript (owner's ruling, 2026-10-12).
+
+    The line this replaces read "Lesson concentration: 20% of turns close on one of only three
+    recurring lessons ... this is measured, so you do not need to count it by hand". All three
+    claims in it were false on this transcript: the 20% divided by all 40 turns although 20 were
+    silent; the "lessons" were the three commonest content WORDS of the model's last sentence
+    (`pawn`, `king`, `passed`); and an alphabetical tie-break dropped `undefended`, so none of the
+    four "Next time you see an undefended piece" closings the review was complaining about
+    (plies 17, 19, 27, 51) were counted. All five v54 reviews quoted it.
+
+    Three surfaces render the stats block, and two of them read the STORED stats rather than
+    recomputing, so every one is built here from the committed transcript: a fresh report card,
+    a re-judge through the script's own loader, and an architecture review.
     """
-    words = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
-    turns = [
-        _turn(i, PHASE_MIDDLEGAME, feedback=f"Some coaching. Worth remembering: {w}.") for i, w in enumerate(words)
-    ]
+    data = json.loads(_V54_SEED23.read_text(encoding="utf-8"))
+    # The stored block predates the change and still carries the old field. That is the point:
+    # the re-judge and architecture paths must not render it even when it is present.
+    assert "lesson_concentration_rate" in data["stats"]
 
-    first = lesson_concentration(turns)
-    # Re-running in-process must agree...
-    assert lesson_concentration(turns) == first
-    # ...and so must a different ordering of the same turns, which is what a
-    # randomized set iteration effectively produced.
-    assert lesson_concentration(list(reversed(turns))) == first
-
-
-def test_lesson_concentration_still_detects_a_repeated_lesson() -> None:
-    """Guard against fixing determinism by making the metric blind.
-
-    Six turns closing on one idea must score far higher than six closing on six.
-    """
-    same = [_turn(i, PHASE_MIDDLEGAME, feedback="Worth remembering: count the defenders.") for i in range(6)]
-    varied = [
-        _turn(i, PHASE_MIDDLEGAME, feedback=f"Worth remembering: {w}.")
-        for i, w in enumerate(["defenders", "promotion", "castling", "tempo", "outpost", "endgames"])
-    ]
-    assert lesson_concentration(same) == 1.0
-    assert lesson_concentration(varied) < lesson_concentration(same)
+    rejudge_turns, rejudge_stats = _load_rejudge_script()._load(_V54_SEED23)
+    arch_turns = [ReviewTurn(**dict(t)) for t in data["turns"]]
+    surfaces = {
+        "report card": build_coach_review_prompt(rejudge_turns, aggregate_review(rejudge_turns)),
+        "re-judge": build_coach_review_prompt(rejudge_turns, rejudge_stats),
+        "architecture review": build_architecture_review_prompt(
+            architecture="-",
+            constraints="-",
+            lever_log="-",
+            sample_prompt="-",
+            sample_turns=arch_turns[:3],
+            stats=ReviewStats.from_dict(data["stats"]),
+        ),
+    }
+    for name, prompt in surfaces.items():
+        low = prompt.lower()
+        assert "lesson concentration" not in low, f"{name} still shows the lesson-concentration line"
+        assert "recurring lessons" not in low, f"{name} still shows the lesson-concentration line"
+        assert "count it by hand" not in low, f"{name} still tells the judge not to count"
+        # Guard against fixing this by blanking the whole block: the other stats must survive.
+        assert "Recycled phrasing:" in prompt, f"{name} lost the rest of the stats block"
