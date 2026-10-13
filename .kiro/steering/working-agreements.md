@@ -44,6 +44,31 @@ concern before it was acted on.
 **Verify a position before writing it into a test.** Four test FENs in one session named a
 piece that was not there or a move that was illegal.
 
+## At each milestone: say where the bottleneck is
+
+Asked for directly: after each milestone, state plainly whether the limit is now the ENGINE or
+the COACH, and show the reasoning. Not a hedge — a verdict.
+
+The test is mechanical. For each defect worth fixing, ask: **is the information the coach needs
+present in the engine's output?**
+
+- Present and unused -> coach. Fixable here, now.
+- Absent or wrong -> engine. Prompt work cannot lift it, and per the division of labour we do
+  not work around it.
+
+Worked example, the phase/endgame defect (2026-09-14): phase we compute ourselves, passed pawns
+the engine supplies, king activity we already have a detector for, opposition and
+rook-behind-the-passer are rules geometry. All present, none used. Coach.
+
+Counter-example on the same day: best-move agreement 4 of 18 and a 50-60cp residual under every
+conversion. No prompt fixes that. Engine.
+
+**Name the instrument's blind spot when you give the verdict.** The judge can read writing,
+structure and lesson variety; it cannot check whether a move was really bad. So it will keep
+reporting coach problems even when an engine problem is larger, because the engine's errors are
+invisible to it. A verdict that does not mention this is overstating its own evidence — nine
+unanimous reviews saying "coach" is partly an artefact of what the reviewer can see.
+
 ## Choosing what to do
 
 **Read `BACKLOG.md` before proposing work, not just after.** Sixteen rounds of numbered lists
