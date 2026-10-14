@@ -84,13 +84,20 @@ Generalise one of these before writing anything new:
 - `scripts/eval_transcript_pairwise.py` — the quality instrument, 94% self-agreement.
 - `scripts/eval_coach_rejudge.py` — re-judge a saved transcript with no coach, engine or
   tunnel, to isolate the judge's ask from the coach's output.
-- `verify.py` internals — `_SAN_RE`, `_legal_san`, `_recommended_tokens` already encode "which
-  moves does this text name, and whose". Do not write a second move parser.
 - `scripts/snapshot_clauses.py --check docs/clause-snapshot.tsv` — 5062 positions; run it on
   any change to the clause pipeline.
 
-Anchor measures on the board or on text we composed. The retired phrase list is kept in the
-code only as a warning against rebuilding it.
+Anchor measures on the board or on text we composed, never on the model's words — see "No
+regex, phrase list or keyword match over prose a model wrote" in `working-agreements.md`, which
+`tests/test_model_text_matchers.py` enforces. The retired phrase list is kept in the code only as
+a warning against rebuilding it.
+
+**`verify.py` is not an instrument to reuse.** This list used to say its `_SAN_RE`,
+`_legal_san` and `_recommended_tokens` "already encode which moves this text names, and whose —
+do not write a second move parser". They do it by reading the model's wording ("better",
+"opponent", reply-verb lists), so that line pointed agents at exactly what the rule forbids, and
+the gate's word lists grew under it. They predate the ruling: do not extend them, do not copy
+them, and do not build a measure on top of them.
 
 ## Step 5 — what a good gate message looks like here
 

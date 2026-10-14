@@ -26,6 +26,22 @@ asserted from what was verified against the board.
 
 ## Measurement
 
+**No regex, phrase list or keyword match over prose a model wrote — anywhere.** Not in a
+measure, a test, a scratch script or the gate; not on the coach's reply or the judge's commentary.
+Anchor on text we composed or on the board. If the only way to check something is to read the
+model's words, the check does not get written: say so and ask. There are no exceptions an agent
+grants itself — if one looks justified, that is the moment to ask. (Parsing a JSON reply we asked
+the judge for is not prose.) The owner's ruling, 2026-10-14. Three rules saying the same for
+measures were already loaded when it was broken: a checker matching "is still available" was
+added to `verify.py`, defended in its own comment because "the word is ours", and scratch scripts
+did the same with no defence at all. `tests/test_model_text_matchers.py` freezes every
+string-matching construct in code that handles model text (207 at freeze) and fails on any new
+one or any changed pattern. **When it fails, stop and ask; never regenerate its list to pass.**
+A commit that changes `tests/model_text_matchers.txt` says so in its first line. The 207 predate
+the ruling and are recorded, not endorsed: do not extend them, and replacing them is the owner's
+decision. Scratch scripts under `.kiro/tmp/` are not tracked, so the test cannot see them; the
+rule still applies there.
+
 **Do not accept or reject a change on the judge's 0-10 score.** It returned 5.5 / 5.0 / 2.0 on
 byte-identical input, and four of seven category scores differ on a re-run of the same
 transcript. "Worse on five of seven dimensions" is what noise looks like, not evidence.
