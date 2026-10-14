@@ -97,6 +97,7 @@ def test_a_record_heading_needs_no_metadata() -> None:
         "### Closed by measurement, do not reopen\n\nprose\n\n"
         "## TOP — A real action\n\n"
         "- **Id:** B-900\n- **Category:** instrumentation\n- **Gives:** 5 of 81 turns\n- **Priority:** P2\n"
+        "- **Found while:** own review\n"
     )
     items, problems = bi.parse_backlog(text)
     assert not problems, problems
@@ -122,6 +123,7 @@ def test_partially_fixed_is_not_treated_as_fixed() -> None:
     partial = (
         "### BUG-902: Slow\n"
         "- **Id:** BUG-902\n- **Category:** infra\n- **Gives:** 1 thing\n- **Priority:** P2\n"
+        "- **Found while:** own review\n"
         "- **Status**: PARTIALLY FIXED — half of it.\n"
     )
     items, problems = bi.parse_bugs(partial)
@@ -133,6 +135,7 @@ def test_a_bug_whose_declared_id_disagrees_with_its_heading_is_refused() -> None
     text = (
         "### BUG-903: Something\n"
         "- **Id:** BUG-999\n- **Category:** infra\n- **Gives:** x\n- **Priority:** P3\n"
+        "- **Found while:** own review\n"
         "- **Not fixed**: no\n"
     )
     _items, problems = bi.parse_bugs(text)
@@ -149,3 +152,78 @@ def test_a_closed_items_id_is_not_offered_for_reuse() -> None:
     suggested = bi.next_free_id()
     text = (bi.BACKLOG.read_text(encoding="utf-8")) + (bi.BUGS.read_text(encoding="utf-8") if bi.BUGS.exists() else "")
     assert f"**Id:** {suggested}" not in text, f"{suggested} is already used somewhere in the files"
+
+
+# --- "Found while": an item filed while working another must say why it is not part of it --------
+#
+# Working one item kept producing new ones: B-013 gave B-014, B-014 gave B-019, B-005 gave B-015 to
+# B-018, and B-019 gave two more, one of which was the broken instrument deciding B-019's own
+# verdict. The rule that let it through filed "anything else you notice" without asking whether it
+# was else. This field makes the question unavoidable at the moment an item is filed. It cannot
+# make the answer honest; it does make a dishonest one visible in the table.
+
+
+def _item(ident: str, extra: str = "") -> str:
+    return (
+        "## OPEN — Something noticed\n\n"
+        f"- **Id:** {ident}\n- **Category:** coaching\n- **Gives:** 2 turns\n- **Priority:** P2\n{extra}"
+    )
+
+
+def test_a_new_item_must_say_where_it_was_found() -> None:
+    _items, problems = bi.parse_backlog(_item("B-900"))
+    assert problems and "Found while" in problems[0], problems
+
+
+def test_an_item_from_before_the_rule_does_not_need_it() -> None:
+    items, problems = bi.parse_backlog(_item("B-019"))
+    assert not problems, problems
+    assert items[0].found_while == ""
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "own review",
+        "B-019 — separate because the same gap passed v60's Qc2 claim, before B-019 changed anything",
+        "BUG-017 - separate because it is about the engine, not the clause",
+    ],
+)
+def test_found_while_takes_own_review_or_a_parent_and_a_reason(value: str) -> None:
+    items, problems = bi.parse_backlog(_item("B-900", f"- **Found while:** {value}\n"))
+    assert not problems, problems
+    assert items[0].found_while == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "B-019",  # a parent and no reason: the question was not answered
+        "B-019 — separate because",  # the words with nothing after them
+        "while reading v61",  # neither own review nor an item id
+    ],
+)
+def test_found_while_without_an_answer_is_refused(value: str) -> None:
+    _items, problems = bi.parse_backlog(_item("B-900", f"- **Found while:** {value}\n"))
+    assert problems and "Found while" in problems[0], f"should have been refused: {value!r}"
+
+
+def test_the_parent_must_exist() -> None:
+    items, problems = bi.parse_backlog(_item("B-900", "- **Found while:** B-899 — separate because no\n"))
+    assert not problems
+    assert bi.check_parents(items, known={"B-019"}), "a parent that is not in either file must be reported"
+    assert not bi.check_parents(items, known={"B-899"})
+
+
+def test_a_new_bug_needs_it_too() -> None:
+    """Otherwise the rule is avoided by filing the same thing in BUGS.md."""
+    bug = "### BUG-930: Something\n- **Id:** BUG-930\n- **Category:** infra\n- **Gives:** x\n- **Priority:** P3\n"
+    _items, problems = bi.parse_bugs(bug)
+    assert problems and "Found while" in problems[0], problems
+
+
+def test_the_table_shows_where_each_item_came_from() -> None:
+    items, _ = bi.parse_backlog(_item("B-900", "- **Found while:** B-019 — separate because it predates it\n"))
+    table = bi.render(items)
+    assert "| Found while |" in table
+    assert "| B-900 | P2 | coaching | B-019 |" in table

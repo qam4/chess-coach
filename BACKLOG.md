@@ -39,6 +39,11 @@ whose status does not begin `FIXED` — carries four fields directly under its h
 - **Priority** — `P1` changes a large share of coached turns, or is the only thing that would
   let us tell whether a P1 worked. `P2` changes a smaller share, or makes a P1 measurable.
   `P3` is everything else. Priority is impact, never cost.
+- **Found while** — required from B-020 and BUG-023 on. `own review`, or the item being worked
+  when this was found and `separate because <reason>`. The reason must say why that item's verdict
+  does not depend on this one; if it does, this is unfinished work on that item and does not get
+  an id. Added 2026-10-13 because working one item kept producing new ones (B-013 -> B-014 ->
+  B-019 -> two more), and one of them was the broken instrument deciding B-019's own verdict.
 
 This exists because sixteen rounds of numbered lists accumulated here and the same items kept
 recurring: the file recorded WHAT to do and never what doing it would buy, so the cheapest item
@@ -60,26 +65,26 @@ item that closes from now on keeps the id it had.
 **Open actions: 18** (14 from this file, 4 open bugs from `BUGS.md`).
 Generated — edit the fields under each heading, not this table.
 
-| Id | P | Category | Action | What it gives |
-|---|---|---|---|---|
-| B-008 | P1 | engine | the engine's numbers are not the truth (2026-08-20) | the ~18 turns per game where the coach speaks would be about moves that are actually bad. Today 7 of those 18 criticise a move the reference scores good or nearly good, and best-move agreement is 4 of 18. No prompt change reaches this. |
-| B-002 | P2 | coaching | Our clause names the smallest thing the move wins (2026-09-21, architecture review D1) | 55 turns of 4672 (1.2%), firing in 11 of 119 stored runs. Severe where it lands and rare overall — recorded at P2 for that reason, not P1. |
-| B-003 | P2 | coaching | The coach has no memory across turns (2026-09-21, measured on v54) | the shorten-on-repeat half is DONE (median length ratio 1.23 -> 0.93, criterion 0.70 missed). What remains: 7 turns still silent at the moment the student finally plays the move we asked for, and the repeat turns still run 1.28-1.55x on four of seventeen. |
-| B-004 | P2 | coaching | The closing lesson names a theme the turn never taught (2026-09-21, v54 reviews) | ~9 of 81 turns stop closing on an irrelevant theme (measured on v53; the nine plies are listed below). Deterministic, so the fix is measurable despite the model's churn. |
-| B-018 | P2 | coaching | The engine's move named in plain words, past the B-012 withhold (2026-10-12) | unknown across the corpus. In one game (v60 seed 17), 2 turns name the engine's move plainly and 3 more come close; nothing measures this today. |
-| B-019 | P2 | coaching | The coach tells the student the move they just played "is still available" (2026-10-12) | 8 of 81 spoken v60 turns (10%) stop telling the student, in effect, to play the move they have just played. The judges' most common "fix this first": 3 of 20 reviews rank it their single highest-leverage change, and 8 more say to fix it before anything else because it is the only defect that actively misleads. |
-| BUG-017 | P2 | coaching | Ungrounded positional justifications persist (broader than BUG-013) | unknown, and that is the finding. This was called "the single most damaging problem" on 2026-08-05, before the gating checks, the composed clause pipeline and the ownership, relation, intent and confinement checks existed. Clean% now reads 89-100% across five games, so the claim needs re-measuring before it is worked on. Re-measure first, then price it. |
-| B-009 | P2 | decision | Two band questions that need judgement, not arithmetic | unknown until the band is chosen. It decides how many of ~18 spoken turns per game are about a move that is not actually bad, so it is upstream of the coaching, but no number can be attached without picking the band first. |
-| B-010 | P2 | decision | Structural options, blocked on the engine answer above | would close the 4-of-18 best-move agreement gap directly rather than waiting on Blunder's NNUE work. Costs a runtime dependency, which is the owner's call. |
-| BUG-006 | P2 | infra | Play mode takes 6-8 minutes per move | interactive play at all. Every coached turn in the report card now costs ~2-5s, but the PLAY path was last measured at ~480s per move and has not been re-measured since the UCI migration, so the size of what remains is unknown. |
-| B-011 | P2 | instrumentation | Re-run the breadth sweep against the reference engine | tells us whether the 20-of-44 engine disagreement is one game or the general case. That decides whether the P1 engine item above is as large as it looks. |
-| B-001 | P3 | coaching | A quiet opponent reply bypasses the punishment gate (2026-09-21, architecture review D3) | **nothing measurable. Do not build this without new evidence.** The code inconsistency is real — `_reply_punishes` is skipped for an engine-supplied refutation — but every consequence the review attributed to it failed to reproduce. Four measurements below. |
-| B-016 | P3 | coaching | The judge calls our closing frame wallpaper, and we compose it (2026-10-12, B-005 A/B) | unknown, and probably little on its own. None of the 20 reviews ranks the frame as its highest-leverage change; they treat it as a symptom of the lesson being chosen apart from the diagnosis, which is B-004. Re-measure after B-004 lands. |
-| B-017 | P3 | coaching | "The data shows": our prompt's framing reaches the student (2026-10-12) | 2 of 81 spoken v60 turns. |
-| BUG-022 | P3 | decision | `critical_moment` cannot see catastrophic alternatives (OPEN, by design?) | nothing until the definition is settled, which is why it sits here rather than in a queue. `critical_moment` gates nothing the student sees today; ledger row 52 measured gating speech on it and rejected it. So this is a naming and semantics question, not a defect. |
-| B-006 | P3 | instrumentation | Guard tolerances from the measured noise floor, not one 3pp rule | zero coached turns. Stops `--guard` false-alarming on every run. |
-| B-015 | P3 | instrumentation | Every rate in the judge's stats block counts silent turns | zero coached turns. Corrects two more numbers in every judge input: on v54 the judge is told 25-56% of turns voice a composed fact where the spoken-turn figure is 68-88%, and 2-11% recycled phrasing where it is 4-22%. One v54 review (seed 17) quoted the diluted 3%. |
-| BUG-021 | P3 | instrumentation | `eval_drop_cp` reports mate scores as centipawns (OPEN, low priority) | zero coached turns today — the coach is forbidden from stating centipawn numbers, so no student sees it. It becomes real the moment anything averages or plots eval drops, and `metrics_history` now plots per-run numbers, so the day is closer than when this was filed. |
+| Id | P | Category | Found while | Action | What it gives |
+|---|---|---|---|---|---|
+| B-021 | P1 | coaching | B-019 | Stop deciding what the model's text means by matching its words: the gate and the counters (2026-10-14) | the gate runs on every spoken turn, and all 13 of its blocking kinds depend on the model's wording somewhere. It has been measured wrong in both directions: 8 of 11 fallbacks in one sweep were correct coaching blocked by its word lists (ledger row 113), and 2 board falsehoods in the 36 B-019 repeat turns read by hand passed it as clean (folded in from B-020). Every falsehood count in the ledger comes from these same checks. |
+| B-008 | P1 | engine |  | the engine's numbers are not the truth (2026-08-20) | the ~18 turns per game where the coach speaks would be about moves that are actually bad. Today 7 of those 18 criticise a move the reference scores good or nearly good, and best-move agreement is 4 of 18. No prompt change reaches this. |
+| B-002 | P2 | coaching |  | Our clause names the smallest thing the move wins (2026-09-21, architecture review D1) | 55 turns of 4672 (1.2%), firing in 11 of 119 stored runs. Severe where it lands and rare overall — recorded at P2 for that reason, not P1. |
+| B-003 | P2 | coaching |  | The coach has no memory across turns (2026-09-21, measured on v54) | the shorten-on-repeat half is DONE (median length ratio 1.23 -> 0.93, criterion 0.70 missed). What remains: 7 turns still silent at the moment the student finally plays the move we asked for, and the repeat turns still run 1.28-1.55x on four of seventeen. |
+| B-004 | P2 | coaching |  | The closing lesson names a theme the turn never taught (2026-09-21, v54 reviews) | ~9 of 81 turns stop closing on an irrelevant theme (measured on v53; the nine plies are listed below). Deterministic, so the fix is measurable despite the model's churn. |
+| B-018 | P2 | coaching |  | The engine's move named in plain words, past the B-012 withhold (2026-10-12) | unknown across the corpus. In one game (v60 seed 17), 2 turns name the engine's move plainly and 3 more come close; nothing measures this today. |
+| BUG-017 | P2 | coaching |  | Ungrounded positional justifications persist (broader than BUG-013) | unknown, and that is the finding. This was called "the single most damaging problem" on 2026-08-05, before the gating checks, the composed clause pipeline and the ownership, relation, intent and confinement checks existed. Clean% now reads 89-100% across five games, so the claim needs re-measuring before it is worked on. Re-measure first, then price it. |
+| B-009 | P2 | decision |  | Two band questions that need judgement, not arithmetic | unknown until the band is chosen. It decides how many of ~18 spoken turns per game are about a move that is not actually bad, so it is upstream of the coaching, but no number can be attached without picking the band first. |
+| B-010 | P2 | decision |  | Structural options, blocked on the engine answer above | would close the 4-of-18 best-move agreement gap directly rather than waiting on Blunder's NNUE work. Costs a runtime dependency, which is the owner's call. |
+| BUG-006 | P2 | infra |  | Play mode takes 6-8 minutes per move | interactive play at all. Every coached turn in the report card now costs ~2-5s, but the PLAY path was last measured at ~480s per move and has not been re-measured since the UCI migration, so the size of what remains is unknown. |
+| B-011 | P2 | instrumentation |  | Re-run the breadth sweep against the reference engine | tells us whether the 20-of-44 engine disagreement is one game or the general case. That decides whether the P1 engine item above is as large as it looks. |
+| B-001 | P3 | coaching |  | A quiet opponent reply bypasses the punishment gate (2026-09-21, architecture review D3) | **nothing measurable. Do not build this without new evidence.** The code inconsistency is real — `_reply_punishes` is skipped for an engine-supplied refutation — but every consequence the review attributed to it failed to reproduce. Four measurements below. |
+| B-016 | P3 | coaching |  | The judge calls our closing frame wallpaper, and we compose it (2026-10-12, B-005 A/B) | unknown, and probably little on its own. None of the 20 reviews ranks the frame as its highest-leverage change; they treat it as a symptom of the lesson being chosen apart from the diagnosis, which is B-004. Re-measure after B-004 lands. |
+| B-017 | P3 | coaching |  | "The data shows": our prompt's framing reaches the student (2026-10-12) | 2 of 81 spoken v60 turns. |
+| BUG-022 | P3 | decision |  | `critical_moment` cannot see catastrophic alternatives (OPEN, by design?) | nothing until the definition is settled, which is why it sits here rather than in a queue. `critical_moment` gates nothing the student sees today; ledger row 52 measured gating speech on it and rejected it. So this is a naming and semantics question, not a defect. |
+| B-006 | P3 | instrumentation |  | Guard tolerances from the measured noise floor, not one 3pp rule | zero coached turns. Stops `--guard` false-alarming on every run. |
+| B-015 | P3 | instrumentation |  | Every rate in the judge's stats block counts silent turns | zero coached turns. Corrects two more numbers in every judge input: on v54 the judge is told 25-56% of turns voice a composed fact where the spoken-turn figure is 68-88%, and 2-11% recycled phrasing where it is 4-22%. One v54 review (seed 17) quoted the diluted 3%. |
+| BUG-021 | P3 | instrumentation |  | `eval_drop_cp` reports mate scores as centipawns (OPEN, low priority) | zero coached turns today — the coach is forbidden from stating centipawn numbers, so no student sees it. It becomes real the moment anything averages or plots eval drops, and `metrics_history` now plots per-run numbers, so the day is closer than when this was filed. |
 
 <!-- END BACKLOG INDEX -->
 
@@ -788,7 +793,15 @@ This leaks past the owner's B-012 ruling (the coaching text names no move). A me
 to be anchored on the best move's from- and to-squares and piece type, not on SAN. Measure it
 across the corpus before pricing it.
 
-### OPEN — The coach tells the student the move they just played "is still available" (2026-10-12)
+### DONE — The coach tells the student the move they just played "is still available" (closed 2026-10-14, ledger 170)
+
+**Closed 2026-10-14.** The repeat instruction asks for the cue instead of a move name. By reading
+every repeat-turn sentence that names the played move, the student was offered their own move
+10 times before and 1 after, across qwen3:14b, gemma4, qwen3:8b and hermes3. Every pre-registered
+bar passes on every model: gemma4's length by the owner's ruling, and the cue on reading rather
+than as scored (16/18 as scored, both misses read and explained). The checker half was removed under
+the owner's no-regex ruling, and the "Bh6" measure fix was reverted for the same reason. The fix is
+guarded by a test on the composed prompt. The remaining wording matches on model output are B-021.
 
 - **Id:** B-019
 - **Category:** coaching
@@ -796,7 +809,7 @@ across the corpus before pricing it.
   they have just played. The judges' most common "fix this first": 3 of 20 reviews rank it their
   single highest-leverage change, and 8 more say to fix it before anything else because it is the
   only defect that actively misleads.
-- **Priority:** P2
+- **Priority:** closed
 
 Seen on v60: seed 7 plies 38 and 46; seed 13 plies 20, 26 and 36; seed 23 plies 21, 39 and 43.
 For example, seed 23 ply 43: the student played Qb6+, and the coach says "The move Qb6+ is still
@@ -838,7 +851,44 @@ available earlier and does the same thing here") were missed. **Sibling, same ca
 seed 7 ply 58, "The move Re1 was available and still is", Re1 being the rook already on e1. The
 checker does not flag it (it is not the played move); the prompt change should remove it.
 
-**Next session — opener: "read sweep_v61 for B-019".** Job `sweep_v61` ran 2026-10-13
+**v61 READ 2026-10-13 (ledger row 170): KEPT on qwen3:14b, every pre-registered criterion
+met.** On the 18 repeat turns: played move offered 8 -> 0, other move offered 1 -> 0, mean words
+49.3 -> 47.8, cue voiced 18/18 -> 17/18 (bar 17), prompts changed on exactly those 18 and nothing
+else moved. The cue first read 16/18 because the metric could not read a square written after a
+bishop ("Bh6"); that was fixed inside this item behind a red test, then **REVERTED 2026-10-14**
+under the no-regex ruling, so the cue reads 16/18 as scored and passes on reading. One new falsehood on a changed turn, seed 23 ply 23 "capture
+it with Kf8", against two v60 falsehoods removed; the checker gap behind both is B-020.
+
+**Remaining before this item is done: the other three models** (gemma4:12b-it-qat, qwen3:8b,
+hermes3:8b), five seeds each, at the pre-fix commit `f118f27` and at the fix, same criteria.
+
+**Three-model sweep READ 2026-10-14 (ledger row 170).** By reading every repeat-turn sentence
+naming the played move: qwen3:14b 8 -> 0, gemma4 2 -> 0, qwen3:8b 0 -> 0, hermes3 0 -> 1. Every
+bar passes on every model except one: **gemma4's repeat turns average 55.2 words against the
+54-word bar**, which was a fixed number set from qwen3:14b and is one noise SD (2.9) on gemma4.
+(1) **Owner's ruling 2026-10-14: gemma4's length counts as a pass.** (2) **Owner's ruling 2026-10-14: no regex on LLM output.** The proposed widening was withdrawn and
+the shipped `played_offered` check REMOVED (`verify.py` and its tests restored to `f118f27`). Half 2
+of this item is therefore dropped by ruling, not done: catching the defect in the model's text would
+mean judging what a sentence means from its wording. The fix is guarded by the prompt test, on text
+we compose. With that, every criterion is met and this item closes on commit. Background, kept for
+the record — the removed checker missed the defect in other words — "You could have played Rhe1 instead"
+(gemma4 pre, s17 p37) and "You missed an opportunity to fork their pieces with Bd3" (hermes3 post,
+s23 p21). The widening that would have caught them was withdrawn under the same ruling. The 30
+three-model transcripts are committed under `output/b019_models/` (`.gitignore` exemption added),
+and the pre-fix worktree is removed.
+
+**Superseded — the launch record.** Job `sweep_b019_models`, launched 2026-10-13 — 30 runs, `output/_sweep_b019_models.ps1`.
+The pre arm runs from a git worktree of `f118f27` at `.kiro/tmp/b019pre` (its own uv venv,
+checked to import its own `src` and carry the old instruction); the post arm from the main
+checkout. Transcripts land in `output/b019_models/{pre,post}_{gemma12,qwen8,hermes8}_seed{7,11,13,17,23}`
+— deliberately NOT under `coach_review_v*` (the version series would average three models into
+v60/v61) nor `matrix/` (whose grid is one build). That directory is gitignored, so committing
+them needs a `.gitignore` exemption. Read `~/.kiro-monitor/runs/sweep_b019_models/status.json`
+first, then per model, pre vs post on that model's repeat turns: `.kiro/tmp/b019_baseline.py`
+takes run directories once pointed at them. Same pass/revert bars as qwen3:14b. Remove the
+worktree afterwards with `git worktree remove .kiro/tmp/b019pre`.
+
+**Superseded handoff, kept for the criteria — opener was "read sweep_v61 for B-019".** Job `sweep_v61` ran 2026-10-13
 17:13-17:27 UTC, status COMPLETED, all five seeds exit 0; the transcripts are committed as
 `output/coach_review_v61_seed{7,11,13,17,23}/transcript.json` and have NOT been read. On the 18
 repeat turns, against v60:
@@ -856,6 +906,65 @@ three models, pre and post. If it fails: revert the prompt half (`_RECOMMENDATIO
 its three prompt tests) and keep the checker, which is how the failure was seen. The one thing
 that would change the plan: 3 or more turns still offering the played move would mean the
 instruction was not the whole cause, and the change is reverted rather than extended.
+
+### OPEN — Stop deciding what the model's text means by matching its words: the gate and the counters (2026-10-14)
+
+- **Id:** B-021
+- **Category:** coaching
+- **Gives:** the gate runs on every spoken turn, and all 13 of its blocking kinds depend on the
+  model's wording somewhere. It has been measured wrong in both directions: 8 of 11 fallbacks in
+  one sweep were correct coaching blocked by its word lists (ledger row 113), and 2 board
+  falsehoods in the 36 B-019 repeat turns read by hand passed it as clean (folded in from B-020).
+  Every falsehood count in the ledger comes from these same checks.
+- **Priority:** P1
+- **Found while:** B-019 — separate because B-019's verdict rests on reading its turns by hand,
+  not on any of these checks, and B-019 changed none of them.
+
+The owner's ruling, 2026-10-14: no regex, phrase list or keyword match over prose a model wrote
+(`working-agreements.md`, Measurement), and the existing code is to be fixed, not only frozen.
+`tests/test_model_text_matchers.py` freezes the 207 existing constructs in 30 files so nothing is
+added while this is done; the inventory is in that file's list.
+
+**The first step is the measure, not the code.** Every count of false statements reaching the
+student is produced by the checks being replaced, so judging a new gate by them would be a measure
+sharing its predicate with the fix. Two candidates, to be chosen at the owner's gate:
+1. read and board-check every claim on a committed set of turns by hand, as B-019 did;
+2. have the model return the claims it makes in a structured form we check against the board.
+Then: the measurement counters first (no student impact; those that cannot be anchored on the board
+or our prompt are dropped, as B-005 dropped lesson concentration), then the gate behind that
+measure. Removing the gate's word lists without a replacement either blocks correct coaching or lets
+falsehoods through, so they stay until the replacement measures at least as well.
+
+Known in the meantime: `cue_voiced` cannot read a square written right after a bishop's "B" (its
+case-insensitive lookbehind); v61 seed 23 ply 23 "Your move left Bh6 undefended" scores as a miss.
+A fix was written and reverted under the ruling.
+
+Cost unknown until the measure is chosen. Ranking against B-008, the other P1, is the owner's call.
+
+### MERGED into B-021 — The checker passes an opponent reply described as a capture when it captures nothing (2026-10-13)
+
+**Merged 2026-10-14.** Its fix would have been tightening a regex on the model's text, which the
+no-regex ruling rules out, and it is a gate miss that B-021 has to measure anyway.
+
+- **Id:** B-020
+- **Category:** coaching
+- **Gives:** merged into B-021. 2 board falsehoods in the 36 repeat turns read for B-019
+  (v60 and v61), both shipped to the student, both passed as clean. A gating check for opponent
+  replies exists and did not fire on either.
+- **Priority:** closed
+- **Found while:** B-019 — separate because the same gap passed v60's "Qc2, capturing your bishop
+  on c1" before B-019 changed anything, so B-019's verdict does not depend on it. The one falsehood
+  B-019's change did produce (seed 23 ply 23, Kf8) is counted against B-019 in ledger row 170.
+
+Board-checked with python-chess on the committed transcripts:
+- v60 seed 13 ply 20: "The opponent replies Qc2, capturing your bishop on c1." Qc2 is not a
+  capture; it attacks c1. Our composed reply line said what it does, and the model upgraded it.
+- v61 seed 23 ply 23: "Your move left Bh6 undefended, allowing Black to capture it with Kf8." Kf8
+  captures nothing; the composed reply was "Kf8, defending their pawn on g7", and the model fused
+  it with the cause (h6 attacked by g7/g8/h8).
+
+Cause in `verify._check_opponent_reply` not yet diagnosed: both name the reply's SAN and a capture
+verb, and neither was flagged. Measure across the corpus before pricing it.
 
 ### OPEN — Guard tolerances from the measured noise floor, not one 3pp rule
 

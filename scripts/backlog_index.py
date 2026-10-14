@@ -52,8 +52,24 @@ CATEGORIES = ("coaching", "instrumentation", "engine", "decision", "infra")
 PRIORITIES = ("P1", "P2", "P3")
 ID_RE = re.compile(r"^(?:B-\d{3}|BUG-\d+)$")
 
-FIELD = re.compile(r"^\s*-\s+\*\*(Id|Category|Gives|Priority):\*\*\s*(.+?)\s*$")
+FIELD = re.compile(r"^\s*-\s+\*\*(Id|Category|Gives|Priority|Found while):\*\*\s*(.+?)\s*$")
 REQUIRED = ("Id", "Category", "Gives", "Priority")
+
+#: Where an item came from: "own review", or the item being worked when it was found plus why it is
+#: NOT part of that item. Working one item kept producing new ones — B-013 gave B-014, B-014 gave
+#: B-019, B-005 gave B-015 to B-018, B-019 gave two more — and one of B-019's was the broken
+#: instrument that decided B-019's own verdict, filed instead of fixed. The work-loop rule now asks
+#: "does this item's verdict depend on it?" before anything is filed; this field makes that question
+#: impossible to skip, and the index shows the answer beside every item.
+FOUND_WHILE = re.compile(
+    r"^(?:own review\b.*|(?P<parent>B-\d{3}|BUG-\d+)\s*[—–-]?\s*separate because\s+\S.*)$", re.IGNORECASE
+)
+
+#: Required from these ids on; items filed before the rule are left alone rather than back-filled
+#: from memory, which would be guessing.
+FOUND_WHILE_FROM = {"B": 20, "BUG": 23}
+
+KNOWN_ID = re.compile(r"\*\*Id:\*\*\s*(B-\d{3}|BUG-\d+)")
 
 
 @dataclass(frozen=True)
@@ -66,6 +82,28 @@ class Item:
     category: str
     gives: str
     priority: str
+    found_while: str = ""
+
+
+def _needs_found_while(ident: str) -> bool:
+    prefix, _, number = ident.partition("-")
+    floor = FOUND_WHILE_FROM.get(prefix)
+    return floor is not None and number.isdigit() and int(number) >= floor
+
+
+def parent_of(found_while: str) -> str:
+    """The item an entry was found under, or '' for own review or no field."""
+    m = FOUND_WHILE.match(found_while)
+    return (m.group("parent") or "").upper() if m else ""
+
+
+def check_parents(items: list[Item], known: set[str]) -> list[str]:
+    """Every named parent must be an id that exists in one of the two files."""
+    return [
+        f"{it.source} line {it.line}: {it.ident} says it was found while working {parent}, which is not an id"
+        for it in items
+        if (parent := parent_of(it.found_while)) and parent not in known
+    ]
 
 
 def _collapse(text: str) -> str:
@@ -112,6 +150,20 @@ def _validate(found: dict[str, str], where: str, title: str, problems: list[str]
     if found["Priority"] not in PRIORITIES:
         problems.append(f"{where}: {title!r} has Priority {found['Priority']!r}, expected one of {PRIORITIES}")
         ok = False
+    origin = found.get("Found while")
+    if origin is None:
+        if ok and _needs_found_while(found["Id"]):
+            problems.append(
+                f"{where}: {title!r} is missing Found while: 'own review', or the item being worked and "
+                "'separate because <why that item's verdict does not depend on this>'"
+            )
+            ok = False
+    elif not FOUND_WHILE.match(origin):
+        problems.append(
+            f"{where}: {title!r} has Found while {origin!r}; expected 'own review' or "
+            "'B-nnn — separate because <reason>'"
+        )
+        ok = False
     return ok
 
 
@@ -138,6 +190,7 @@ def parse_backlog(text: str) -> tuple[list[Item], list[str]]:
                 found["Category"],
                 _collapse(found["Gives"]),
                 found["Priority"],
+                _collapse(found.get("Found while", "")),
             )
         )
     return items, problems
@@ -169,17 +222,33 @@ def parse_bugs(text: str) -> tuple[list[Item], list[str]]:
             problems.append(f"{where}: {bug_id} declares Id {found['Id']!r}; they must match")
             continue
         items.append(
-            Item("bugs", i + 1, bug_id, "BUG", title, found["Category"], _collapse(found["Gives"]), found["Priority"])
+            Item(
+                "bugs",
+                i + 1,
+                bug_id,
+                "BUG",
+                title,
+                found["Category"],
+                _collapse(found["Gives"]),
+                found["Priority"],
+                _collapse(found.get("Found while", "")),
+            )
         )
     return items, problems
 
 
 def parse_all() -> tuple[list[Item], list[str]]:
-    items, problems = parse_backlog(BACKLOG.read_text(encoding="utf-8"))
+    backlog_text = BACKLOG.read_text(encoding="utf-8")
+    items, problems = parse_backlog(backlog_text)
+    known = set(KNOWN_ID.findall(backlog_text))
     if BUGS.exists():
-        b_items, b_problems = parse_bugs(BUGS.read_text(encoding="utf-8"))
+        bugs_text = BUGS.read_text(encoding="utf-8")
+        b_items, b_problems = parse_bugs(bugs_text)
         items += b_items
         problems += b_problems
+        known |= set(KNOWN_ID.findall(bugs_text))
+        known |= {m.group(1) for m in map(BUG_HEADING.match, bugs_text.splitlines()) if m}
+    problems += check_parents(items, known)
     seen: dict[str, Item] = {}
     for it in items:
         if it.ident in seen:
@@ -199,13 +268,14 @@ def render(items: list[Item]) -> str:
         f"**Open actions: {len(rows)}** ({len(rows) - bugs} from this file, {bugs} open bugs from `BUGS.md`).",
         "Generated — edit the fields under each heading, not this table.",
         "",
-        "| Id | P | Category | Action | What it gives |",
-        "|---|---|---|---|---|",
+        "| Id | P | Category | Found while | Action | What it gives |",
+        "|---|---|---|---|---|---|",
     ]
     for it in rows:
         title = _collapse(it.title).replace("|", "\\|")
         gives = it.gives.replace("|", "\\|")
-        out.append(f"| {it.ident} | {it.priority} | {it.category} | {title} | {gives} |")
+        origin = parent_of(it.found_while) or ("own review" if it.found_while else "")
+        out.append(f"| {it.ident} | {it.priority} | {it.category} | {origin} | {title} | {gives} |")
     out += ["", END]
     return "\n".join(out)
 
@@ -245,7 +315,9 @@ def main() -> int:
         print(f"{len(problems)} problem(s)")
         for p in problems:
             print(f"  {p}")
-        print("\nEvery open item needs Id, Category, Gives and Priority directly under its heading.")
+        print("\nEvery open item needs Id, Category, Gives and Priority directly under its heading,")
+        print("and a new one also needs Found while: 'own review', or the item being worked and why")
+        print("that item's verdict does not depend on this one. If it does, it is not a new item.")
         print("See 'How to read this file' in BACKLOG.md.")
         return 1
     if not items:
