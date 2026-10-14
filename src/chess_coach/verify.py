@@ -386,9 +386,9 @@ class Violation:
     """One detected contradiction in coaching text.
 
     ``kind`` is one of ``illegal_move`` / ``unsound_move`` / ``off_menu`` /
-    ``played_offered`` / ``placement`` / ``ownership`` / ``development`` /
-    ``empty_source`` / ``piece_type`` / ``pawn_structure`` / ``geometry``; ``text``
-    is the offending fragment; ``detail`` explains why it is wrong.
+    ``placement`` / ``ownership`` / ``development`` / ``empty_source`` /
+    ``piece_type`` / ``pawn_structure`` / ``geometry``; ``text`` is the offending
+    fragment; ``detail`` explains why it is wrong.
     """
 
     kind: str
@@ -532,60 +532,6 @@ def _check_named_moves(
             out.append(violation)
 
     return out
-
-
-#: The played move as the SUBJECT of "is/was (still) available", right after the token: "The move
-#: Qb6+ is still available", "h4, is still available here", "Bd3 was available earlier and still is".
-#: The word is ours: the repeat instruction said "say that it is still available" and the
-#: achievement line opens "What was available here". Anchored on the token being the move the
-#: student played, so "Rb1 does not take it, and the capture is still available" is not read as
-#: offering Rb1. Validated on all 108 committed transcripts (2584 spoken turns): 21 hits, all at
-#: v58-v60 and each one offering the played move. A wider reading (the played move followed in the
-#: same sentence by still / again / consider / try / could / can) found 54 more sentences and none
-#: of them offered it.
-_OFFERED_AS_AVAILABLE_RE = re.compile(r"[+#]?,?\s+(?:is|was)\s+(?:still\s+)?available\b", re.IGNORECASE)
-
-
-def _check_played_move_offered(text: str, board: chess.Board, played_uci: str = "") -> list[Violation]:
-    """Flag the move the student just played being offered back to them as still available.
-
-    B-019, and the case B-014 got wrong. Naming the played move to say what it did ("Qb6+ leaves
-    the pawn on e5 undefended") is not a recommendation, and `_check_named_moves` rightly skips its
-    menu classification. Telling the student it "is still available" is advice to play the move
-    they already played, and with that skip in place the checker passed every instance as clean:
-    8 of 81 spoken v60 turns, 4 of which had carried the very `off_menu`/`unsound_move` flags B-014
-    reclassified as artefacts.
-
-    A separate check rather than a carve-out inside `_check_named_moves`, for two reasons. Half of
-    the v60 cases are bare pawn moves ("The move c4 is still available"), which that function never
-    judges because "c4" may be a square. And the question is not whether the move is on the menu:
-    offering the played move back is wrong whatever the engine thinks of it.
-
-    Requires ``played_uci``; without it there is nothing to compare against.
-    """
-    if not played_uci:
-        return []
-    try:
-        played = chess.Move.from_uci(played_uci)
-    except ValueError:
-        return []
-    if played not in board.legal_moves:
-        return []
-    played_san = board.san(played).rstrip("+#")
-    for m in _SAN_RE.finditer(text):
-        if m.group(1).rstrip("+#") != played_san:
-            continue
-        offered = _OFFERED_AS_AVAILABLE_RE.match(text, m.end())
-        if offered:
-            return [
-                Violation(
-                    "played_offered",
-                    text[m.start() : offered.end()],
-                    f"{played_san} is the move the student just played; offering it as available "
-                    "tells them to play the move they already played",
-                )
-            ]
-    return []
 
 
 # Wording that tells the student the game has ENDED. Searched in the prose with the
@@ -1640,7 +1586,6 @@ def _run_fidelity_checks(
     by_uci = _menu_by_uci(menu)
     violations: list[Violation] = []
     violations.extend(_check_named_moves(text, board, by_uci, played_uci))
-    violations.extend(_check_played_move_offered(text, board, played_uci))
     violations.extend(_check_placement(text, board, played_uci))
     violations.extend(_check_ownership(text, board))
     violations.extend(_check_defence_relation(text, board))
@@ -1685,11 +1630,6 @@ def _run_fidelity_checks(
 #: detected and still counts. That pattern is most likely in exactly the
 #: mistake-explanation turns we least want to replace with a template. They stay
 #: reported, and un-gated.
-#:
-#: ``played_offered`` (B-019) is excluded for a different reason: it is the instrument
-#: for the prompt fix that removed its cause. The report card counts violations on the
-#: text that SHIPPED, so gating it would make the post-fix count zero whatever the prompt
-#: did. Whether it should gate is a separate decision, to be taken on the measured residue.
 GATING_VIOLATION_KINDS = frozenset(
     {
         "placement",

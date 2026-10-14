@@ -46,3 +46,12 @@ output/matrix/*
 !output/matrix/*/
 output/matrix/*/*
 !output/matrix/*/transcript.json
+
+# B-019's before/after runs on gemma4, qwen3:8b and hermes3 (ledger row 170). Not in the history
+# TSV — three models would be averaged into one version point — but they are the evidence for a
+# closed item, and its verdict was read from them by hand.
+!output/b019_models/
+output/b019_models/*
+!output/b019_models/*/
+output/b019_models/*/*
+!output/b019_models/*/transcript.json
