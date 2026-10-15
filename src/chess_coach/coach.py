@@ -615,7 +615,14 @@ class Coach:
         """
 
         def _generate() -> str:
-            return self.llm.generate(prompt, max_tokens=max_tokens, temperature=self.temperature)
+            draft = self.llm.generate(prompt, max_tokens=max_tokens, temperature=self.temperature)
+            # Every draft, before the gate decides on it. Without this the report card kept only
+            # the text that shipped, so the 9 replies the gate blocked at v61 could not be read
+            # afterwards, and B-021 grades the gate against a reading of every draft. Under
+            # `draft`, not `llm_response`: the play UI prints `llm_response` in its debug log, and
+            # a blocked draft is one the board contradicts.
+            trace("eval_llm_draft", f"Draft written ({len(draft)} chars)", tool="llm", draft=draft)
+            return draft
 
         if not self.verify_output:
             feedback = _generate()

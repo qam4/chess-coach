@@ -610,3 +610,58 @@ def test_composed_fallback_honours_the_lesson_ladder():
     assert "undefended bishop on b4" in retired
     assert "Bc3" not in retired
     assert len(retired) > 30
+
+
+# --------------------------------------------------------------------------
+# Every draft reaches the report card, not only the text that shipped (B-021).
+# --------------------------------------------------------------------------
+#
+# The transcript kept only what was sent, so a draft the gate blocked was lost: at v61 the gate
+# blocked 9 of 81 replies and none of the 9 could be read afterwards. B-021 grades the gate against
+# a reading of every draft, so the drafts have to be in the transcript. These run the SHIPPING
+# coach through the report card's own per-turn function rather than a fake coach, so a renamed
+# trace step fails here instead of leaving a fake that still passes.
+
+# In _REPEAT_FEN f3 is empty, so the first is a gating `placement` violation; the second passes the
+# gate. Both checked with `check_text_fidelity(text, _REPEAT_FEN, played_uci="e2c4")`.
+_BLOCKED_DRAFT = "Your knight on f3 is now loose."
+_CLEAN_DRAFT = "Bc3 was stronger. Worth remembering: count defenders."
+
+
+def _report_card_script():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent / "scripts" / "eval_coach_review.py"
+    spec = importlib.util.spec_from_file_location("eval_coach_review_drafts_under_test", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _drafting_coach(*drafts: str) -> Coach:
+    engine = _mock_coaching_engine()
+    engine.get_comparison_report.return_value = _comparison_with_repeatable_lesson()
+    llm = _mock_llm()
+    llm.generate.side_effect = list(drafts)
+    return Coach(engine=engine, llm=llm)  # the gate is on by default, which is the point
+
+
+class TestDraftsReachTheReportCard:
+    def test_a_blocked_draft_is_kept_beside_the_text_that_shipped(self):
+        mod = _report_card_script()
+        turn = mod._coach_turn(_drafting_coach(_BLOCKED_DRAFT, _CLEAN_DRAFT), 31, _REPEAT_FEN, "e2c4")
+
+        assert turn.coach_feedback == _CLEAN_DRAFT
+        assert turn.drafts == [_BLOCKED_DRAFT, _CLEAN_DRAFT]
+        assert turn.to_dict()["drafts"] == [_BLOCKED_DRAFT, _CLEAN_DRAFT]
+
+    def test_a_fallback_turn_keeps_both_drafts_the_gate_refused(self):
+        # The case the 9 lost v61 replies were: every attempt blocked, composed text sent instead.
+        mod = _report_card_script()
+        turn = mod._coach_turn(_drafting_coach(_BLOCKED_DRAFT, _BLOCKED_DRAFT), 31, _REPEAT_FEN, "e2c4")
+
+        assert turn.coach_feedback.strip()
+        assert turn.coach_feedback != _BLOCKED_DRAFT
+        assert turn.drafts == [_BLOCKED_DRAFT, _BLOCKED_DRAFT]

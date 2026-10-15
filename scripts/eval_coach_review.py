@@ -194,10 +194,15 @@ def _coach_turn(coach, ply, fen, move):  # type: ignore[no-untyped-def]
     reviewed.
     """
     captured: dict[str, object] = {}
+    # Every text the model wrote, in order, including the ones the gate refused; see
+    # `ReviewTurn.drafts`.
+    drafts: list[str] = []
 
     def on_debug(step) -> None:  # type: ignore[no-untyped-def]
         if step.step == "eval_llm_start":
             captured["prompt"] = step.detail.get("llm_prompt", "")
+        elif step.step == "eval_llm_draft":
+            drafts.append(str(step.detail.get("draft", "")))
         elif step.step == "eval_llm_done":
             captured["latency"] = step.elapsed_s
         elif step.step == "eval_verify_fallback":
@@ -233,6 +238,7 @@ def _coach_turn(coach, ply, fen, move):  # type: ignore[no-untyped-def]
         latency_s=float(captured.get("latency", wall)),  # type: ignore[arg-type]
         fidelity_kinds=dict(fid),
         prompt=str(captured.get("prompt", "")),
+        drafts=drafts,
     )
 
 

@@ -26,12 +26,16 @@ asserted from what was verified against the board.
 
 ## Measurement
 
-**No regex, phrase list or keyword match over prose a model wrote — anywhere.** Not in a
-measure, a test, a scratch script or the gate; not on the coach's reply or the judge's commentary.
-Anchor on text we composed or on the board. If the only way to check something is to read the
-model's words, the check does not get written: say so and ask. There are no exceptions an agent
-grants itself — if one looks justified, that is the moment to ask. (Parsing a JSON reply we asked
-the judge for is not prose.) The owner's ruling, 2026-10-14. Three rules saying the same for
+**The Python we write does not use regexes, phrase lists or keyword matches to parse LLM
+output**, unless the owner consents. That covers the gate, the counters, tests, scripts and
+scratch scripts. Anchor code checks on text we composed or on the board.
+- Covered: `verify.py` treating the word "capturing" as a capture claim to decide whether a reply
+  is false.
+- Not covered: the agent or the judge reading that reply, using python-chess when unsure whether
+  Qc2 captures anything.
+
+There are no exceptions an agent grants itself; if one looks justified, ask. Parsing a JSON reply
+we asked a model for is not parsing prose. The owner's ruling, 2026-10-14. Three rules saying the same for
 measures were already loaded when it was broken: a checker matching "is still available" was
 added to `verify.py`, defended in its own comment because "the word is ours", and scratch scripts
 did the same with no defence at all. `tests/test_model_text_matchers.py` freezes every

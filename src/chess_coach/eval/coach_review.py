@@ -85,6 +85,11 @@ class ReviewTurn:
     # The exact prompt the local model received. Captured so an architecture
     # review can critique the real design, not guess at it from outputs alone.
     prompt: str = ""
+    # Every text the model wrote for this turn, in order, including drafts the gate blocked.
+    # `coach_feedback` is what shipped, which after a fallback is none of these. Kept because the
+    # gate is graded against a reading of every draft (B-021), and until this existed a blocked
+    # draft was lost: 9 of 81 at v61. Not shown to the judge.
+    drafts: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -99,6 +104,7 @@ class ReviewTurn:
             "latency_s": round(self.latency_s, 2),
             "fidelity_kinds": dict(self.fidelity_kinds),
             "prompt": self.prompt,
+            "drafts": list(self.drafts),
         }
 
 
