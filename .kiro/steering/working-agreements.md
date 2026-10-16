@@ -46,6 +46,14 @@ the ruling and are recorded, not endorsed: do not extend them, and replacing the
 decision. Scratch scripts under `.kiro/tmp/` are not tracked, so the test cannot see them; the
 rule still applies there.
 
+**One measured exception: the live gate.** The word lists in `verify.py`'s gate stay, because no
+exact check of free-form text is possible during a live game. They are best effort and are not
+extended. The frontier judge's claim reading (`eval_coach_rejudge.py --claims`) measures them on
+every sweep: false-accept (false replies passed) and false-reject (true replies blocked). First
+measured 2026-10-15 on 82 v62 replies: false-accept 6-7 of 15-16, false-reject 1 of 66-67.
+Considered not harmful, because a blocked reply is replaced by composed text that is true. The
+owner's ruling, 2026-10-15.
+
 **Do not accept or reject a change on the judge's 0-10 score.** It returned 5.5 / 5.0 / 2.0 on
 byte-identical input, and four of seven category scores differ on a re-run of the same
 transcript. "Worse on five of seven dimensions" is what noise looks like, not evidence.

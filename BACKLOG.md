@@ -972,7 +972,15 @@ sure"). `working-agreements.md` now says so, with one covered and one uncovered 
    reading, not dropped.
 3. **The runtime gate**: a second call to a LOCAL model reads the coach's reply and lists its
    claims, python-chess checks them. Graded against step 1's count on the same drafts; the word
-   lists come out only when it does at least as well.
+   lists come out only when it does at least as well. **Correction 2026-10-15: this step was the
+   agent's proposal, never the owner's request** ("I never said I wanted qwen to be the checker!").
+   His "yes" answered a message bundling it with steps 1 and 2. Whether the gate's word lists are
+   replaced at all is his decision (`working-agreements.md`: "replacing them is the owner's
+   decision"). **Decided 2026-10-15 (owner's call): the gate's word lists stay**, as a measured
+   exception to the no-regex rule. His words: "This is an 'exception' the regex rule, and we know
+   it's not perfect, but we measure it, and consider it not harmful", with "false-accept and false
+   reject rate, measured by frontier judge". Written into `working-agreements.md`. So step 3 is
+   dropped, and the gate's two rates join step 2.
 
 Step 1, pre-registered:
 - **Compared:** on the v62 drafts, the drafts the judge's reading marks false against the drafts the
@@ -1070,9 +1078,16 @@ roughly 25 true drafts out of 82, where today's blocks 1. It did flag all 10 dra
 Not tested: another prompt, another local model, a constrained JSON schema; each would be a new
 measurement against this same stop rule, and none was tried after seeing this result.
 
-**So step 3 as designed stops here.** Steps 1 and 2 stand: the reading by the judge (or the agent)
-is the falsehood measure, and the counters can be rebuilt on it. What the runtime gate becomes is
-the owner's decision.
+**This run should not have happened ahead of step 2.** The local-model gate was the agent's idea,
+and step 2 (the counters) comes first in the plan. Recorded because it was run; it decides nothing,
+since nobody asked for that gate.
+
+**Next in this item: step 2.** Rebuild the evaluation counters that match the coach's words
+(`clean%` among them) on the judge's claim reading, and report the live gate's false-accept and
+false-reject rates from that same reading on every sweep. Today's figures, from the 82 v62
+replies: false-accept 7 of 16 / 6 of 15 / 6 of 15, false-reject 1 of 66 / 1 of 67 / 1 of 67 (judge
+run 1, judge run 2, agent). A single judge reading of a five-game sweep takes about 17 minutes.
+The opener: "take B-021 through the loop".
 
 ### OPEN — Only the move feedback is checked against the board; the engine-move explanation and the analysis are not (2026-10-14)
 
