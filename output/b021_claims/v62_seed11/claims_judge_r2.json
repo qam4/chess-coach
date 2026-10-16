@@ -1,0 +1,496 @@
+{
+  "reader": "judge_r2",
+  "transcript": "output/coach_review_v62_seed11/transcript.json",
+  "summary": {
+    "false": 3,
+    "clean": 5,
+    "unresolved": 0,
+    "missing": 0
+  },
+  "drafts": {
+    "11:3:0": {
+      "ply": 3,
+      "fen_before": "r1bqkb1r/ppp2ppp/2n2n2/3pp1N1/2B1P3/8/PPPP1PPP/RNBQK2R w KQkq - 0 6",
+      "student_move_san": "Bxd5",
+      "text": "After your move, the opponent plays Nxd5, capturing your bishop on d5. The check that was skipped: before moving, what of theirs attacks the square you are going to? The opponent's knight on f6 was already attacking d5. Next time you see a capture, ask yourself: what is the opponent\u2019s best reply, and does it win material or threaten something?",
+      "claims": [
+        {
+          "sentence": "After your move, the opponent plays Nxd5, capturing your bishop on d5.",
+          "after": [
+            "Bxd5"
+          ],
+          "kind": "legal",
+          "move": "Nxd5",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "After your move, the opponent plays Nxd5, capturing your bishop on d5.",
+          "after": [
+            "Bxd5"
+          ],
+          "kind": "capture",
+          "move": "Nxd5",
+          "piece": "bishop",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "After your move, the opponent plays Nxd5, capturing your bishop on d5.",
+          "after": [
+            "Bxd5"
+          ],
+          "kind": "piece",
+          "square": "d5",
+          "piece": "bishop",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's knight on f6 was already attacking d5.",
+          "after": [],
+          "kind": "piece",
+          "square": "f6",
+          "piece": "knight",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's knight on f6 was already attacking d5.",
+          "after": [],
+          "kind": "attacks",
+          "square": "f6",
+          "target": "d5",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [],
+      "verdict": "clean"
+    },
+    "11:7:0": {
+      "ply": 7,
+      "fen_before": "r1b1kb1r/ppp2ppp/2n5/3Pp1q1/8/8/PPPP1PPP/RNBQK2R w KQkq - 0 8",
+      "student_move_san": "Qf3",
+      "text": "By moving your queen to f3, you allowed your bishop on c1 to become undefended. The check that was skipped: after your move, is everything you were defending still defended? The move let something concrete happen \u2014 a discovered attack is available, revealing your bishop hitting their queen on g5. Next time you see a capture that wins material, ask yourself: is the piece I\u2019m using to capture still protected after I move?",
+      "claims": [
+        {
+          "sentence": "By moving your queen to f3, you allowed your bishop on c1 to become undefended.",
+          "after": [
+            "Qf3"
+          ],
+          "kind": "piece",
+          "square": "c1",
+          "piece": "bishop",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "By moving your queen to f3, you allowed your bishop on c1 to become undefended.",
+          "after": [
+            "Qf3"
+          ],
+          "kind": "defended",
+          "square": "c1",
+          "negated": true,
+          "holds": true
+        },
+        {
+          "sentence": "By moving your queen to f3, you allowed your bishop on c1 to become undefended.",
+          "after": [],
+          "kind": "defended",
+          "square": "c1",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The move let something concrete happen \u2014 a discovered attack is available, revealing your bishop hitting their queen on g5.",
+          "after": [
+            "Qf3"
+          ],
+          "kind": "piece",
+          "square": "g5",
+          "piece": "queen",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The move let something concrete happen \u2014 a discovered attack is available, revealing your bishop hitting their queen on g5.",
+          "after": [
+            "Qf3"
+          ],
+          "kind": "attacks",
+          "square": "c1",
+          "target": "g5",
+          "negated": false,
+          "holds": false
+        }
+      ],
+      "unchecked": [],
+      "verdict": "false"
+    },
+    "11:11:0": {
+      "ply": 11,
+      "fen_before": "r1b1kbr1/ppp2ppp/8/3Pp1q1/3nQ3/8/PPPP1PPP/RNB1K2R w KQq - 4 10",
+      "student_move_san": "h4",
+      "text": "You missed a chance to capture material. The data shows a capture is available that wins material. The pin on e5 and the discovered attack on Qg5 are both in the data \u2014 these are concrete opportunities you didn\u2019t use. Next time you see a pinned piece or a discovered attack, ask yourself: can I take advantage of this to win material?",
+      "claims": [
+        {
+          "sentence": "The pin on e5 and the discovered attack on Qg5 are both in the data \u2014 these are concrete opportunities you didn\u2019t use.",
+          "after": [],
+          "kind": "pinned",
+          "square": "e5",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The pin on e5 and the discovered attack on Qg5 are both in the data \u2014 these are concrete opportunities you didn\u2019t use.",
+          "after": [],
+          "kind": "piece",
+          "square": "g5",
+          "piece": "queen",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [
+        "You missed a chance to capture material.",
+        "The data shows a capture is available that wins material.",
+        "The pin on e5 and the discovered attack on Qg5 are both in the data \u2014 these are concrete opportunities you didn\u2019t use."
+      ],
+      "verdict": "clean"
+    },
+    "11:17:0": {
+      "ply": 17,
+      "fen_before": "1rb1kbr1/ppp2ppp/8/3Pp2q/4Q2P/8/PPPPnPPK/RNB2R2 w - - 5 13",
+      "student_move_san": "Re1",
+      "text": "Your move left your pawn on f2 undefended. The cue is the knight on e2 \u2014 your move attacked it, but you didn\u2019t check if your pawn was still defended afterward. Before moving, ask yourself: does this move leave any of my pieces without support? Next time you see a piece that seems vulnerable, ask yourself: is it defended, and if so, by what?",
+      "claims": [
+        {
+          "sentence": "Your move left your pawn on f2 undefended.",
+          "after": [
+            "Re1"
+          ],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your move left your pawn on f2 undefended.",
+          "after": [
+            "Re1"
+          ],
+          "kind": "defended",
+          "square": "f2",
+          "negated": true,
+          "holds": true
+        },
+        {
+          "sentence": "The cue is the knight on e2 \u2014 your move attacked it, but you didn\u2019t check if your pawn was still defended afterward.",
+          "after": [
+            "Re1"
+          ],
+          "kind": "piece",
+          "square": "e2",
+          "piece": "knight",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The cue is the knight on e2 \u2014 your move attacked it, but you didn\u2019t check if your pawn was still defended afterward.",
+          "after": [
+            "Re1"
+          ],
+          "kind": "attacks",
+          "square": "e1",
+          "target": "e2",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [],
+      "verdict": "clean"
+    },
+    "11:25:0": {
+      "ply": 25,
+      "fen_before": "1rbk2r1/ppp2ppp/8/3PR3/7b/8/PPPP1PPK/RNB5 w - - 1 17",
+      "student_move_san": "d3",
+      "text": "The opponent's strongest reply is Bxf2, capturing your pawn on f2.  \n\nThe check you skipped was: is anything of yours already under attack?  \n\nYour pawn on f2 was already attacked and undefended before this move.  \n\nNext time you see a piece under attack, ask yourself: is it defended, and if not, where can I move it to safety?",
+      "claims": [
+        {
+          "sentence": "The opponent's strongest reply is Bxf2, capturing your pawn on f2.",
+          "after": [
+            "d3"
+          ],
+          "kind": "legal",
+          "move": "Bxf2",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's strongest reply is Bxf2, capturing your pawn on f2.",
+          "after": [
+            "d3"
+          ],
+          "kind": "capture",
+          "move": "Bxf2",
+          "piece": "pawn",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's strongest reply is Bxf2, capturing your pawn on f2.",
+          "after": [
+            "d3"
+          ],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "attacked",
+          "square": "f2",
+          "by": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "defended",
+          "square": "f2",
+          "negated": true,
+          "holds": true
+        }
+      ],
+      "unchecked": [],
+      "verdict": "clean"
+    },
+    "11:27:0": {
+      "ply": 27,
+      "fen_before": "1rbk2r1/ppp3pp/5p2/3PR3/7b/3P4/PPP2PPK/RNB5 w - - 0 18",
+      "student_move_san": "Rh5",
+      "text": "After your move, the opponent plays Bxf2, capturing your pawn on f2. The pawn on f2 was already attacked and undefended before this move. The check that was skipped: is anything of mine already under attack, before I look for something to improve? The e-file is open, and rooks on open files are powerful. Next time you see an open file, ask yourself: are my pieces defending key squares on that file?",
+      "claims": [
+        {
+          "sentence": "After your move, the opponent plays Bxf2, capturing your pawn on f2.",
+          "after": [
+            "Rh5"
+          ],
+          "kind": "legal",
+          "move": "Bxf2",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "After your move, the opponent plays Bxf2, capturing your pawn on f2.",
+          "after": [
+            "Rh5"
+          ],
+          "kind": "capture",
+          "move": "Bxf2",
+          "piece": "pawn",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "After your move, the opponent plays Bxf2, capturing your pawn on f2.",
+          "after": [
+            "Rh5"
+          ],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "attacked",
+          "square": "f2",
+          "by": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "defended",
+          "square": "f2",
+          "negated": true,
+          "holds": true
+        }
+      ],
+      "unchecked": [
+        "The e-file is open, and rooks on open files are powerful."
+      ],
+      "verdict": "clean"
+    },
+    "11:1000:0": {
+      "ply": 1000,
+      "fen_before": "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1",
+      "student_move_san": "e5",
+      "text": "The opponent's strongest reply is Kxe5, capturing your pawn on e5. This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it. The check that was skipped: before I commit, is the piece I am moving attacked on the square I am moving it to? Next time you see a pawn move, ask yourself: is this square safe for the piece I\u2019m moving it to?",
+      "claims": [
+        {
+          "sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.",
+          "after": [
+            "e5"
+          ],
+          "kind": "legal",
+          "move": "Kxe5",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.",
+          "after": [
+            "e5"
+          ],
+          "kind": "capture",
+          "move": "Kxe5",
+          "piece": "pawn",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.",
+          "after": [
+            "e5"
+          ],
+          "kind": "piece",
+          "square": "e5",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [],
+          "kind": "piece",
+          "square": "e4",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [],
+          "kind": "defended",
+          "square": "e4",
+          "negated": true,
+          "holds": false
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [
+            "e5"
+          ],
+          "kind": "piece",
+          "square": "e5",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [
+            "e5"
+          ],
+          "kind": "piece",
+          "square": "e6",
+          "piece": "king",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [
+            "e5"
+          ],
+          "kind": "attacks",
+          "square": "e6",
+          "target": "e5",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [],
+      "verdict": "false"
+    },
+    "11:1003:0": {
+      "ply": 1003,
+      "fen_before": "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+      "student_move_san": "Ra8#",
+      "text": "Your move, Ra8#, is a strong check that activates your rook. The key idea here is that checks force the opponent to respond immediately. Next time you see a check, ask yourself: does it buy me time to develop or improve another piece?",
+      "claims": [
+        {
+          "sentence": "Your move, Ra8#, is a strong check that activates your rook.",
+          "after": [],
+          "kind": "legal",
+          "move": "Ra8",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your move, Ra8#, is a strong check that activates your rook.",
+          "after": [],
+          "kind": "check",
+          "move": "Ra8",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your move, Ra8#, is a strong check that activates your rook.",
+          "after": [],
+          "kind": "mate",
+          "move": "Ra8",
+          "negated": true,
+          "holds": false
+        }
+      ],
+      "unchecked": [],
+      "verdict": "false"
+    }
+  }
+}

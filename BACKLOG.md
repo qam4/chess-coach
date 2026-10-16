@@ -67,7 +67,7 @@ Generated — edit the fields under each heading, not this table.
 
 | Id | P | Category | Found while | Action | What it gives |
 |---|---|---|---|---|---|
-| B-021 | P1 | coaching | B-019 | Stop deciding what the model's text means by matching its words: the gate and the counters (2026-10-14) | the gate runs on every spoken move-feedback turn (81 at v61), and all 13 of its blocking kinds depend on the model's wording somewhere. At v61 it blocked 9 of 81 replies, and whether those blocks were right is unknown because the report card keeps only the shipped text; 6 of the 9 fired because the reply to a mating move never used the word "mate" or "checkmate" (`_check_terminal_label`). It passed 2 board falsehoods in the 36 B-019 repeat turns read by hand (folded in from B-020). Every falsehood count in the ledger comes from these same checks. |
+| B-021 | P1 | coaching | B-019 | Stop deciding what the model's text means by matching its words: the gate and the counters (2026-10-14) | the gate runs on every spoken move-feedback turn (81 at v61), and all 13 of its blocking kinds depend on the model's wording somewhere. In the report card (temperature 0) it blocked 9 of 81 replies at v61 and v62; the product samples at 0.7 and its rate is unmeasured. Whether those blocks were right is unknown because the report card kept only the shipped text until v62; 6 of the 9 fired because the reply to a mating move never used the word "mate" or "checkmate" (`_check_terminal_label`). It passed 2 board falsehoods in the 36 B-019 repeat turns read by hand (folded in from B-020). Every falsehood count in the ledger comes from these same checks. |
 | B-008 | P1 | engine |  | the engine's numbers are not the truth (2026-08-20) | the ~18 turns per game where the coach speaks would be about moves that are actually bad. Today 7 of those 18 criticise a move the reference scores good or nearly good, and best-move agreement is 4 of 18. No prompt change reaches this. |
 | B-002 | P2 | coaching |  | Our clause names the smallest thing the move wins (2026-09-21, architecture review D1) | 55 turns of 4672 (1.2%), firing in 11 of 119 stored runs. Severe where it lands and rare overall — recorded at P2 for that reason, not P1. |
 | B-003 | P2 | coaching |  | The coach has no memory across turns (2026-09-21, measured on v54) | the shorten-on-repeat half is DONE (median length ratio 1.23 -> 0.93, criterion 0.70 missed). What remains: 7 turns still silent at the moment the student finally plays the move we asked for, and the repeat turns still run 1.28-1.55x on four of seventeen. |
@@ -913,8 +913,8 @@ instruction was not the whole cause, and the change is reverted rather than exte
 - **Id:** B-021
 - **Category:** coaching
 - **Gives:** the gate runs on every spoken move-feedback turn (81 at v61), and all 13 of its
-  blocking kinds depend on the model's wording somewhere. At v61 it blocked 9 of 81 replies, and
-  whether those blocks were right is unknown because the report card keeps only the shipped text;
+  blocking kinds depend on the model's wording somewhere. In the report card (temperature 0) it
+  blocked 9 of 81 replies at v61 and v62; the product samples at 0.7 and its rate is unmeasured. Whether those blocks were right is unknown because the report card kept only the shipped text until v62;
   6 of the 9 fired because the reply to a mating move never used the word "mate" or
   "checkmate" (`_check_terminal_label`). It passed 2 board falsehoods
   in the 36 B-019 repeat turns read by hand (folded in from B-020). Every falsehood count in the
@@ -977,7 +977,8 @@ sure"). `working-agreements.md` now says so, with one covered and one uncovered 
 Step 1, pre-registered:
 - **Compared:** on the v62 drafts, the drafts the judge's reading marks false against the drafts the
   agent's reading marks false; and the judge against its own second run on the same drafts.
-- **Stop** if the judge disagrees with the agent on more than 8 of the 81 replies (10%), or with its
+- **Stop** if the judge disagrees with the agent on more than 8 of the 82 drafts (10%; first written
+  as "of the 81 replies", restated below), or with its
   own second run by as much. Then it cannot be the counter, and the agent's reading stays a one-off
   answer key.
 - How long a judge call per game takes is unmeasured.
@@ -989,9 +990,9 @@ rather than `llm_response` so the play UI's debug log does not print a blocked d
 stream's payload does carry it in its debug trace, unrendered). Not shown to the judge. Two tests in
 `tests/test_coach.py` (`TestDraftsReachTheReportCard`), run through the shipping coach and the
 harness's own `_coach_turn`: red before (no `drafts` attribute, with the gate firing as intended),
-green after. Uncommitted at the time of writing.
+green after. Committed in `102eba0`.
 
-**Handoff — sweep in flight.** Job `sweep_v62`, launched 2026-10-15 14:14 UTC from
+**Superseded — the launch record.** Job `sweep_v62`, launched 2026-10-15 14:14 UTC from
 `output/_sweep_v62.ps1`: the v61 build plus draft recording, five seeds, `--no-judge`, about 14
 minutes. Read `~/.kiro-monitor/runs/sweep_v62/status.json` first. Then:
 - `python scripts/eval_repeat_budget.py --compare output/coach_review_v61_seed<n>
@@ -1003,6 +1004,75 @@ minutes. Read `~/.kiro-monitor/runs/sweep_v62/status.json` first. Then:
   plus any turns blocked once and then passed, which the log never showed.
 - Then build the judge's claim reading (step 1). The opener for that session: "take B-021 through
   the loop".
+
+**v62 READ 2026-10-15.** `sweep_v62` COMPLETED in 13m 30s, every seed exit 0. `--compare` v61 against
+v62: **byte-identical on all 81 spoken turns** (18/8/16/19/20), no prompt changed. 90 drafts saved:
+72 turns with one draft that shipped, and 9 turns with two drafts, all 9 falling back, at the same
+plies as v61's log. No turn was blocked once and then passed. On 8 of the 9 the retry was the first
+draft again, word for word, so there are **82 distinct drafts** to read: 72 + 10.
+
+**The retry repeating is part of this item, not a new one** (first filed as B-023, withdrawn before
+commit; the id is free). It changes two of this item's own numbers:
+- **The fallback count is the report card's, not the product's.** `generate_verified` retries
+  because "the model is sampled, so the same prompt is a genuinely different draw". The product
+  samples at `temperature: 0.7` (`config.yaml`, passed by `chess-coach serve`); the report card runs
+  at `_COACH_TEMPERATURE = 0.0`, where qwen3:14b gives the same text for the same prompt. Checked by
+  string equality on the v62 drafts: the retry repeated on ply 1003 of seeds 7, 11, 13 and 17, seed
+  13 ply 38, and seed 23 plies 19, 71 and 1003; seed 13 ply 34 differed. So "9 of 81 blocked" is the
+  report card's figure; in the product the retry is a real second draw, and the product's fallback
+  rate is unmeasured. Step 3's comparison of fallbacks, old gate
+  against new, has to be read at the product's temperature, with its noise floor from repeat runs,
+  because that is the only setting where the retry can change the outcome.
+- **The measure's unit is the draft.** The stop rule above was written as "8 of the 81 replies";
+  the population is 82 distinct drafts over those 81 turns. Restated before any draft was read:
+  stop if the judge disagrees with the agent on more than 8 of the 82 drafts (10%), the threshold
+  unchanged.
+
+**Step 1 DONE 2026-10-15: the measure holds, and today's gate passes 6 or 7 of the 15 or 16 false
+drafts.** Built: `chess_coach.eval.claims` (the claim kinds, the prompt, JSON parsing, the board
+checks; 22 tests in `tests/test_claims.py`, red before) and `eval_coach_rejudge.py --claims` /
+`--claims-reply` / `--claims-compare`. Run: job `b021_claims`, the pinned judge (claude-opus-5) twice
+per game, 97-318 s per call, 35 min in all; the agent's reading by five sub-agents, one per game,
+from the same prompt file and without sight of the judge's files. Everything is under
+`output/b021_claims/v62_seed{7,11,13,17,23}/`: the prompt, each raw reply, each scored reading.
+- **Against the stop rule (more than 8 of 82):** judge against itself 3 of 82; judge against the
+  agent 3 and 4. Passes. The disagreements, read: 7:44:0 (judge r1 wrote no claim for "c5 leaves
+  your pawn undefended"), 17:1:0 and 23:13:0 (whether "the cue is defending e4" / "remain
+  unchallenged" assert a fact), 11:1000:0 ("the pawn on e4 had no defender when you moved it to
+  e5", read on e4 by the judge and on e5 by the agent), 11:7:0 (the judge encoded "a discovered
+  attack is available, revealing your bishop" as the bishop hitting g5 now, which the text does
+  not say).
+- **False drafts:** judge 16 and 15, agent 15, of 82. **Today's gate blocked 10 drafts: 9 false on
+  every reading, 1 (13:38:0) false on none.** It passed 7 (judge r1), 6 (judge r2) and 6 (agent)
+  false drafts. Passed on all three readings: 13:16:0 "recapture with their queen" (no queen can
+  recapture), 17:79:0 "your rook on b5 was attacking the bishop on e6" (it is not), 23:23:0 "capture
+  it with Kf8" (B-020's case).
+- **Two changes made after seeing readings, both disclosed:** (1) after the one-game smoke run, the
+  prompt gained "a check that buys time to develop is also a mate claim, negated", because the
+  judge had written only a check claim for "Ra8#, a strong check"; the smoke reading was discarded
+  and seed 11 re-read. It decides the 6 `terminal_label` drafts, all false on every reading. (2)
+  `pinned` first meant a pin to the king only, which made "the pin involving c5 and c6" false where
+  Qc5 pins Nc6 to Bc8; widened behind a red test to a pin against any piece of its side behind it,
+  geometry only. All stored readings re-scored: 23:33:0 and 23:37:0 flip to clean on every reading
+  that had them false; nothing else moves. Pre-fix comparison kept as the first figures above.
+- **What this changes in this entry:** the gate's word lists block almost nothing that is true (1
+  of 10), and miss about 40% of what is false. The defect is recall, not false blocks.
+
+**Step 3's viability, measured 2026-10-15 before anything was built: qwen3:14b FAILS the stop rule.**
+Same 82 drafts, same prompt, one draft per call as a runtime gate would make it (`eval_coach_rejudge.py
+--claims --model qwen3:14b`, job `b021_local_reader`, 13 min, 4-15 s per draft). It disagrees with
+the other three readers on **27-28 of 82** (bar: more than 8). It calls 40 drafts false, against
+15-16, plus 14 with claims the board cannot be asked. Read on three of them: the drafts are true,
+and qwen's claims are wrong. It plays the reply and then asks the reply again (17:13 "dxc4" after
+["Qf3", "dxc4"]), writes "what was available here: attacking their bishop on b4" as a fact about the
+position now (7:20), and emits malformed claims (13:6, `"move": "check"`). As a gate it would block
+roughly 25 true drafts out of 82, where today's blocks 1. It did flag all 10 drafts the gate blocks.
+Not tested: another prompt, another local model, a constrained JSON schema; each would be a new
+measurement against this same stop rule, and none was tried after seeing this result.
+
+**So step 3 as designed stops here.** Steps 1 and 2 stand: the reading by the judge (or the agent)
+is the falsehood measure, and the counters can be rebuilt on it. What the runtime gate becomes is
+the owner's decision.
 
 ### OPEN — Only the move feedback is checked against the board; the engine-move explanation and the analysis are not (2026-10-14)
 

@@ -1,0 +1,210 @@
+{"drafts": [
+  {
+    "id": "23:9:0",
+    "claims": [
+      {"sentence": "The cue is defending your pawn on d4.", "after": [], "kind": "piece", "square": "d4", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "The cue is defending your pawn on d4.", "after": [], "kind": "attacked", "square": "d4", "by": "black", "negated": false}
+    ],
+    "unchecked": ["A better option was available that also develops a minor piece."]
+  },
+  {
+    "id": "23:13:0",
+    "claims": [
+      {"sentence": "Your move let the opponent's knight on c6 remain unchallenged.", "after": ["Kd1"], "kind": "piece", "square": "c6", "piece": "knight", "color": "black", "negated": false},
+      {"sentence": "Your move let the opponent's knight on c6 remain unchallenged.", "after": ["Kd1"], "kind": "attacked", "square": "c6", "by": "white", "negated": true},
+      {"sentence": "The cue is the pawn on e4, which fights for central control.", "after": [], "kind": "piece", "square": "e4", "piece": "pawn", "color": "white", "negated": false}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:17:0",
+    "claims": [
+      {"sentence": "Before moving, check if any of your opponent's pieces are undefended — there was an opportunity to capture their pawn on c7.", "after": [], "kind": "piece", "square": "c7", "piece": "pawn", "color": "black", "negated": false},
+      {"sentence": "Before moving, check if any of your opponent's pieces are undefended — there was an opportunity to capture their pawn on c7.", "after": [], "kind": "attacked", "square": "c7", "by": "white", "negated": false},
+      {"sentence": "Before moving, check if any of your opponent's pieces are undefended — there was an opportunity to capture their pawn on c7.", "after": [], "kind": "defended", "square": "c7", "negated": true}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:19:0",
+    "claims": [
+      {"sentence": "After your move, the opponent plays Kf8, capturing your pawn on c7.", "after": ["Rb1"], "kind": "legal", "move": "Kf8", "negated": false},
+      {"sentence": "After your move, the opponent plays Kf8, capturing your pawn on c7.", "after": ["Rb1"], "kind": "capture", "move": "Kf8", "piece": "pawn", "negated": false},
+      {"sentence": "After your move, the opponent plays Kf8, capturing your pawn on c7.", "after": ["Rb1"], "kind": "piece", "square": "c7", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "The same chance came up again — their pawn on c7 was attacked and undefended.", "after": [], "kind": "piece", "square": "c7", "piece": "pawn", "color": "black", "negated": false},
+      {"sentence": "The same chance came up again — their pawn on c7 was attacked and undefended.", "after": [], "kind": "attacked", "square": "c7", "by": "white", "negated": false},
+      {"sentence": "The same chance came up again — their pawn on c7 was attacked and undefended.", "after": [], "kind": "defended", "square": "c7", "negated": true}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:21:0",
+    "claims": [
+      {"sentence": "The opponent’s reply was Kf8, defending their pawn on f7.", "after": ["Bd3"], "kind": "legal", "move": "Kf8", "negated": false},
+      {"sentence": "The opponent’s reply was Kf8, defending their pawn on f7.", "after": ["Bd3", "Kf8"], "kind": "piece", "square": "f7", "piece": "pawn", "color": "black", "negated": false},
+      {"sentence": "The opponent’s reply was Kf8, defending their pawn on f7.", "after": ["Bd3", "Kf8"], "kind": "defended", "square": "f7", "negated": false},
+      {"sentence": "You skipped the check: their pawn on c7 was attacked and undefended.", "after": [], "kind": "piece", "square": "c7", "piece": "pawn", "color": "black", "negated": false},
+      {"sentence": "You skipped the check: their pawn on c7 was attacked and undefended.", "after": [], "kind": "attacked", "square": "c7", "by": "white", "negated": false},
+      {"sentence": "You skipped the check: their pawn on c7 was attacked and undefended.", "after": [], "kind": "defended", "square": "c7", "negated": true}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:23:0",
+    "claims": [
+      {"sentence": "Your move left Bh6 undefended, allowing Black to capture it with Kf8.", "after": ["Bh6"], "kind": "piece", "square": "h6", "piece": "bishop", "color": "white", "negated": false},
+      {"sentence": "Your move left Bh6 undefended, allowing Black to capture it with Kf8.", "after": ["Bh6"], "kind": "defended", "square": "h6", "negated": true},
+      {"sentence": "Your move left Bh6 undefended, allowing Black to capture it with Kf8.", "after": ["Bh6"], "kind": "legal", "move": "Kf8", "negated": false},
+      {"sentence": "Your move left Bh6 undefended, allowing Black to capture it with Kf8.", "after": ["Bh6"], "kind": "capture", "move": "Kf8", "piece": "bishop", "negated": false}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:27:0",
+    "claims": [
+      {"sentence": "After your move, the opponent plays dxe6, capturing your knight on e6.", "after": ["Ne6+"], "kind": "legal", "move": "dxe6", "negated": false},
+      {"sentence": "After your move, the opponent plays dxe6, capturing your knight on e6.", "after": ["Ne6+"], "kind": "capture", "move": "dxe6", "piece": "knight", "negated": false},
+      {"sentence": "After your move, the opponent plays dxe6, capturing your knight on e6.", "after": ["Ne6+"], "kind": "piece", "square": "e6", "piece": "knight", "color": "white", "negated": false},
+      {"sentence": "What was available here does this: capturing their rook on a8 (material win — captures a rook).", "after": [], "kind": "piece", "square": "a8", "piece": "rook", "color": "black", "negated": false},
+      {"sentence": "What was available here does this: capturing their rook on a8 (material win — captures a rook).", "after": [], "kind": "attacked", "square": "a8", "by": "white", "negated": false}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:29:0",
+    "claims": [
+      {"sentence": "Your move left your pawn on a2 undefended.", "after": ["Qc5"], "kind": "piece", "square": "a2", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "Your move left your pawn on a2 undefended.", "after": ["Qc5"], "kind": "defended", "square": "a2", "negated": true},
+      {"sentence": "What was available here does this: adding a defender to your pawn on d4 (piece development — activating a minor piece).", "after": [], "kind": "piece", "square": "d4", "piece": "pawn", "color": "white", "negated": false}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:33:0",
+    "claims": [
+      {"sentence": "The opponent's strongest reply is exf3, capturing your knight on f3.", "after": ["Nf3"], "kind": "legal", "move": "exf3", "negated": false},
+      {"sentence": "The opponent's strongest reply is exf3, capturing your knight on f3.", "after": ["Nf3"], "kind": "capture", "move": "exf3", "piece": "knight", "negated": false},
+      {"sentence": "The opponent's strongest reply is exf3, capturing your knight on f3.", "after": ["Nf3"], "kind": "piece", "square": "f3", "piece": "knight", "color": "white", "negated": false},
+      {"sentence": "You moved to a square that was already under attack, skipping the check that was available.", "after": [], "kind": "attacked", "square": "f3", "by": "black", "negated": false},
+      {"sentence": "The cue here is the pin involving c5 and c6.", "after": [], "kind": "pinned", "square": "c6", "negated": false}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:35:0",
+    "claims": [
+      {"sentence": "After your move, the opponent plays Bxb7, capturing your bishop on b7.", "after": ["Bxb7"], "kind": "legal", "move": "Bxb7", "negated": false},
+      {"sentence": "After your move, the opponent plays Bxb7, capturing your bishop on b7.", "after": ["Bxb7"], "kind": "capture", "move": "Bxb7", "piece": "bishop", "negated": false},
+      {"sentence": "After your move, the opponent plays Bxb7, capturing your bishop on b7.", "after": ["Bxb7"], "kind": "piece", "square": "b7", "piece": "bishop", "color": "white", "negated": false},
+      {"sentence": "The bishop on b7 is undefended, and the square is attacked by Black’s bishop on c8.", "after": ["Bxb7"], "kind": "piece", "square": "b7", "piece": "bishop", "color": "white", "negated": false},
+      {"sentence": "The bishop on b7 is undefended, and the square is attacked by Black’s bishop on c8.", "after": ["Bxb7"], "kind": "defended", "square": "b7", "negated": true},
+      {"sentence": "The bishop on b7 is undefended, and the square is attacked by Black’s bishop on c8.", "after": ["Bxb7"], "kind": "attacked", "square": "b7", "by": "black", "negated": false},
+      {"sentence": "The bishop on b7 is undefended, and the square is attacked by Black’s bishop on c8.", "after": ["Bxb7"], "kind": "piece", "square": "c8", "piece": "bishop", "color": "black", "negated": false},
+      {"sentence": "The bishop on b7 is undefended, and the square is attacked by Black’s bishop on c8.", "after": ["Bxb7"], "kind": "attacks", "square": "c8", "target": "b7", "negated": false}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:37:0",
+    "claims": [
+      {"sentence": "Your move left the pawn on g2 undefended.", "after": ["Bxc6+"], "kind": "piece", "square": "g2", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "Your move left the pawn on g2 undefended.", "after": ["Bxc6+"], "kind": "defended", "square": "g2", "negated": true},
+      {"sentence": "The pin on c6 was available — a key idea that could have been used to control the square and improve your position.", "after": [], "kind": "pinned", "square": "c6", "negated": false}
+    ],
+    "unchecked": ["This moment was critical because it involved a clear tactical opportunity that you overlooked."]
+  },
+  {
+    "id": "23:39:0",
+    "claims": [
+      {"sentence": "You let a capture slip by — their pawn on f3 was undefended and attacked.", "after": [], "kind": "piece", "square": "f3", "piece": "pawn", "color": "black", "negated": false},
+      {"sentence": "You let a capture slip by — their pawn on f3 was undefended and attacked.", "after": [], "kind": "defended", "square": "f3", "negated": true},
+      {"sentence": "You let a capture slip by — their pawn on f3 was undefended and attacked.", "after": [], "kind": "attacked", "square": "f3", "by": "white", "negated": false},
+      {"sentence": "After your move, the opponent plays fxg2, capturing your pawn on g2.", "after": ["dxe5"], "kind": "legal", "move": "fxg2", "negated": false},
+      {"sentence": "After your move, the opponent plays fxg2, capturing your pawn on g2.", "after": ["dxe5"], "kind": "capture", "move": "fxg2", "piece": "pawn", "negated": false},
+      {"sentence": "After your move, the opponent plays fxg2, capturing your pawn on g2.", "after": ["dxe5"], "kind": "piece", "square": "g2", "piece": "pawn", "color": "white", "negated": false}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:43:0",
+    "claims": [
+      {"sentence": "The opponent plays Ke7, moving their king off d8 where it was attacked.", "after": ["Qb6+"], "kind": "legal", "move": "Ke7", "negated": false},
+      {"sentence": "The opponent plays Ke7, moving their king off d8 where it was attacked.", "after": ["Qb6+"], "kind": "piece", "square": "d8", "piece": "king", "color": "black", "negated": false},
+      {"sentence": "The opponent plays Ke7, moving their king off d8 where it was attacked.", "after": ["Qb6+"], "kind": "attacked", "square": "d8", "by": "white", "negated": false},
+      {"sentence": "The pawn on e5 is now undefended.", "after": ["Qb6+"], "kind": "piece", "square": "e5", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "The pawn on e5 is now undefended.", "after": ["Qb6+"], "kind": "defended", "square": "e5", "negated": true}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:51:0",
+    "claims": [
+      {"sentence": "The opponent's strongest reply is Nxf2+, capturing your pawn on f2.", "after": ["Qxe6"], "kind": "legal", "move": "Nxf2+", "negated": false},
+      {"sentence": "The opponent's strongest reply is Nxf2+, capturing your pawn on f2.", "after": ["Qxe6"], "kind": "capture", "move": "Nxf2+", "piece": "pawn", "negated": false},
+      {"sentence": "The opponent's strongest reply is Nxf2+, capturing your pawn on f2.", "after": ["Qxe6"], "kind": "check", "move": "Nxf2+", "negated": false},
+      {"sentence": "The opponent's strongest reply is Nxf2+, capturing your pawn on f2.", "after": ["Qxe6"], "kind": "piece", "square": "f2", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "Your pawn on f2 was already attacked and undefended before this move.", "after": [], "kind": "piece", "square": "f2", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "Your pawn on f2 was already attacked and undefended before this move.", "after": [], "kind": "attacked", "square": "f2", "by": "black", "negated": false},
+      {"sentence": "Your pawn on f2 was already attacked and undefended before this move.", "after": [], "kind": "defended", "square": "f2", "negated": true}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:57:0",
+    "claims": [
+      {"sentence": "After your move, the opponent plays Ke6, moving their king off e7 where it was attacked.", "after": ["Qb7+"], "kind": "legal", "move": "Ke6", "negated": false},
+      {"sentence": "After your move, the opponent plays Ke6, moving their king off e7 where it was attacked.", "after": ["Qb7+"], "kind": "piece", "square": "e7", "piece": "king", "color": "black", "negated": false},
+      {"sentence": "After your move, the opponent plays Ke6, moving their king off e7 where it was attacked.", "after": ["Qb7+"], "kind": "attacked", "square": "e7", "by": "white", "negated": false},
+      {"sentence": "The rook on h8 was attacked and undefended before your move, and Qb7+ does not take it.", "after": [], "kind": "piece", "square": "h8", "piece": "rook", "color": "black", "negated": false},
+      {"sentence": "The rook on h8 was attacked and undefended before your move, and Qb7+ does not take it.", "after": [], "kind": "attacked", "square": "h8", "by": "white", "negated": false},
+      {"sentence": "The rook on h8 was attacked and undefended before your move, and Qb7+ does not take it.", "after": [], "kind": "defended", "square": "h8", "negated": true},
+      {"sentence": "The rook on h8 was attacked and undefended before your move, and Qb7+ does not take it.", "after": [], "kind": "capture", "move": "Qb7+", "piece": "rook", "negated": true}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:63:0",
+    "claims": [
+      {"sentence": "The cue is the discovered attack: moving e5 reveals Qe4 hitting Ke6.", "after": [], "kind": "piece", "square": "e4", "piece": "queen", "color": "white", "negated": false},
+      {"sentence": "The cue is the discovered attack: moving e5 reveals Qe4 hitting Ke6.", "after": [], "kind": "piece", "square": "e6", "piece": "king", "color": "black", "negated": false},
+      {"sentence": "Instead of moving your king, consider keeping it on f2 to guard against this threat.", "after": [], "kind": "piece", "square": "f2", "piece": "king", "color": "white", "negated": false}
+    ],
+    "unchecked": ["The cue is the discovered attack: moving e5 reveals Qe4 hitting Ke6."]
+  },
+  {
+    "id": "23:65:0",
+    "claims": [
+      {"sentence": "Before moving, check if any of your pieces are undefended — your e5 pawn is now undefended after Qxf3.", "after": ["Qxf3"], "kind": "piece", "square": "e5", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "Before moving, check if any of your pieces are undefended — your e5 pawn is now undefended after Qxf3.", "after": ["Qxf3"], "kind": "defended", "square": "e5", "negated": true},
+      {"sentence": "The queen was the only thing guarding it.", "after": [], "kind": "defended", "square": "e5", "negated": false}
+    ],
+    "unchecked": ["The queen was the only thing guarding it."]
+  },
+  {
+    "id": "23:71:0",
+    "claims": [
+      {"sentence": "Your move gives check and improves rook activity.", "after": [], "kind": "check", "move": "Rhd1", "negated": false},
+      {"sentence": "Your move gives check and improves rook activity.", "after": [], "kind": "mate", "move": "Rhd1", "negated": true}
+    ],
+    "unchecked": []
+  },
+  {
+    "id": "23:1000:0",
+    "claims": [
+      {"sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.", "after": ["e5"], "kind": "legal", "move": "Kxe5", "negated": false},
+      {"sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.", "after": ["e5"], "kind": "capture", "move": "Kxe5", "piece": "pawn", "negated": false},
+      {"sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.", "after": ["e5"], "kind": "piece", "square": "e5", "piece": "pawn", "color": "white", "negated": false},
+      {"sentence": "This happened because the pawn on e5 had no defender, and your king on e3 couldn’t reach in time.", "after": ["e5"], "kind": "defended", "square": "e5", "negated": true},
+      {"sentence": "This happened because the pawn on e5 had no defender, and your king on e3 couldn’t reach in time.", "after": ["e5"], "kind": "piece", "square": "e3", "piece": "king", "color": "white", "negated": false}
+    ],
+    "unchecked": ["This happened because the pawn on e5 had no defender, and your king on e3 couldn’t reach in time."]
+  },
+  {
+    "id": "23:1003:0",
+    "claims": [
+      {"sentence": "Your move Ra8# is strong, as it gives check and improves rook activity.", "after": [], "kind": "check", "move": "Ra8", "negated": false},
+      {"sentence": "Your move Ra8# is strong, as it gives check and improves rook activity.", "after": [], "kind": "mate", "move": "Ra8", "negated": true}
+    ],
+    "unchecked": []
+  }
+]}

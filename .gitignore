@@ -55,3 +55,10 @@ output/b019_models/*
 !output/b019_models/*/
 output/b019_models/*/*
 !output/b019_models/*/transcript.json
+
+# B-021's claim readings of the v62 drafts (ledger rows 172 and 173): the prompt each reader saw,
+# each raw reply, and each reading scored on the board. They are the falsehood measure's evidence,
+# and the stop rule was judged on them, so nobody can re-check that verdict without them.
+!output/b021_claims/
+output/b021_claims/*
+!output/b021_claims/*/

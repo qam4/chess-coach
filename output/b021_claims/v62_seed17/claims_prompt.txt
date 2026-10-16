@@ -1,0 +1,397 @@
+You are reading a chess coach's feedback to a student. For each draft below, write down every
+claim it makes about the board, in the fixed form described here. A program then checks each claim
+on the board. Your job is ONLY to write down what the text claims. Do not check whether it is true,
+and do not leave a claim out because you think it is false or obvious.
+
+A claim is a JSON object:
+  {"sentence": "<the sentence it comes from, copied exactly>",
+   "after": [<moves in SAN, played in order from the position BEFORE the student's move>],
+   "kind": "<one of the kinds below>",
+   <the fields that kind needs>,
+   "negated": <true if the text says this does NOT hold, otherwise false>}
+
+"after" sets the position the claim is about:
+  []                                  before the student's move ("was already attacked before this move")
+  ["<student's move>"]                after it; most claims are about this position
+  ["<student's move>", "<reply>"]     after a reply the text names
+
+Kinds. Squares like "c3"; colours "white" or "black"; pieces pawn, knight, bishop, rook, queen,
+king; moves in SAN, legal for the side to move in the claim's position.
+- piece: square, piece, color — that piece of that colour stands on the square
+- empty: square — nothing stands on the square
+- legal: move — the side to move can play the move
+- capture: move, and optionally piece — the move captures (a piece of that type)
+- check: move — the move gives check
+- mate: move — the move is checkmate
+- attacks: square, target — the piece standing on square attacks the target square
+- attacked: square, by — some piece of colour `by` attacks the square
+- defended: square — some piece of the same colour as the one on the square defends it
+- pinned: square — the piece on the square is pinned to its king
+- passed: square — the pawn on the square is a passed pawn
+- isolated: square — the pawn on the square has no friendly pawn on a neighbouring file
+
+How to write them:
+- One claim per fact. "The opponent replies Qc2, capturing your bishop on c1" is two claims: legal
+  Qc2 after ["<student's move>"], and capture Qc2 with piece bishop after ["<student's move>"].
+  "... Qc2, attacking your bishop on c1" is legal Qc2, then attacks square c2 target c1 after
+  ["<student's move>", "Qc2"].
+- "Your move left the pawn on c3 undefended" is a defended claim on c3, negated, after the move.
+- "you"/"your" is the student's colour; "they"/"their"/"the opponent" is the other colour. A piece
+  named with its square ("your pawn on c3") is also a piece claim.
+- A claim can be implied. Calling a move "a check" that "buys time to develop" says the game goes
+  on, so it is also a mate claim on that move, negated.
+- Advice, questions, lessons and general principles are not claims. A sentence that does state a
+  fact about this board that none of the kinds can express goes in "unchecked", copied exactly.
+
+Reply with ONE JSON object and nothing else, with one entry for every draft, in order:
+  {"drafts": [{"id": "<id>", "claims": [<claim>, ...], "unchecked": ["<sentence>", ...]}, ...]}
+
+### Draft 17:1:0
+Student plays White. Student's move: Ng5
+Position before the move (FEN): rnbqkb1r/pp1ppppp/5n2/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3
+Position after the move (FEN): rnbqkb1r/pp1ppppp/5n2/2p3N1/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 3 3
+Board before the move (White's pieces in capitals, White at the bottom):
+r n b q k b . r
+p p . p p p p p
+. . . . . n . .
+. . p . . . . .
+. . . . P . . .
+. . . . . N . .
+P P P P . P P P
+R N B Q K B . R
+Text:
+<<<
+Your move, Ng5, lets your opponent take control of the center. The cue is defending your pawn on e4. Before starting something new, ask yourself: is there something important already on the board that needs protection? Next time you see a piece or pawn in a key spot, check if moving another piece might leave it undefended.
+>>>
+
+### Draft 17:3:0
+Student plays White. Student's move: Nxf7
+Position before the move (FEN): rnbqkb1r/pp1pppp1/5n1p/2p3N1/4P3/8/PPPP1PPP/RNBQKB1R w KQkq - 0 4
+Position after the move (FEN): rnbqkb1r/pp1ppNp1/5n1p/2p5/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 0 4
+Board before the move (White's pieces in capitals, White at the bottom):
+r n b q k b . r
+p p . p p p p .
+. . . . . n . p
+. . p . . . N .
+. . . . P . . .
+. . . . . . . .
+P P P P . P P P
+R N B Q K B . R
+Text:
+<<<
+After your move, the opponent plays Kxf7, capturing your knight on f7. The check that was skipped: before I commit, is the piece I am moving attacked on the square I am moving it to? Your knight on g5 was moving to f7, a square attacked by Black’s king on e8. This left your knight undefended. Next time you see a piece moving to a square, ask yourself: is that square attacked?
+>>>
+
+### Draft 17:11:0
+Student plays White. Student's move: Ne4
+Position before the move (FEN): rnbqnbkr/pp1p2p1/4p2p/2p1P3/2B5/2N5/PPPP1PPP/R1BQK2R w KQ - 1 8
+Position after the move (FEN): rnbqnbkr/pp1p2p1/4p2p/2p1P3/2B1N3/8/PPPP1PPP/R1BQK2R b KQ - 2 8
+Board before the move (White's pieces in capitals, White at the bottom):
+r n b q n b k r
+p p . p . . p .
+. . . . p . . p
+. . p . P . . .
+. . B . . . . .
+. . N . . . . .
+P P P P . P P P
+R . B Q K . . R
+Text:
+<<<
+By moving Ne4, you missed the opportunity to castle short, which would have tucked your king onto g1 and connected your rooks for better king safety. The data shows that castling short was available here. 
+
+Next time you see the center starting to open, ask yourself: have I secured my king’s safety first?
+>>>
+
+### Draft 17:13:0
+Student plays White. Student's move: Qf3
+Position before the move (FEN): rnbqnbkr/pp4p1/4p2p/2ppP3/2B1N3/8/PPPP1PPP/R1BQK2R w KQ d6 0 9
+Position after the move (FEN): rnbqnbkr/pp4p1/4p2p/2ppP3/2B1N3/5Q2/PPPP1PPP/R1B1K2R b KQ - 1 9
+Board before the move (White's pieces in capitals, White at the bottom):
+r n b q n b k r
+p p . . . . p .
+. . . . p . . p
+. . p p P . . .
+. . B . N . . .
+. . . . . . . .
+P P P P . P P P
+R . B Q K . . R
+Text:
+<<<
+After your move, the opponent plays dxc4, capturing your bishop on c4. The bishop on c4 was already attacked and undefended before this move. The check that was skipped: is anything of mine already under attack, before I look for something to improve? What matters here is the undefended bishop. Next time you see a piece under attack, ask yourself: is it defended, and if not, what happens if it’s taken?
+>>>
+
+### Draft 17:15:0
+Student plays White. Student's move: Qg4
+Position before the move (FEN): rnbqnbkr/pp4p1/4p2p/2p1P3/2B1p3/5Q2/PPPP1PPP/R1B1K2R w KQ - 0 10
+Position after the move (FEN): rnbqnbkr/pp4p1/4p2p/2p1P3/2B1p1Q1/8/PPPP1PPP/R1B1K2R b KQ - 1 10
+Board before the move (White's pieces in capitals, White at the bottom):
+r n b q n b k r
+p p . . . . p .
+. . . . p . . p
+. . p . P . . .
+. . B . p . . .
+. . . . . Q . .
+P P P P . P P P
+R . B . K . . R
+Text:
+<<<
+Before moving, check if any of your opponent’s pieces are undefended — there was an opportunity to capture their pawn on e4. The check that was skipped: before anything else, is there something of theirs I can just take? Next time you see an undefended piece, ask yourself: can I take it immediately?
+>>>
+
+### Draft 17:17:0
+Student plays White. Student's move: c3
+Position before the move (FEN): rnb1nbkr/pp2q1p1/4p2p/2p1P3/2B1p1Q1/8/PPPP1PPP/R1B1K2R w KQ - 2 11
+Position after the move (FEN): rnb1nbkr/pp2q1p1/4p2p/2p1P3/2B1p1Q1/2P5/PP1P1PPP/R1B1K2R b KQ - 0 11
+Board before the move (White's pieces in capitals, White at the bottom):
+r n b . n b k r
+p p . . q . p .
+. . . . p . . p
+. . p . P . . .
+. . B . p . Q .
+. . . . . . . .
+P P P P . P P P
+R . B . K . . R
+Text:
+<<<
+You missed a chance to capture their undefended pawn on e4. The same opportunity was available earlier, and it’s still there now. Before moving, ask yourself: is there something I can just take right now? Next time you see an undefended piece, check if you can capture it with a move that also improves your position.
+>>>
+
+### Draft 17:25:0
+Student plays White. Student's move: dxc5
+Position before the move (FEN): rnb3kr/ppb2qp1/4p2p/2p5/2BPQ3/2P5/PP3PPP/R1B1K2R w KQ - 1 15
+Position after the move (FEN): rnb3kr/ppb2qp1/4p2p/2P5/2B1Q3/2P5/PP3PPP/R1B1K2R b KQ - 0 15
+Board before the move (White's pieces in capitals, White at the bottom):
+r n b . . . k r
+p p b . . q p .
+. . . . p . . p
+. . p . . . . .
+. . B P Q . . .
+. . P . . . . .
+P P . . . P P P
+R . B . K . . R
+Text:
+<<<
+The cue is the central square d5, which you could have occupied with your pawn. A better option was available that strengthens your control of the center. Next time you see a central square contested, ask yourself: which piece can I use to claim it and improve my position?
+>>>
+
+### Draft 17:35:0
+Student plays White. Student's move: f3
+Position before the move (FEN): r1b3kr/pp4p1/2n1p3/2P1b2p/2B4P/2P1B3/PP3PP1/2KR3R w - - 0 20
+Position after the move (FEN): r1b3kr/pp4p1/2n1p3/2P1b2p/2B4P/2P1BP2/PP4P1/2KR3R b - - 0 20
+Board before the move (White's pieces in capitals, White at the bottom):
+r . b . . . k r
+p p . . . . p .
+. . n . p . . .
+. . P . b . . p
+. . B . . . . P
+. . P . B . . .
+P P . . . P P .
+. . K R . . . R
+Text:
+<<<
+The cue here is the pin: your bishop on c4 pins Black’s pawn on e6 to their king. Before moving, check if everything you were defending is still defended. Your bishop on e3 was previously defended, but after f3, it is not. Next time you see a pinned piece, ask yourself: is this the best square for my piece, or could it be better placed elsewhere?
+>>>
+
+### Draft 17:37:0
+Student plays White. Student's move: Rhe1
+Position before the move (FEN): r1b3kr/1p4p1/2n1p3/p1P1b2p/2B4P/2P1BP2/PP4P1/2KR3R w - - 0 21
+Position after the move (FEN): r1b3kr/1p4p1/2n1p3/p1P1b2p/2B4P/2P1BP2/PP4P1/2KRR3 b - - 1 21
+Board before the move (White's pieces in capitals, White at the bottom):
+r . b . . . k r
+. p . . . . p .
+. . n . p . . .
+p . P . b . . p
+. . B . . . . P
+. . P . B P . .
+P P . . . . P .
+. . K R . . . R
+Text:
+<<<
+The pin on e6 is still in place. Your pawn on h4 was defended before Rhe1, but it’s not after. This is the same idea as earlier in the game — going after a piece that has too few defenders.
+>>>
+
+### Draft 17:43:0
+Student plays White. Student's move: Bf4
+Position before the move (FEN): r1b3kr/1pb3p1/4p3/p1P1n2p/2B4P/2P1BP2/PP4P1/2KRR3 w - - 6 24
+Position after the move (FEN): r1b3kr/1pb3p1/4p3/p1P1n2p/2B2B1P/2P2P2/PP4P1/2KRR3 b - - 7 24
+Board before the move (White's pieces in capitals, White at the bottom):
+r . b . . . k r
+. p b . . . p .
+. . . . p . . .
+p . P . n . . p
+. . B . . . . P
+. . P . B P . .
+P P . . . . P .
+. . K R R . . .
+Text:
+<<<
+The opponent's strongest reply is Nd3+, attacking your rook on e1 and bishop on f4. The check that was skipped: after your move, your pawn on c5 is no longer defended. The cue here is the pin involving c4 and e6. Next time you see a pinned piece, ask yourself: is everything I was defending still defended?
+>>>
+
+### Draft 17:55:0
+Student plays White. Student's move: Bxa5
+Position before the move (FEN): 2b2rk1/1pB3p1/r3p3/p1P4R/3R3P/2P2P2/PK4P1/8 w - - 1 30
+Position after the move (FEN): 2b2rk1/1p4p1/r3p3/B1P4R/3R3P/2P2P2/PK4P1/8 b - - 0 30
+Board before the move (White's pieces in capitals, White at the bottom):
+. . b . . r k .
+. p B . . . p .
+r . . . p . . .
+p . P . . . . R
+. . . R . . . P
+. . P . . P . .
+P K . . . . P .
+. . . . . . . .
+Text:
+<<<
+The opponent's strongest reply is Rxa5, capturing your bishop on a5. This happened because after your move, nothing of yours defends a5, and a6 attacks it. The check that was skipped: before moving, is the piece you're moving attacked on the square you're moving it to?  
+
+Next time you see a piece that leaves the board, ask yourself: does it help or hurt my material lead?
+>>>
+
+### Draft 17:57:0
+Student plays White. Student's move: a3
+Position before the move (FEN): 2b2rk1/1p4p1/4p3/r1P4R/3R3P/2P2P2/PK4P1/8 w - - 0 31
+Position after the move (FEN): 2b2rk1/1p4p1/4p3/r1P4R/3R3P/P1P2P2/1K4P1/8 b - - 0 31
+Board before the move (White's pieces in capitals, White at the bottom):
+. . b . . r k .
+. p . . . . p .
+. . . . p . . .
+r . P . . . . R
+. . . R . . . P
+. . P . . P . .
+P K . . . . P .
+. . . . . . . .
+Text:
+<<<
+The cue here is the discovered attack: moving c5 reveals Rh5 hitting Ra5. What was available was a chance to use that tactical opportunity. Next time you see a piece that can create a discovered attack, ask yourself: is there a way to use that to gain an immediate advantage?
+>>>
+
+### Draft 17:65:0
+Student plays White. Student's move: Rg5
+Position before the move (FEN): 2b2rk1/1p4p1/8/1RP1R3/7P/P1P2P2/1K4P1/8 w - - 1 35
+Position after the move (FEN): 2b2rk1/1p4p1/8/1RP3R1/7P/P1P2P2/1K4P1/8 b - - 2 35
+Board before the move (White's pieces in capitals, White at the bottom):
+. . b . . r k .
+. p . . . . p .
+. . . . . . . .
+. R P . R . . .
+. . . . . . . P
+P . P . . P . .
+. K . . . . P .
+. . . . . . . .
+Text:
+<<<
+The cue is the isolated a3 pawn and the back-rank threat. Before moving, check if any of your pieces are undefended or if your king is exposed. A better option was available that keeps your pieces active and avoids giving your opponent a clear path to counterplay.  
+
+Next time you see an isolated pawn and a back rank, ask yourself: is there a safer, more active square for my rook?
+>>>
+
+### Draft 17:77:0
+Student plays White. Student's move: Rd5
+Position before the move (FEN): 2b3k1/1p4p1/8/PRP3R1/2PK3P/5P2/6P1/2r5 w - - 1 41
+Position after the move (FEN): 2b3k1/1p4p1/8/PRPR4/2PK3P/5P2/6P1/2r5 b - - 2 41
+Board before the move (White's pieces in capitals, White at the bottom):
+. . b . . . k .
+. p . . . . p .
+. . . . . . . .
+P R P . . . R .
+. . P K . . . P
+. . . . . P . .
+. . . . . . P .
+. . r . . . . .
+Text:
+<<<
+Your move Rd5 left your pawn on g2 undefended, which was previously protected. The check that was skipped: after your move, is everything you were defending still defended? This moment was critical because it opened up a weakness that your opponent can exploit. Next time you see a piece or pawn that was previously defended, ask yourself: does my move still protect it?
+>>>
+
+### Draft 17:79:0
+Student plays White. Student's move: Rxb7
+Position before the move (FEN): 6k1/1p4p1/4b3/PRPR4/2PK3P/5P2/6P1/2r5 w - - 3 42
+Position after the move (FEN): 6k1/1R4p1/4b3/P1PR4/2PK3P/5P2/6P1/2r5 b - - 0 42
+Board before the move (White's pieces in capitals, White at the bottom):
+. . . . . . k .
+. p . . . . p .
+. . . . b . . .
+P R P R . . . .
+. . P K . . . P
+. . . . . P . .
+. . . . . . P .
+. . r . . . . .
+Text:
+<<<
+Your move let the opponent capture your rook on d5. The opponent's answer: Bxd5, capturing your rook on d5. The check that was skipped: after your move, your pawn on a5 was no longer defended. The cue: your rook on b5 was attacking the bishop on e6. Next time you see an undefended pawn, ask yourself: is everything I was defending still defended?
+>>>
+
+### Draft 17:85:0
+Student plays White. Student's move: Ke5
+Position before the move (FEN): 8/1R4pk/8/P1PK3P/2P5/5P2/2r3P1/8 w - - 1 45
+Position after the move (FEN): 8/1R4pk/8/P1P1K2P/2P5/5P2/2r3P1/8 b - - 2 45
+Board before the move (White's pieces in capitals, White at the bottom):
+. . . . . . . .
+. R . . . . p k
+. . . . . . . .
+P . P K . . . P
+. . P . . . . .
+. . . . . P . .
+. . r . . . P .
+. . . . . . . .
+Text:
+<<<
+After your move, the opponent plays Rxg2, capturing your pawn on g2. The thinking that went wrong was skipping the check: before moving a piece, is it the only thing guarding something? The pawn on c4 was left undefended after Ke5. This moment was critical because it opened the door for your opponent to capture a valuable pawn. Next time you see a piece that might be the only defender, ask yourself: is it the only thing guarding something?
+>>>
+
+### Draft 17:87:0
+Student plays White. Student's move: Kf4
+Position before the move (FEN): 8/1R4pk/8/P1P1K2P/2P5/5P2/6r1/8 w - - 0 46
+Position after the move (FEN): 8/1R4pk/8/P1P4P/2P2K2/5P2/6r1/8 b - - 1 46
+Board before the move (White's pieces in capitals, White at the bottom):
+. . . . . . . .
+. R . . . . p k
+. . . . . . . .
+P . P . K . . P
+. . P . . . . .
+. . . . . P . .
+. . . . . . r .
+. . . . . . . .
+Text:
+<<<
+By moving your king to f4, you missed the chance to support your passed pawn on the a-file. The rook on b7 is already in position to back it up, and your king should be near the pawn to help push it forward. This moment was critical because advancing the passed pawn is key to converting your material lead. Next time you see a passed pawn, ask yourself: where can my king go to support it best?
+>>>
+
+### Draft 17:1000:0
+Student plays White. Student's move: e5
+Position before the move (FEN): 8/8/4k3/8/4P3/4K3/8/8 w - - 0 1
+Position after the move (FEN): 8/8/4k3/4P3/8/4K3/8/8 b - - 0 1
+Board before the move (White's pieces in capitals, White at the bottom):
+. . . . . . . .
+. . . . . . . .
+. . . . k . . .
+. . . . . . . .
+. . . . P . . .
+. . . . K . . .
+. . . . . . . .
+. . . . . . . .
+Text:
+<<<
+The opponent's strongest reply is Kxe5, capturing your pawn on e5. This happened because after your move, nothing of yours defends e5, and e6 attacks it. The check that was skipped: before moving, is the piece you're moving attacked on the square you're moving it to?  
+
+Next time you see a passed pawn, ask yourself: is it properly supported, and is my king positioned to help it advance?
+>>>
+
+### Draft 17:1003:0
+Student plays White. Student's move: Ra8#
+Position before the move (FEN): 6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1
+Position after the move (FEN): R5k1/5ppp/8/8/8/8/5PPP/6K1 b - - 1 1
+Board before the move (White's pieces in capitals, White at the bottom):
+. . . . . . k .
+. . . . . p p p
+. . . . . . . .
+. . . . . . . .
+. . . . . . . .
+. . . . . . . .
+. . . . . P P P
+R . . . . . K .
+Text:
+<<<
+Your move, Ra8#, is a strong check that activates your rook. The key idea here is that checks force the opponent to respond immediately. Next time you see a check, ask yourself: does it buy me time to develop or improve another piece?
+>>>
