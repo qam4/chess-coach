@@ -24,8 +24,12 @@ the two cannot silently disagree.
 B-021: the same transcript can instead be read for its BOARD CLAIMS. The judge writes every claim
 each draft makes as JSON and python-chess checks them (`chess_coach.eval.claims`):
 
-    python scripts/eval_coach_rejudge.py --claims --runs 2 \
-        --transcript output/coach_review_v62_seed7/transcript.json --out output/b021_claims/v62_seed7
+    python scripts/eval_coach_rejudge.py --claims --runs 1 \
+        --transcript output/coach_review_v62_seed7/transcript.json
+
+writes `claims_judge_r1.json` beside the transcript, which is what the dashboard reads; `--out DIR`
+puts it elsewhere. The same reading says which composed facts each text states, which sentences
+claim to know what the student was thinking, and which give a number rating the position.
 
 A reading written by someone else (the agent) answering the same `claims_prompt.txt` is scored the
 same way with `--claims-reply FILE --reader agent`. Readings are compared, and graded against
@@ -35,6 +39,7 @@ today's gate, with `--claims-compare DIR [DIR ...] --readers judge_r1,judge_r2,a
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import shlex
 import sys
@@ -75,28 +80,63 @@ def _judge(args: argparse.Namespace):  # type: ignore[no-untyped-def]
     )
 
 
-def _write_scored(out_dir: Path, reader: str, drafts: list[cl.Draft], reply: str, args: argparse.Namespace) -> None:
+def _hard_metrics():  # type: ignore[no-untyped-def]
+    """`scripts/eval_hard_metrics.py`, for `supplied_facts`: one parser of our prompt, not two."""
+    path = Path(__file__).resolve().parent / "eval_hard_metrics.py"
+    spec = importlib.util.spec_from_file_location("eval_hard_metrics_for_rejudge", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["eval_hard_metrics_for_rejudge"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _spoken(data: dict) -> int:  # type: ignore[type-arg]
+    return sum(1 for t in data["turns"] if (t.get("coach_feedback") or "").strip())
+
+
+def _write_scored(
+    out_dir: Path,
+    reader: str,
+    drafts: list[cl.Draft],
+    reply: str,
+    args: argparse.Namespace,
+    spoken: int,
+) -> None:
     raw = out_dir / f"claims_reply_{reader}.txt"
     if not raw.exists() or raw.read_text(encoding="utf-8") != reply:
         raw.write_text(reply, encoding="utf-8")
     scored = cl.score_reading(drafts, cl.parse_claims_reply(reply))
     verdicts = [s["verdict"] for s in scored.values()]
-    summary = {v: verdicts.count(v) for v in (cl.FALSE, cl.CLEAN, cl.UNRESOLVED, cl.MISSING)}
-    record = {"reader": reader, "transcript": args.transcript, "summary": summary, "drafts": scored}
+    counts = {v: verdicts.count(v) for v in (cl.FALSE, cl.CLEAN, cl.UNRESOLVED, cl.MISSING)}
+    record = {
+        "reader": reader,
+        "transcript": args.transcript,
+        "summary": counts,
+        # What `metrics_history.py` charts. Shares of what the student received, plus the gate's
+        # two rates over the model's drafts; see `claims.summarise`.
+        "numbers": cl.summarise(scored, spoken),
+        "drafts": scored,
+    }
     (out_dir / f"claims_{reader}.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
-    print(f"  {reader}: {len(drafts)} drafts {summary}")
+    print(f"  {reader}: {len(drafts)} texts {counts}")
 
 
 def _claims(args: argparse.Namespace) -> None:
-    """Read every distinct draft in the transcript for its board claims, and score them."""
+    """Read every text in the transcript for its claims and the other questions, and score them.
+
+    With no ``--out`` the reading lands beside the transcript, where `metrics_history.py` reads it.
+    """
     data = json.loads(Path(args.transcript).read_text(encoding="utf-8"))
-    drafts = cl.drafts_of(data, seed=int(data["environment"]["seed"]))
-    out_dir = Path(args.out)
+    drafts = cl.drafts_of(data, seed=int(data["environment"]["seed"]), facts_of=_hard_metrics().supplied_facts)
+    spoken = _spoken(data)
+    out_dir = Path(args.out) if args.out_given else Path(args.transcript).parent
     out_dir.mkdir(parents=True, exist_ok=True)
     if args.claims_reply:
         # Scoring a reply already written: `claims_prompt.txt` stays as the prompt that reader saw.
-        print(f"{len(drafts)} distinct drafts from {args.transcript}, scoring {args.claims_reply}")
-        _write_scored(out_dir, args.reader, drafts, Path(args.claims_reply).read_text(encoding="utf-8"), args)
+        print(f"{len(drafts)} texts from {args.transcript}, scoring {args.claims_reply}")
+        reply = Path(args.claims_reply).read_text(encoding="utf-8")
+        _write_scored(out_dir, args.reader, drafts, reply, args, spoken)
         return
     prompt = cl.build_claims_prompt(drafts)
     (out_dir / "claims_prompt.txt").write_text(prompt, encoding="utf-8")
@@ -114,7 +154,7 @@ def _claims(args: argparse.Namespace) -> None:
             except cl.ClaimsParseError as e:
                 print(f"  run {run}: unparseable reply, retrying ({e})")
         print(f"  run {run} done in {time.perf_counter() - t0:.0f}s ({len(reply)} chars)")
-        _write_scored(out_dir, f"judge_r{run}", drafts, reply, args)
+        _write_scored(out_dir, f"judge_r{run}", drafts, reply, args, spoken)
     print(f"progress={args.runs}/{args.runs} complete")
 
 
@@ -158,7 +198,11 @@ def _claims_local(args: argparse.Namespace) -> None:
 
 
 def _gate_blocks(entry: dict) -> bool:  # type: ignore[type-arg]
-    """Does today's gate block this draft? The shipping gate's call, with the played move."""
+    """Did the gate block this draft? What it did at run time when the reading recorded it, else
+    today's gate asked again (readings from before `shipped` was recorded)."""
+    shipped = entry.get("shipped")
+    if shipped is not None:
+        return not shipped
     played = chess.Board(entry["fen_before"]).parse_san(entry["student_move_san"]).uci()
     return bool(gating_violations(check_text_fidelity(entry["text"], entry["fen_before"], played_uci=played)))
 
@@ -182,12 +226,17 @@ def _claims_compare(args: argparse.Namespace) -> None:
                 {k: e["verdict"] for k, e in pooled[a].items()}, {k: e["verdict"] for k, e in pooled[b].items()}
             )
             print(f"{a} vs {b}: {len(differ)} of {compared} drafts called false by one only: {differ}")
+            for question in cl.QUESTIONS:
+                if question == "false":  # the verdict comparison just above
+                    continue
+                n, diff = cl.answer_disagreements(pooled[a], pooled[b], question)
+                print(f"  {question:<7} {len(diff)} of {n} differ: {diff}")
     for r in readers:
         table = {(True, True): 0, (True, False): 0, (False, True): 0, (False, False): 0}
         passed_false: list[str] = []
         blocked_clean: list[str] = []
         for k, e in sorted(pooled[r].items()):
-            if e["verdict"] == cl.MISSING:
+            if e["verdict"] == cl.MISSING or not e.get("is_draft", True):
                 continue
             is_false, blocks = e["verdict"] == cl.FALSE, _gate_blocks(e)
             table[(is_false, blocks)] += 1
@@ -234,7 +283,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Re-judge a saved report-card transcript")
     p.add_argument("--transcript", nargs="+", default=None, help="report-card transcript.json; several with --model")
     p.add_argument("--rubric", default="v2", help=f"comma-separated, from {RUBRIC_VERSIONS}")
-    p.add_argument("--out", default="output/coach_rejudge")
+    p.add_argument("--out", default=None, help="default output/coach_rejudge; with --claims, beside the transcript")
     p.add_argument("--judge-model", default="claude-opus-5")
     p.add_argument("--judge-agent", default="judge-opus5")
     p.add_argument("--judge-command", default=None, help="defaults to kiro-cli with --judge-model")
@@ -249,6 +298,9 @@ def main() -> None:
     p.add_argument("--base-url", default="http://localhost:11435", help="with --model")
     p.add_argument("--max-tokens", type=int, default=2048, help="with --model")
     args = p.parse_args()
+    args.out_given = args.out is not None
+    if args.out is None:
+        args.out = "output/coach_rejudge"
 
     if args.claims_compare:
         _claims_compare(args)

@@ -20,8 +20,9 @@ TWO KINDS OF METRIC, and the distinction is the most useful output here:
   is zero by construction, so one run per arm is enough and any movement at all is real. Measured
   rather than assumed: if one of these shows spread, either the pipeline is not deterministic or
   the metric is not reading what it claims to.
-- **Model-side** (`clean_pct`, `cause_voiced_pct`, `words_per_turn`) are read off the model's
-  prose and carry its churn.
+- **Model-side** (`clean_pct`, `words_per_turn`) are read off the model's text and carry its
+  churn. `clean_pct` is the live checker's verdict on what shipped; whether the reply is true or
+  told the student the cause is the judge's reading (B-021), which is not re-run per repeat.
 
 The arithmetic is the standard two-sample normal approximation, and its assumptions are stated
 because they are shaky on this data: independence (fine — separate processes), normality (a
@@ -70,7 +71,6 @@ def metrics_for(path: Path) -> dict[str, float | None]:
         "plies": float(m.plies),
         "clean_pct": m.clean_rate,
         "cause_given_pct": m.cause_given_rate,
-        "cause_voiced_pct": m.cause_voiced_rate,
         "lesson_conc_pct": m.lesson_concentration,
         "lesson_open_pct": None if not m.spoken else 100.0 * m.lesson_open / m.spoken,
         "words_per_turn": float(m.words_per_turn),

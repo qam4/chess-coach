@@ -11,6 +11,12 @@ keyword matches, and parsing a JSON reply we asked a model for is not parsing pr
 A draft is FALSE if any claim the reader wrote down is false on the board. A claim the board cannot
 be asked (an illegal line, an unknown kind, a square with nothing on it where a piece is needed) is
 None: the reader's error, not the coach's, so it never makes a draft false.
+
+The same reading answers three questions no board can settle, which replaced the dashboard counters
+that matched the coach's words (B-021 step 2, the owner's approval 2026-10-16): which of the facts
+we composed the text states, which sentences say what the student was thinking, and which give a
+number rating the position. For those the reading itself is the measure, trusted because two
+readers agree on it; `answer_disagreements` is the check.
 """
 
 from __future__ import annotations
@@ -233,37 +239,67 @@ def draft_verdict(results: list[bool | None]) -> str:
 # --------------------------------------------------------------- the drafts
 
 
+#: Fact labels with a role in the summary. The label is the prompt section a fact came from, as
+#: `scripts/eval_hard_metrics.supplied_facts` returns it; a test pins the two files together.
+CAUSE = "How this came about"
+GUIDANCE = "Guidance"
+
+
 @dataclass(frozen=True)
 class Draft:
-    id: str  # "<seed>:<ply>:<index of the distinct draft within the turn>"
+    """One text to read: a model draft, or the composed fallback the student received instead."""
+
+    id: str  # "<seed>:<ply>:<n>" for the n-th distinct draft, "<seed>:<ply>:f" for the fallback
     ply: int
     fen_before: str
     student_move_san: str
     text: str
+    #: The facts we composed for this turn, as ``(label, text)``. The reader says which it states.
+    facts: tuple[tuple[str, str], ...] = ()
+    #: This text is what the student received.
+    shipped: bool = False
+    #: The model wrote it (False for our composed fallback). A draft that did not ship was blocked.
+    is_draft: bool = True
 
 
-def drafts_of(transcript: dict[str, Any], *, seed: int) -> list[Draft]:
-    """Every distinct draft in a report-card transcript, in order.
+def drafts_of(
+    transcript: dict[str, Any],
+    *,
+    seed: int,
+    facts_of: Callable[[str], list[tuple[str, str]]] | None = None,
+) -> list[Draft]:
+    """Every distinct draft in a report-card transcript, plus each fallback that shipped, in order.
 
     A retry that repeated the blocked draft word for word is one draft to read, not two: at
-    temperature 0 that was 8 of the 9 retries at v62.
+    temperature 0 that was 8 of the 9 retries at v62. When every draft was blocked, the student
+    received our composed fallback instead, and that text is read too: it is what they saw.
+    ``facts_of`` extracts the facts we composed from the turn's prompt; without it none are given.
     """
     out: list[Draft] = []
     for turn in transcript["turns"]:
+        shipped = str(turn.get("coach_feedback") or "")
+        facts = tuple(facts_of(str(turn.get("prompt") or ""))) if facts_of else ()
+
+        def text_of(n: str, text: str, *, is_draft: bool = True, _turn: dict[str, Any] = turn) -> Draft:
+            return Draft(
+                id=f"{seed}:{_turn['ply']}:{n}",
+                ply=int(_turn["ply"]),
+                fen_before=str(_turn["fen_before"]),
+                student_move_san=str(_turn["student_move_san"]),
+                text=text,
+                facts=facts,
+                shipped=text == shipped,
+                is_draft=is_draft,
+            )
+
         seen: list[str] = []
         for text in turn.get("drafts") or []:
             if text in seen:
                 continue
             seen.append(text)
-            out.append(
-                Draft(
-                    id=f"{seed}:{turn['ply']}:{len(seen) - 1}",
-                    ply=int(turn["ply"]),
-                    fen_before=str(turn["fen_before"]),
-                    student_move_san=str(turn["student_move_san"]),
-                    text=text,
-                )
-            )
+            out.append(text_of(str(len(seen) - 1), text))
+        if seen and shipped.strip() and shipped not in seen:
+            out.append(text_of("f", shipped, is_draft=False))
     return out
 
 
@@ -304,8 +340,23 @@ How to write them:
 - Advice, questions, lessons and general principles are not claims. A sentence that does state a
   fact about this board that none of the kinds can express goes in "unchecked", copied exactly.
 
+Three more questions about each text, answered in the same entry:
+- "stated": the ids of the facts listed under "Facts we gave the coach" that the text tells the
+  student, in our words or its own. A fact counts when the text gives the student its point: the
+  same piece or square, and what the fact says about it. Naming that square for some other reason
+  does not count. If no facts are listed, give [].
+- "intent": every sentence that says what the student was thinking, trying, hoping or meaning to
+  do with THIS move ("Your move aimed to develop the bishop", "I see you're trying to ..."),
+  copied exactly. Advice about next time is not intent, and neither is restating a fact we gave
+  the coach, such as the check that was skipped.
+- "numbers": every sentence that gives a number rating the position or the move, such as an
+  evaluation, centipawns, or pawns lost in value ("costing you over 138 centipawns"), copied
+  exactly. Squares like "e5", move numbers, and counts of pieces or attackers are not ratings.
+
 Reply with ONE JSON object and nothing else, with one entry for every draft, in order:
-  {"drafts": [{"id": "<id>", "claims": [<claim>, ...], "unchecked": ["<sentence>", ...]}, ...]}
+  {"drafts": [{"id": "<id>", "claims": [<claim>, ...], "unchecked": ["<sentence>", ...],
+               "stated": ["<fact id>", ...], "intent": ["<sentence>", ...],
+               "numbers": ["<sentence>", ...]}, ...]}
 """
 
 
@@ -321,21 +372,34 @@ def build_claims_prompt(drafts: list[Draft]) -> str:
             fen_after = after.fen()
         except ValueError:
             fen_after = "(the student's move does not parse in this position)"
+        listed = "\n".join(f"  {fact_id} [{label}] {text}" for fact_id, (label, text) in _fact_ids(d)) or "  (none)"
         blocks.append(
             f"### Draft {d.id}\n"
             f"Student plays {side}. Student's move: {d.student_move_san}\n"
             f"Position before the move (FEN): {d.fen_before}\n"
             f"Position after the move (FEN): {fen_after}\n"
             f"Board before the move (White's pieces in capitals, White at the bottom):\n{board}\n"
+            f"Facts we gave the coach:\n{listed}\n"
             f"Text:\n<<<\n{d.text}\n>>>\n"
         )
     return _ASK.replace("{kinds}", kinds) + "\n" + "\n".join(blocks)
+
+
+def _fact_ids(d: Draft) -> list[tuple[str, tuple[str, str]]]:
+    return [(f"F{i}", fact) for i, fact in enumerate(d.facts, start=1)]
 
 
 @dataclass
 class ReadDraft:
     claims: list[dict[str, Any]] = field(default_factory=list)
     unchecked: list[str] = field(default_factory=list)
+    stated: list[str] = field(default_factory=list)
+    intent: list[str] = field(default_factory=list)
+    numbers: list[str] = field(default_factory=list)
+
+
+def _strings(value: object) -> list[str]:
+    return [str(s) for s in value] if isinstance(value, list) else []
 
 
 def parse_claims_reply(reply: str) -> dict[str, ReadDraft]:
@@ -352,28 +416,44 @@ def parse_claims_reply(reply: str) -> dict[str, ReadDraft]:
         if not isinstance(entry, dict) or entry.get("id") is None:
             continue
         found = entry.get("claims") or []
-        loose = entry.get("unchecked") or []
         out[str(entry["id"])] = ReadDraft(
             claims=[c for c in found if isinstance(c, dict)] if isinstance(found, list) else [],
-            unchecked=[str(s) for s in loose] if isinstance(loose, list) else [],
+            unchecked=_strings(entry.get("unchecked")),
+            stated=_strings(entry.get("stated")),
+            intent=_strings(entry.get("intent")),
+            numbers=_strings(entry.get("numbers")),
         )
     return out
 
 
 def score_reading(drafts: list[Draft], reading: dict[str, ReadDraft]) -> dict[str, dict[str, Any]]:
-    """Each draft's claims with whether they hold, and the draft's verdict, by draft id."""
+    """Each draft's claims with whether they hold, its verdict, and the reader's other answers."""
     out: dict[str, dict[str, Any]] = {}
     for d in drafts:
-        base = {"ply": d.ply, "fen_before": d.fen_before, "student_move_san": d.student_move_san, "text": d.text}
+        ids = dict(_fact_ids(d))
+        base = {
+            "ply": d.ply,
+            "fen_before": d.fen_before,
+            "student_move_san": d.student_move_san,
+            "text": d.text,
+            "shipped": d.shipped,
+            "is_draft": d.is_draft,
+            "facts": {fact_id: {"label": label, "text": text} for fact_id, (label, text) in ids.items()},
+        }
         read = reading.get(d.id)
         if read is None:
-            out[d.id] = {**base, "claims": [], "unchecked": [], "verdict": MISSING}
+            out[d.id] = {**base, "claims": [], "unchecked": [], "stated": [], "intent": [], "numbers": []}
+            out[d.id]["verdict"] = MISSING
             continue
         claims = [{**c, "holds": evaluate(d.fen_before, c)} for c in read.claims]
         out[d.id] = {
             **base,
             "claims": claims,
             "unchecked": list(read.unchecked),
+            # Only ids we listed: a reader naming a fact that does not exist has not stated one.
+            "stated": [s for s in read.stated if s in ids],
+            "intent": list(read.intent),
+            "numbers": list(read.numbers),
             "verdict": draft_verdict([c["holds"] for c in claims]),
         }
     return out
@@ -383,3 +463,81 @@ def disagreements(a: dict[str, str], b: dict[str, str]) -> tuple[int, list[str]]
     """How many drafts both readers read, and the ids one calls false and the other does not."""
     both = sorted(i for i in a if i in b and a[i] != MISSING and b[i] != MISSING)
     return len(both), [i for i in both if (a[i] == FALSE) != (b[i] == FALSE)]
+
+
+# --------------------------------------------------------------- the questions, per text
+
+
+#: The questions a scored reading answers about each text, in the order they are reported.
+QUESTIONS = {
+    "false": "Is anything it claims about the board false?",
+    "cause": "Did the reason we composed reach the student? (of texts whose turn had one)",
+    "cue": "Does it state any fact we composed, guidance aside? (of texts given one)",
+    "theme": "Does it state a guidance fact? (of texts given one)",
+    "intent": "Does it say what the student was thinking?",
+    "number": "Does it give a number rating the position or the move?",
+}
+
+
+def answers(entry: dict[str, Any]) -> dict[str, bool | None]:
+    """One scored text's answer to each of `QUESTIONS`; None where the question does not apply.
+
+    ``intent`` and ``number`` are True when the reader quoted at least one such sentence.
+    """
+    if entry.get("verdict") == MISSING:
+        return dict.fromkeys(QUESTIONS)
+    facts = entry.get("facts") or {}
+    stated = set(entry.get("stated") or [])
+    cause = [i for i, f in facts.items() if f["label"] == CAUSE]
+    cue = [i for i, f in facts.items() if f["label"] != GUIDANCE]
+    theme = [i for i, f in facts.items() if f["label"] == GUIDANCE]
+    return {
+        "false": entry["verdict"] == FALSE,
+        "cause": bool(stated & set(cause)) if cause else None,
+        "cue": bool(stated & set(cue)) if cue else None,
+        "theme": bool(stated & set(theme)) if theme else None,
+        "intent": bool(entry.get("intent")),
+        "number": bool(entry.get("numbers")),
+    }
+
+
+def answer_disagreements(
+    a: dict[str, dict[str, Any]], b: dict[str, dict[str, Any]], question: str
+) -> tuple[int, list[str]]:
+    """For one question: how many texts both readings answer, and the ids where they differ."""
+    both = []
+    for i in sorted(set(a) & set(b)):
+        x, y = answers(a[i])[question], answers(b[i])[question]
+        if x is not None and y is not None:
+            both.append((i, x != y))
+    return len(both), [i for i, differ in both if differ]
+
+
+# --------------------------------------------------------------- the dashboard numbers
+
+
+def summarise(scored: dict[str, dict[str, Any]], spoken: int) -> dict[str, Any]:
+    """The run's numbers from one scored reading. ``spoken`` is the turns the coach spoke on.
+
+    Shares are over what the student RECEIVED (the shipped texts), except the gate's two rates,
+    which are over the model's drafts: false-accept is false drafts that shipped, of false drafts;
+    false-reject is drafts blocked with nothing false in them, of such drafts. ``unread`` counts
+    spoken turns whose text no reader saw, so a short reading cannot pass for a clean one.
+    """
+    shipped = [e for e in scored.values() if e["shipped"] and e["verdict"] != MISSING]
+    drafts = [e for e in scored.values() if e["is_draft"] and e["verdict"] != MISSING]
+
+    def share(question: str) -> tuple[int, int]:
+        vals = [answers(e)[question] for e in shipped]
+        applies = [v for v in vals if v is not None]
+        return sum(1 for v in applies if v), len(applies)
+
+    false_drafts = [e for e in drafts if e["verdict"] == FALSE]
+    true_drafts = [e for e in drafts if e["verdict"] != FALSE]
+    out: dict[str, Any] = {"spoken": spoken, "read": len(shipped), "unread": spoken - len(shipped)}
+    for q in QUESTIONS:
+        out[q] = share(q)
+    out["unresolved"] = sum(1 for e in shipped if e["verdict"] == UNRESOLVED)
+    out["gate_false_accept"] = (sum(1 for e in false_drafts if e["shipped"]), len(false_drafts))
+    out["gate_false_reject"] = (sum(1 for e in true_drafts if not e["shipped"]), len(true_drafts))
+    return out

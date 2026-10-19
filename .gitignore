@@ -62,3 +62,7 @@ output/b019_models/*/*
 !output/b021_claims/
 output/b021_claims/*
 !output/b021_claims/*/
+
+# The judge's reading of a run, beside its transcript (B-021): `metrics_history.py` charts what the
+# coach said from it, so without it the dashboard cannot be regenerated anywhere else.
+!output/coach_review_v*/claims_*

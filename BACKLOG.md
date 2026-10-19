@@ -1089,6 +1089,53 @@ replies: false-accept 7 of 16 / 6 of 15 / 6 of 15, false-reject 1 of 66 / 1 of 6
 run 1, judge run 2, agent). A single judge reading of a five-game sweep takes about 17 minutes.
 The opener: "take B-021 through the loop".
 
+**Step 2 at the owner's gate 2026-10-16, headline counter first.** The dashboard's "Is everything it
+says true?" (`clean_pct`, with `bad_turns` and `gating`) reads 100% on all five v62 games
+(`eval_hard_metrics.measure`: 0 bad turns of 81), because it scores the shipped text with the same
+checker that gated it. By the readings, 7 / 6 / 6 of the 81 replies the student received are false
+(judge r1, judge r2, agent; the 9 composed fallbacks were not read). Proposed: the reading replaces
+that counter, stored beside each transcript and committed so the history regenerates from it; the
+fallbacks are read too; runs before v62 show blank, never a number. **Retracted the same day:**
+splitting the other counters off "as their own question" narrowed this item. The owner: "I thought
+this backlog item would address all regex cases." Step 2 covers every frozen construct that reads
+model prose, except the gate (his exception) and JSON we asked a model for. Proposed treatment, at
+his gate: the dashboard counters on the coach's reply (true%, reason reached the student, cue
+voiced, invents intent, leaks a number) all come from one judge reading per run; the word-matched
+lines in the judge's stats block (`coach_review.py`) are removed, after his required judge A/B; the
+old keyword benchmarks (`eval_coaching.py`, `eval_models.py`, `objective.py` and its callers) are
+retired, after checking what imports them. Matchers on our own prompt, CLI flags and config stay.
+**Scope approved by the owner 2026-10-16 ("yes").** The measure for the dashboard counters went to
+his gate the same day: one judge call per run, reading every reply the student received for (a)
+board claims, (b) which of the facts we composed it states (gives "reason reached" and "cue
+voiced"), (c) sentences saying what the student was thinking, (d) numbers rating the position or
+the move. Found while choosing examples, read: today's intent counter's newest hits (v53-v57 seed
+23 ply 33) are a false alarm on "after your move is exf3"; its last genuine hit is v52 ply 26
+"Your move aimed to develop the bishop". The number counter last fired at v5.
+
+**Step 2 measured 2026-10-16** (approved: "yes I approve"). The reading now covers 91 texts (82 drafts
+plus the 9 fallbacks that shipped), with the facts we composed listed per text (`supplied_facts` in
+`eval_hard_metrics.py`, read off our prompt). Judge twice (job `b021_step2`, 117-380 s per game call,
+45 min), the agent once through five sub-agents blind to the judge's files. Disagreements, against the
+stop rule (more than 10% of the texts a question applies to):
+- false 0 of 91 for every pair; cause 0 of 58; cue 0 of 91; number 0 of 91. **Pass.**
+- theme (a guidance fact stated; not one of the approved counters, added by the agent): judge
+  against itself 12 of 70. **Fails; dropped.**
+- intent: judge against itself 0 of 91, judge against the agent 11 of 91. All 11 are one sentence
+  type, counted by the agent's seed-7 reader (10) and seed-17 reader (1): the coach restating the
+  skipped check our prompt composed ("The check that was skipped: before moving, ask if anything of
+  yours is left where it can simply be taken"). **Owner's ruling 2026-10-16: "I do not think coach
+  repeating skipped-check counts as 'inventing the student's intent'".** So the 11 are reader errors
+  and intent passes (no other disagreement). The reading prompt now says so in one line, added after
+  seeing these results; the stored step-2 readings were made without it.
+- v62 by judge run 1: 76 of 81 replies the student received true (5 false; step 1's 7/6/6 counted
+  before the pin fix and without the fallbacks); reason reached 55 of 57; intent 0; numbers 0; the
+  gate passed 5 of 14 false drafts and blocked 1 of 68 drafts with nothing false.
+- Built, uncommitted: the reading's new questions and `summarise` (`claims.py`), the dashboard on the
+  reading (`metrics_history.py`, detector 2), and the regex counters removed from
+  `eval_hard_metrics.py` (intent, numbers, cause/cue voiced, theme won, repeat names move); tests red
+  on HEAD first. Not yet: the judge's stats block A/B, the old benchmark scripts, the freeze-list
+  regeneration (removals only), and the `.gitignore` line for the readings beside each transcript.
+
 ### OPEN — Only the move feedback is checked against the board; the engine-move explanation and the analysis are not (2026-10-14)
 
 - **Id:** B-022

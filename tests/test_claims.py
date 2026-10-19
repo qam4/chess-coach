@@ -192,3 +192,145 @@ def test_agreement_counts_drafts_called_false_by_one_reader_only() -> None:
     compared, differ = cl.disagreements(a, b)
     assert compared == 3  # a draft one reader never read is not compared
     assert differ == ["y"]
+
+
+# --------------------------------------------------------------------------
+# Step 2: the same reading answers the dashboard's other questions.
+# --------------------------------------------------------------------------
+
+
+def _ehm():  # type: ignore[no-untyped-def]
+    import importlib.util
+    import sys
+
+    path = REPO / "scripts" / "eval_hard_metrics.py"
+    spec = importlib.util.spec_from_file_location("ehm_for_claims_tests", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["ehm_for_claims_tests"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _v62(seed: int) -> dict:  # type: ignore[type-arg]
+    return json.loads(
+        (REPO / "output" / f"coach_review_v62_seed{seed}" / "transcript.json").read_text(encoding="utf-8")
+    )
+
+
+def test_the_labels_are_the_ones_the_prompt_parser_emits() -> None:
+    """`claims` names the cause and guidance labels; `eval_hard_metrics` produces them."""
+    ehm = _ehm()
+    assert cl.CAUSE in ehm._CUE_SECTIONS
+    assert cl.GUIDANCE == ehm.GUIDANCE
+
+
+def test_supplied_facts_reads_our_prompt_for_the_bh6_turn() -> None:
+    """v62 seed 23 ply 23: the cause we composed is the h6 fact, and the achievement line the c7 one."""
+    ehm = _ehm()
+    turn = next(t for t in _v62(23)["turns"] if t["ply"] == 23)
+    facts = ehm.supplied_facts(turn["prompt"])
+    labels = [label for label, _text in facts]
+    cause = next(text for label, text in facts if label == cl.CAUSE)
+    assert cause.startswith("After Bh6 nothing of yours defends h6")
+    assert "What was available here" in labels
+    assert cl.GUIDANCE in labels  # the fork / capture-value themes' HERE lines
+    # The cue squares are unchanged by the refactor that introduced supplied_facts.
+    assert ehm._cue_squares(turn["prompt"]) >= {"h6", "c7"}
+
+
+def test_a_fallback_that_shipped_is_read_and_drafts_know_whether_they_shipped() -> None:
+    """v62 seed 13 ply 34: two different drafts, both blocked, and the composed fallback sent."""
+    ehm = _ehm()
+    drafts = [d for d in cl.drafts_of(_v62(13), seed=13, facts_of=ehm.supplied_facts) if d.ply == 34]
+    assert [d.id for d in drafts] == ["13:34:0", "13:34:1", "13:34:f"]
+    assert [(d.shipped, d.is_draft) for d in drafts] == [(False, True), (False, True), (True, False)]
+    assert drafts[0].facts and drafts[0].facts == drafts[2].facts
+    # A turn whose single draft shipped: one text, shipped, a draft.
+    one = [d for d in cl.drafts_of(_v62(13), seed=13) if d.ply == 20]
+    assert [(d.id, d.shipped, d.is_draft) for d in one] == [("13:20:0", True, True)]
+
+
+def test_the_prompt_lists_each_fact_with_an_id_and_asks_the_three_questions() -> None:
+    ehm = _ehm()
+    drafts = [d for d in cl.drafts_of(_v62(23), seed=23, facts_of=ehm.supplied_facts) if d.ply == 23]
+    prompt = cl.build_claims_prompt(drafts)
+    assert f"F1 [{drafts[0].facts[0][0]}] {drafts[0].facts[0][1]}" in prompt
+    for field_name in ('"stated"', '"intent"', '"numbers"'):
+        assert field_name in prompt
+    # The owner's ruling, 2026-10-16: restating the skipped check we composed is not intent.
+    assert "neither is restating a fact we gave\n  the coach, such as the check that was skipped" in prompt
+
+
+def _scored_bh6(stated: list[str], intent: list[str], numbers: list[str]) -> dict:  # type: ignore[type-arg]
+    ehm = _ehm()
+    drafts = [d for d in cl.drafts_of(_v62(23), seed=23, facts_of=ehm.supplied_facts) if d.ply == 23]
+    reading = {
+        "23:23:0": cl.ReadDraft(
+            claims=[{"after": ["Bh6"], "kind": "capture", "move": "Kf8"}],
+            stated=stated,
+            intent=intent,
+            numbers=numbers,
+        )
+    }
+    return cl.score_reading(drafts, reading)["23:23:0"]
+
+
+def test_answers_for_the_bh6_turn() -> None:
+    """The reply states the cause ("Your move left Bh6 undefended"), which today's counter misses."""
+    entry = _scored_bh6(stated=["F1", "F99"], intent=[], numbers=[])
+    assert entry["facts"]["F1"]["label"] == cl.CAUSE
+    assert entry["stated"] == ["F1"], "an id we never listed is not a stated fact"
+    got = cl.answers(entry)
+    assert got["false"] is True  # Kf8 captures nothing
+    assert got["cause"] is True and got["cue"] is True
+    assert got["theme"] is False
+    assert got["intent"] is False and got["number"] is False
+
+
+def test_a_question_that_does_not_apply_is_none_not_false() -> None:
+    entry = {"verdict": cl.CLEAN, "facts": {}, "stated": [], "intent": ["x"], "numbers": []}
+    got = cl.answers(entry)
+    assert got["cause"] is None and got["cue"] is None and got["theme"] is None
+    assert got["intent"] is True
+    assert all(v is None for v in cl.answers({"verdict": cl.MISSING}).values())
+
+
+def test_answer_disagreements_compares_only_where_both_readers_answer() -> None:
+    a = {
+        "x": {"verdict": cl.CLEAN, "facts": {"F1": {"label": cl.CAUSE}}, "stated": ["F1"]},
+        "y": {"verdict": cl.CLEAN, "facts": {"F1": {"label": cl.CAUSE}}, "stated": []},
+        "z": {"verdict": cl.CLEAN, "facts": {}, "stated": []},
+    }
+    b = {k: {**v, "stated": ["F1"]} for k, v in a.items()}
+    compared, differ = cl.answer_disagreements(a, b, "cause")
+    assert compared == 2  # z has no cause, so neither reader can be asked about it
+    assert differ == ["y"]
+
+
+def test_summarise_counts_what_the_student_received_and_grades_the_gate_on_drafts() -> None:
+    def e(verdict: str, shipped: bool, is_draft: bool = True, intent: bool = False) -> dict:  # type: ignore[type-arg]
+        return {
+            "verdict": verdict,
+            "shipped": shipped,
+            "is_draft": is_draft,
+            "facts": {"F1": {"label": cl.CAUSE}},
+            "stated": ["F1"] if verdict == cl.CLEAN else [],
+            "intent": ["s"] if intent else [],
+            "numbers": [],
+        }
+
+    scored = {
+        "a": e(cl.FALSE, shipped=True),  # false and passed: a false accept
+        "b": e(cl.CLEAN, shipped=True, intent=True),
+        "c": e(cl.FALSE, shipped=False),  # blocked, rightly
+        "d": e(cl.CLEAN, shipped=False),  # blocked with nothing false in it: a false reject
+        "e": e(cl.CLEAN, shipped=True, is_draft=False),  # the composed fallback that replaced c and d
+    }
+    s = cl.summarise(scored, spoken=4)
+    assert s["read"] == 3 and s["unread"] == 1
+    assert s["false"] == (1, 3)
+    assert s["cause"] == (2, 3)
+    assert s["intent"] == (1, 3)
+    assert s["gate_false_accept"] == (1, 2)
+    assert s["gate_false_reject"] == (1, 2)

@@ -34,59 +34,18 @@ import chess
 
 from chess_coach.verify import check_text_fidelity, gating_violations
 
-#: Phrases that put a motive in the student's mouth. The reviewer flagged these on
-#: several runs ("I see you're trying to develop your pieces" on a move that did nothing
-#: of the kind) and they are the one Stance defect with a mechanical signature.
-#: A LIST of exact phrases was the first version and it undercounted by roughly nine times: it
-#: held only "I see you're trying" and its variants, so the ledger recorded 1-2 turns per game
-#: while the actual rate was 5-7 — which `_check_intent_attribution`'s docstring had already
-#: measured and written down. Surveying every stored transcript found 148 instances and the
-#: dominant forms were all absent from the list: "your move aimed to ..." 55, "you were looking
-#: to ..." 26, "you were aiming to ..." 23, "you were trying to ..." 11, against 26 for the one
-#: phrase we were counting.
+#: REMOVED 2026-10-16 (B-021 step 2, the owner's approval): every counter here that decided
+#: what the coach's reply SAID by matching its words — intent ("mind reading"), evaluation
+#: numbers ("magnitude"), whether the cause or the cue reached the student (squares pulled out of
+#: the reply with a regex), the guidance theme displacing the cue, and whether a repeat turn named
+#: the move. Those questions are now answered by the judge's reading (`chess_coach.eval.claims`,
+#: `eval_coach_rejudge.py --claims`), which `metrics_history.py` charts. What stays here reads
+#: only our own prompt, the board, or arithmetic. `clean_rate` stays as the live checker's verdict
+#: on what shipped, which the owner kept as a measured exception; it is not a truth measure.
 #:
-#: So: a pattern over the SHAPE — an intent verb applied to the student — rather than a list of
-#: remembered sentences. The lesson generalises past this counter: a detector built from the
-#: examples someone happened to quote will measure those examples and nothing else.
-#: Cues that make the following clause ADVICE rather than a claim about what the student
-#: thought. "Next time you are looking for a way to improve, ask yourself..." is the takeaway
-#: hook doing its job; counting it as mind-reading would penalise the thing we want. Found by
-#: reading the two turns the counter still flagged after the prompt fix — both were this.
-_HYPOTHETICAL = ("next time", "whenever", "when ", "if ", "should ", "always ", "before you")
-_HYPOTHETICAL_LOOKBACK = 24
-
-MIND_READING_RE = re.compile(
-    r"\b(?:"
-    r"i (?:can )?see (?:that )?you"
-    r"|i notice (?:that )?you"
-    r"|(?:it )?(?:looks|sounds|seems) like you"
-    r"|(?:it )?seems (?:that )?you"
-    r"|you(?:'re| are| were) (?:trying|looking|hoping|aiming|planning|going for)"
-    r"|you (?:tried|wanted|intended|hoped|aimed|meant|planned)"
-    r"|your (?:move|plan|idea|intention|goal|aim)s? (?:was|were|is|aimed|tried|intended|wanted|sought|hoped)"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-def _mind_reads(low: str) -> bool:
-    """Does the text claim to know what the student was thinking?
-
-    A claim about the past, not advice about the future. The pattern alone cannot tell the two
-    apart — "you are looking for a way to improve" is mind-reading after "I see" and a habit
-    prompt after "next time" — so each match is checked against what precedes it.
-    """
-    for m in MIND_READING_RE.finditer(low):
-        before = low[max(0, m.start() - _HYPOTHETICAL_LOOKBACK) : m.start()]
-        if any(cue in before for cue in _HYPOTHETICAL):
-            continue
-        return True
-    return False
-
-
-#: A number that prices the position. Should be zero: the protocol forbids showing the
-#: student an evaluation, and the units were never defensible anyway.
-MAGNITUDE = ("centipawn", "cp)", " cp ", "+0.", "-0.", "eval of", "score of")
+#: Measured when they went, so nobody rebuilds them: on v62 the intent counter's five newest hits
+#: (v53-v57 seed 23 ply 33) were one false alarm on "after your move is exf3"; the number counter
+#: last fired at v5; the cause counter could not read a square written after a bishop's "B".
 
 
 #: The habit-phrasings the diagnosis emits, matched on their distinctive middles so a
@@ -144,18 +103,10 @@ def _composed_lesson(prompt: str) -> tuple[str, str]:
 #: text in our own prompt, so finding it is exact rather than a guess about prose.
 _CAUSE_SECTION = re.compile(r"--- How this came about ---\s*\n(.+?)(?=\n---|\n\n|\Z)", re.DOTALL)
 
-#: Square extraction is deliberately ASYMMETRIC, because the two sides want opposite things.
-#:
-#: STRICT, for the composed cause: a bare square only. "Before Bd2 your pawn on b2 was
-#: defended" is about b2 — d2 is merely where the bishop went, and anchoring on a move's
-#: destination would point the metric at the wrong square.
-#:
-#: LOOSE, for the coach's text: a square even inside a SAN token, because that is still naming
-#: it. Measured — at ply 8 of seed 13 the cause was "their bishop on c3 was attacked and
-#: undefended, and bxc3 does not take it", and the coach answered "the stronger move was Bxc3,
-#: capturing their bishop". Strict matching scored that a miss, which it plainly is not.
+#: A bare square in our own composed text. "Before Bd2 your pawn on b2 was defended" is about
+#: b2 — d2 is merely where the bishop went, and anchoring on a move's destination would point a
+#: measure at the wrong square.
 _SQUARE_STRICT = re.compile(r"\b([a-h][1-8])\b")
-_SQUARE_LOOSE = re.compile(r"(?<![a-h0-9])([a-h][1-8])(?![0-9])", re.IGNORECASE)
 
 
 def _cause_squares(prompt: str) -> set[str] | None:
@@ -219,6 +170,30 @@ _ACHIEVEMENT_CLAUSE = re.compile(
 )
 
 
+#: The label `supplied_facts` gives an injected guidance fact. Not part of the cue: the prompt
+#: offers it as a theme, and B-013 measured it competing WITH the cue.
+GUIDANCE = "Guidance"
+
+
+def supplied_facts(prompt: str) -> list[tuple[str, str]]:
+    """Every concrete fact we composed for this turn, as ``(label, text)``, in prompt order.
+
+    Our own prompt text, never the model's. The label is the prompt section the fact came from
+    ("How this came about", "Missed Tactics", ...), "What was available here" for the
+    achievement clause, or `GUIDANCE` for an injected theme's board fact. B-021 hands these to
+    the reader, who says which of them a reply tells the student; the cue is every label except
+    `GUIDANCE`, and the cause is "How this came about".
+    """
+    facts: list[tuple[str, str]] = []
+    for header in _CUE_SECTIONS:
+        m = re.search(rf"--- {re.escape(header)} ---\s*\n(.+?)(?=\n---|\n\n|\Z)", prompt, re.DOTALL)
+        if m:
+            facts.append((header, " ".join(m.group(1).split())))
+    facts += [("What was available here", " ".join(a.split())) for a in _ACHIEVEMENT_CLAUSE.findall(prompt)]
+    facts += [(GUIDANCE, " ".join(t.split())) for t in _theme_facts(prompt)]
+    return facts
+
+
 def _cue_squares(prompt: str) -> set[str] | None:
     """Squares of every concrete fact we supplied, or None when we supplied none.
 
@@ -226,16 +201,8 @@ def _cue_squares(prompt: str) -> set[str] | None:
     which asks the narrower question "did the CAUSE reach the student" and has its own series
     in this ledger — both are kept because they answer different questions, and they share this
     module's square extraction so they cannot drift apart.
-
-    Same strict/loose asymmetry as the cause: strict here because this is our own composed
-    text, loose in `_voices_the_cause` because the model writes `Bxc3` where we wrote `c3`.
     """
-    blobs: list[str] = []
-    for header in _CUE_SECTIONS:
-        m = re.search(rf"--- {re.escape(header)} ---\s*\n(.+?)(?=\n---|\n\n|\Z)", prompt, re.DOTALL)
-        if m:
-            blobs.append(" ".join(m.group(1).split()))
-    blobs.extend(_ACHIEVEMENT_CLAUSE.findall(prompt))
+    blobs = [text for label, text in supplied_facts(prompt) if label != GUIDANCE]
     if not blobs:
         return None
     return {s.lower() for s in _SQUARE_STRICT.findall(" ".join(blobs))}
@@ -253,27 +220,9 @@ _THEME_FACT = re.compile(r"^\s*HERE:\s*(.+)$", re.MULTILINE)
 _THEME_FILE = re.compile(r"\b([a-h])-file\b")
 
 
-def _theme_files(prompt: str) -> set[str]:
-    """File letters an injected guidance fact names, e.g. {"a"} for "your a-file pawn".
-
-    Separate from `_theme_squares` because the model answers in the SAME vocabulary the theme
-    used: handed "your a-file pawn is isolated" it writes "the passed pawn on the a-file", with
-    no square anywhere in the sentence. Square-only matching scored two such turns as
-    unexplained and made the theme look like a 1-turn problem when it is the whole of it.
-    """
-    return {f.lower() for fact in _THEME_FACT.findall(prompt) for f in _THEME_FILE.findall(fact)}
-
-
-#: "the a-file", "your a-file pawn", "on the a file". Matched on the MODEL's text, so it is
-#: deliberately loose about the separator the way `_SQUARE_LOOSE` is about case.
-_SAID_FILE = re.compile(r"\b([a-h])[- ]file\b", re.IGNORECASE)
-
-
-def _voices_the_theme(text: str, theme_sq: set[str], theme_files: set[str]) -> bool:
-    """Did the turn point at the injected theme, by square OR by file?"""
-    if _voices_the_cause(text, theme_sq):
-        return True
-    return bool(theme_files & {f.lower() for f in _SAID_FILE.findall(text)})
+def _theme_facts(prompt: str) -> list[str]:
+    """The instantiated board fact of each injected guidance entry, from our own prompt."""
+    return _THEME_FACT.findall(prompt)
 
 
 def _theme_squares(prompt: str) -> set[str]:
@@ -285,7 +234,7 @@ def _theme_squares(prompt: str) -> set[str]:
     on d7 — which is the safe direction: it undercounts the competition rather than inventing it.
     """
     out: set[str] = set()
-    for fact in _THEME_FACT.findall(prompt):
+    for fact in _theme_facts(prompt):
         out |= {s.lower() for s in _SQUARE_STRICT.findall(fact)}
         for file_name in _THEME_FILE.findall(fact):
             out |= {f"{file_name}{rank}" for rank in range(1, 9)}
@@ -365,33 +314,9 @@ def _threat_materialises(turns: list[dict[str, object]], turn: dict[str, object]
     return False
 
 
-def _voices_the_cause(text: str, cause_sq: set[str]) -> bool:
-    """Does the turn name a square the composed cause is about?
-
-    Deliberately not "does it use a causal construction": that is phrasing, and phrasing is
-    what the retired metric got wrong. Validated across two models — 100%/90% for qwen and
-    92%/100% for gemma, a spread of ±8 points running in BOTH directions, against the retired
-    metric's consistent 35-point gap.
-
-    Known false-positive class, measured at ZERO occurrences over four runs: if the cause
-    square is also the square the opponent captures on, a turn could name it just by reporting
-    the capture. It has not happened, but it is the thing to re-check if this metric ever
-    saturates suspiciously.
-
-    Known FALSE NEGATIVE, and it is a limit of the design rather than a bug: a turn can convey
-    the cause without coordinates. At ply 56 of seed 7 the cause was about e1 and the coach
-    said "moving the rook left it undefended" — correct, and unscoreable here. So this metric
-    UNDERCOUNTS, and the honest reading of a figure below 100% is "at least this many", not
-    "exactly this many". Closing that gap means going back to matching phrasing, which is what
-    the retired metric did wrong.
-    """
-    said = {s.lower() for s in _SQUARE_LOOSE.findall(text)}
-    return bool(cause_sq & said)
-
-
 @dataclass
 class Metrics:
-    """One transcript's counters. Every field is either a rule of chess or arithmetic."""
+    """One transcript's counters. Every field is a rule of chess, our own prompt, or arithmetic."""
 
     name: str
     plies: int = 0
@@ -401,29 +326,16 @@ class Metrics:
     turns_with_violation: int = 0
     kinds: Counter[str] = field(default_factory=Counter)
     cause_given: int = 0
-    cause_anchorable: int = 0
-    cause_voiced: int = 0
     cause_own_piece: int = 0
     cause_irrelevant: int = 0
-    #: The CUE series, wider than the cause: any concrete fact we supplied, including the
-    #: achievement clause. This is B-012's fifth criterion — with the engine's move withheld,
-    #: does the turn still name something on the board?
-    cue_anchorable: int = 0
-    cue_voiced: int = 0
-    #: B-013. Turns where we composed a cause AND injected a guidance fact, and the two name
-    #: different squares — so the prompt offers the model two subjects and lets it choose.
+    #: B-013. Turns where we composed a cue AND injected a guidance fact, and the two name
+    #: different squares — so the prompt offers the model two subjects and lets it choose. Read
+    #: off our prompt; whether the reply then followed the theme is the judge's reading.
     theme_competes: int = 0
-    #: Of those, the turns where the model voiced the THEME's square and not the cause's. This
-    #: is the one that can come out against the fix: if it stays near zero, the competition is
-    #: harmless and B-013 is not worth building.
-    theme_won: int = 0
     cause_materialised: int = 0
     repeat_rec: int = 0
     repeat_rec_words: int = 0
-    repeat_rec_names_move: int = 0
     repeat_rec_has_lesson: int = 0
-    mind_reading: int = 0
-    magnitude: int = 0
     words: int = 0
     lesson_composed: int = 0
     lesson_open: int = 0
@@ -432,7 +344,13 @@ class Metrics:
 
     @property
     def clean_rate(self) -> float:
-        """Share of spoken turns with nothing the board contradicts. The headline."""
+        """Share of spoken turns the live checker finds nothing wrong with. NOT a truth measure.
+
+        It runs the checker that already passed the shipped text, so it cannot see what that
+        checker misses: 100% on all five v62 games while the judge's reading found 7 of 81 replies
+        false. Kept as the checker's own verdict (`checker_passed_pct`), under the owner's ruling
+        that the gate is a measured exception; whether the reply is true is the judge's reading.
+        """
         return 0.0 if not self.spoken else 100.0 * (self.spoken - self.turns_with_violation) / self.spoken
 
     @property
@@ -444,62 +362,6 @@ class Metrics:
         composition gap, fixable here, not something to push the model harder about.
         """
         return 0.0 if not self.spoken else 100.0 * self.cause_given / self.spoken
-
-    @property
-    def cue_voiced_rate(self) -> float:
-        """Of the turns where we supplied a concrete fact, how many named one.
-
-        Read it alongside `cause_voiced_rate`, never instead of it: this one is the wider
-        question and the two can move in opposite directions. On v57 -> v58 they did — cause
-        96.4% -> 98.2% while this was the series B-012 was judged against.
-
-        Undercounts for the same reason `_voices_the_cause` does: a turn can convey a fact
-        without coordinates ("moving the rook left it undefended"). A figure below 100% means
-        "at least this many", not "exactly this many".
-
-        **Read this as a regression detector, not an improvement detector, and never as a
-        measure of coaching quality.** Measured over 520 anchorable turns across v53-v59:
-
-        * The ceiling is real, not an artefact of a permissive test. The union offers a median
-          of 2 squares per turn (mean 2.2, max 6), and scoring on the SUBJECT clauses alone —
-          cause plus achievement — gives 96.3% against the union's 96.7%. Two turns in 520 pass
-          on the union while failing on the subject. So the width of the union buys almost
-          nothing, and the ~96% is the coach genuinely echoing a square we handed it.
-        * That leaves roughly 3 points of headroom, so a change cannot demonstrate an
-          improvement here however good it is. v58's fall from 98.6% to 93.2% is detectable
-          precisely because the headroom is small.
-        * Passing means THE TEXT IS ANCHORED TO THE BOARD. It does not mean the coach pointed at
-          the right feature: a turn naming a different supplied square still passes. B-012's
-          lost turns failed by naming no supplied square at all — the model invented a feature
-          ("a discovered attack by the bishop on c6", where c6 was never supplied) — which is
-          why the regression was visible at all. Had it reached for another square we supplied,
-          this metric would have called it a pass.
-        """
-        return 0.0 if not self.cue_anchorable else 100.0 * self.cue_voiced / self.cue_anchorable
-
-    @property
-    def theme_won_rate(self) -> float:
-        """Of the turns offering a competing theme, how often the theme displaced the cause.
-
-        B-012 removed the engine's move from the prompt and the cue-voiced rate fell: with the
-        move gone the model reached for the nearest other composed fact, twice the isolated-pawn
-        guidance entry. This asks how often that happens, square-anchored, so it can say whether
-        the competition is a real defect or an artefact of two turns.
-
-        Both sides are text WE composed, which is why prompt wording could not arbitrate between
-        them (v59 measured as nothing) and why the remedy is selection.
-        """
-        return 0.0 if not self.theme_competes else 100.0 * self.theme_won / self.theme_competes
-
-    @property
-    def cause_voiced_rate(self) -> float:
-        """Of the causes we composed AND could anchor, how many reached the student.
-
-        Near ceiling (90-100% across two models), which is itself the finding: when a cause is
-        composed it almost always gets voiced. Little headroom, so watch it for regressions
-        rather than expecting gains.
-        """
-        return 0.0 if not self.cause_anchorable else 100.0 * self.cause_voiced / self.cause_anchorable
 
     @property
     def cause_irrelevant_rate(self) -> float | None:
@@ -562,7 +424,7 @@ class Metrics:
         This number does NOT move when the repetition is fixed — the student still misses the move
         the same number of times, because the simulated student's move is chosen before the coach
         speaks and cannot respond to it. What should move is `repeat_rec_words_per_turn`, and what
-        must NOT move are the two guardrails below.
+        must NOT move is the guardrail below.
         """
         return 0.0 if not self.spoken else 100.0 * self.repeat_rec / self.spoken
 
@@ -577,24 +439,12 @@ class Metrics:
         return 0.0 if not self.repeat_rec else self.repeat_rec_words / self.repeat_rec
 
     @property
-    def repeat_rec_names_move_rate(self) -> float | None:
-        """GUARDRAIL. Of the re-recommending turns, how many still name the move. Must stay at 100%.
-
-        The whole point of the turn is that the student has not yet played the move we want. A
-        shortening instruction that drops the move name would leave the student with a nudge and no
-        subject, which is worse than the repetition it replaced.
-        """
-        if not self.repeat_rec:
-            return None
-        return 100.0 * self.repeat_rec_names_move / self.repeat_rec
-
-    @property
     def repeat_rec_has_lesson_rate(self) -> float | None:
         """GUARDRAIL. Of the re-recommending turns, how many still close on a composed lesson.
 
-        Separate from the move name because they can fail independently: an escalation that becomes
-        "Still there. Nxc7+." keeps the move and loses the teaching. Recorded so a fall shows up as
-        a cost rather than as brevity.
+        Read off our prompt. Its sibling, "does the repeat turn still name the move", is gone: it
+        checked the move token against the coach's text, and since B-012 the coach names no move,
+        so it read 0 by design (0 of 17 at v62).
         """
         if not self.repeat_rec:
             return None
@@ -637,7 +487,6 @@ def measure(path: Path) -> Metrics:
             continue
         m.spoken += 1
         m.words += len(text.split())
-        low = text.lower()
 
         fen = t.get("fen_before") or ""
         played = ""
@@ -657,37 +506,19 @@ def measure(path: Path) -> Metrics:
             m.gating += len(gating_violations(vs))
             m.kinds.update(v.kind for v in vs)
 
-        # Does the turn account for the failure, or only report it? Two questions, not one:
-        # did WE compose a cause, and did it reach the student. Anchored on the squares the
-        # composed cause names, so a model that paraphrases scores the same as one that echoes.
+        # B-013: does an injected guidance fact point away from the cue? Keyed on the CUE, not the
+        # cause: the cue is what B-012's criterion is about, and keying this to the cause reported
+        # 1 competing turn where the per-turn reading showed 5. Both sides are our own prompt;
+        # which of them the reply followed is the judge's reading (`theme` in the claims summary).
         cue_sq = _cue_squares(t.get("prompt") or "")
         if cue_sq:
-            m.cue_anchorable += 1
-            voiced_cue = _voices_the_cause(text, cue_sq)
-            if voiced_cue:
-                m.cue_voiced += 1
-            # B-013: does an injected guidance fact point away from the cue, and if so, which
-            # one did the student get? Keyed on the CUE, not the cause: the cue is what B-012's
-            # criterion is about, and keying this to the cause reported 1 displaced turn where
-            # the per-turn reading showed 5 — a turn can keep the cause and still lose the cue.
             theme_sq = _theme_squares(t.get("prompt") or "")
-            theme_f = _theme_files(t.get("prompt") or "")
             if theme_sq and not (theme_sq & cue_sq):
                 m.theme_competes += 1
-                if _voices_the_theme(text, theme_sq, theme_f) and not voiced_cue:
-                    m.theme_won += 1
 
-        cause_sq = _cause_squares(t.get("prompt") or "")
-        if cause_sq is not None:
+        # Did WE compose a cause? Whether the reply told the student is the judge's reading.
+        if _cause_squares(t.get("prompt") or "") is not None:
             m.cause_given += 1
-            if cause_sq:  # a cause with no square is given but not scorable
-                m.cause_anchorable += 1
-                voiced_cause = _voices_the_cause(text, cause_sq)
-                if voiced_cause:
-                    m.cause_voiced += 1
-                # B-013: does an injected guidance fact point somewhere else, and if so, which
-                # one did the student actually get? Same square anchoring as the cause, so the
-                # two halves are comparable and neither depends on wording.
 
         # Is the cause about something the opponent can actually do anything about? See
         # `cause_irrelevant_rate`. Separate from voicing: a cause can be composed, faithfully
@@ -700,10 +531,6 @@ def measure(path: Path) -> Metrics:
             # And the check that can disagree with the detector: did the threat arrive?
             if _threat_materialises(turns, t, own):
                 m.cause_materialised += 1
-        if _mind_reads(low):
-            m.mind_reading += 1
-        if any(p in low for p in MAGNITUDE):
-            m.magnitude += 1
 
         # Lesson concentration, measured from what we COMPOSED rather than from cue words in
         # the response. High means one idea is being taught over and over.
@@ -724,8 +551,6 @@ def measure(path: Path) -> Metrics:
             if best in already_recommended:
                 m.repeat_rec += 1
                 m.repeat_rec_words += len(text.split())
-                if best in text:
-                    m.repeat_rec_names_move += 1
                 if lesson:
                     m.repeat_rec_has_lesson += 1
             already_recommended.add(best)
@@ -744,29 +569,24 @@ def main(argv: list[str]) -> int:
         return 1
 
     print(
-        f"{'run':<8}{'plies':>6}{'spoke':>6}{'clean%':>8}{'bad turns':>10}{'gating':>8}"
-        f"{'cause-giv%':>11}{'cause-voi%':>11}{'mind-rd':>8}{'magn':>6}{'w/turn':>8}"
-        f"{'lesson-conc%':>13}{'open':>6}"
+        f"{'run':<8}{'plies':>6}{'spoke':>6}{'checker%':>10}{'flagged':>9}{'gating':>8}"
+        f"{'cause-giv%':>11}{'w/turn':>8}{'lesson-conc%':>13}{'open':>6}"
     )
     for m in rows:
         conc = m.lesson_concentration
         conc_s = "n/a" if conc is None else f"{conc:.0f}%"
         print(
-            f"{m.name:<8}{m.plies:>6}{m.spoken:>6}{m.clean_rate:>7.0f}%{m.turns_with_violation:>10}"
-            f"{m.gating:>8}{m.cause_given_rate:>10.0f}%{m.cause_voiced_rate:>10.0f}%"
-            f"{m.mind_reading:>8}{m.magnitude:>6}"
+            f"{m.name:<8}{m.plies:>6}{m.spoken:>6}{m.clean_rate:>9.0f}%{m.turns_with_violation:>9}"
+            f"{m.gating:>8}{m.cause_given_rate:>10.0f}%"
             f"{m.words_per_turn:>8.0f}{conc_s:>13}{m.lesson_open:>6}"
         )
     print()
-    print("clean%      turns with NOTHING the board contradicts (higher is better) — the")
-    print("            one that decides whether this is safe for a 1200")
+    print("checker%    turns the live checker passes. NOT whether the reply is true: it is the")
+    print("            checker that already passed the shipped text. Truth, intent, numbers and")
+    print("            whether the cause reached the student come from the judge's reading:")
+    print("            scripts/eval_coach_rejudge.py --claims, charted by metrics_history.py")
     print("gating      violations severe enough to block a response")
     print("cause-giv%  spoken turns WE handed a composed cause — ours to fix, not the model's")
-    print("cause-voi%  of those, how many reached the student. Anchored on the squares the")
-    print("            composed cause names, so it survives a change of model; the phrase-")
-    print("            matched version it replaces was really a compliance score (row 137)")
-    print("mind-rd     turns inventing the student's intent")
-    print("magn        turns leaking an evaluation number (must stay 0)")
     print("lesson-conc% share of the lessons WE composed that are the same single lesson (lower")
     print("             is better). n/a means nothing was composed, which is not the same as")
     print("             perfect variety — see `open`")
@@ -776,14 +596,10 @@ def main(argv: list[str]) -> int:
         first, last = rows[0], rows[-1]
         print()
         print(
-            f"trend {first.name} -> {last.name}:  clean {first.clean_rate:.0f}% -> {last.clean_rate:.0f}%"
+            f"trend {first.name} -> {last.name}:  checker {first.clean_rate:.0f}% -> {last.clean_rate:.0f}%"
             f"   cause given {first.cause_given_rate:.0f}% -> {last.cause_given_rate:.0f}%"
             f"   words {first.words_per_turn:.0f} -> {last.words_per_turn:.0f}"
         )
-
-    worst = [m for m in rows if m.magnitude]
-    if worst:
-        print(f"\nWARNING: evaluation numbers reached the student in: {', '.join(m.name for m in worst)}")
     return 0
 
 

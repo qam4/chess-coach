@@ -45,13 +45,17 @@ def _row(run: str, group: str, **over: Any) -> dict[str, Any]:
         "engine_sha": "abc123",
         "plies": 44,
         "spoke": 18,
-        "clean_pct": "100",
-        "bad_turns": 0,
-        "gating": 0,
+        "read": 18,
+        "true_pct": "100",
+        "false_replies": 0,
+        "checker_passed_pct": "100",
+        "gate_false_accept": "0/0",
+        "gate_false_reject": "0/18",
         "cause_given_pct": "72",
-        "cause_voiced_pct": "100",
-        "mind_reading": 0,
-        "magnitude": 0,
+        "reason_reached_pct": "100",
+        "cue_stated_pct": "100",
+        "intent": 0,
+        "number": 0,
         "words_per_turn": "62",
         "lesson_conc_pct": "25",
         "lesson_open": 2,
@@ -60,8 +64,8 @@ def _row(run: str, group: str, **over: Any) -> dict[str, Any]:
     plies, spoke = int(base["plies"]), int(base["spoke"])
     base["spoke_pct_of_plies"] = f"{100.0 * spoke / plies:.0f}" if plies else ""
     for count_key, pct_key in (
-        ("mind_reading", "mind_reading_pct_of_spoken"),
-        ("magnitude", "magnitude_pct_of_spoken"),
+        ("intent", "intent_pct_of_spoken"),
+        ("number", "number_pct_of_spoken"),
         ("lesson_open", "lesson_open_pct_of_spoken"),
     ):
         base[pct_key] = f"{100.0 * int(base[count_key]) / spoke:.0f}" if spoke else ""
@@ -108,8 +112,8 @@ def test_guard_refuses_to_compare_different_games() -> None:
     """
     mod = _load()
     rows = [
-        _row("v52_seed7", "history", seed=7, clean_pct="100"),
-        _row("v53_seed17", "history", seed=17, clean_pct="80"),
+        _row("v52_seed7", "history", seed=7, true_pct="100"),
+        _row("v53_seed17", "history", seed=17, true_pct="80"),
     ]
     code, lines = mod.guard(rows)
     assert code == 1
@@ -128,12 +132,12 @@ def test_guard_fails_on_a_real_regression_in_a_paired_cell() -> None:
     """Same seed, same model, temperature 0 — so a difference is the build, not sampling."""
     mod = _load()
     rows = [
-        _row("v52_seed7", "history", seed=7, clean_pct="100"),
-        _row("v53_seed7", "history", seed=7, clean_pct="88"),
+        _row("v52_seed7", "history", seed=7, true_pct="100"),
+        _row("v53_seed7", "history", seed=7, true_pct="88"),
     ]
     code, lines = mod.guard(rows)
     assert code == 1
-    assert any("FAIL" in ln and "clean_pct" in ln for ln in lines)
+    assert any("FAIL" in ln and "true_pct" in ln for ln in lines)
 
 
 def test_guard_ignores_an_improvement() -> None:
@@ -154,10 +158,10 @@ def test_several_runs_of_one_version_collapse_to_one_point() -> None:
     row happened to sort last as "now".
     """
     mod = _load()
-    rows = [_row("v52", "history", clean_pct="100")]
-    rows += [_row("v53", "history", seed=s, clean_pct=c) for s, c in ((7, "100"), (11, "90"), (13, "95"))]
+    rows = [_row("v52", "history", true_pct="100")]
+    rows += [_row("v53", "history", seed=s, true_pct=c) for s, c in ((7, "100"), (11, "90"), (13, "95"))]
 
-    agg = mod._agg(rows, "clean_pct")
+    agg = mod._agg(rows, "true_pct")
     assert [a[0] for a in agg] == [52, 53], "one point per version"
     v53 = next(a for a in agg if a[0] == 53)
     assert v53[1] == 95.0  # mean of 100, 90, 95
@@ -168,12 +172,12 @@ def test_a_decline_is_not_reported_as_flat() -> None:
     """The failure this state machine replaced.
 
     Comparing the latest value against the WORST ever reads "flat throughout" when the latest
-    value IS the worst. `clean_pct` falling 100 -> 97 came out as unchanged, which is the
+    value IS the worst. `true_pct` falling 100 -> 97 came out as unchanged, which is the
     flattering reading, and flattering-while-blind is the recurring defect in this project.
     """
     mod = _load()
-    rows = [_row("v52", "history", clean_pct="100"), _row("v53", "history", clean_pct="97")]
-    card = next(c for c in mod.headline(rows) if c["key"] == "clean_pct")
+    rows = [_row("v52", "history", true_pct="100"), _row("v53", "history", true_pct="97")]
+    card = next(c for c in mod.headline(rows) if c["key"] == "true_pct")
     assert card["state"] == "worst"
     assert card["better"] is False
     assert card["best"] == 100.0 and card["from_run"] == "v52"
@@ -181,8 +185,8 @@ def test_a_decline_is_not_reported_as_flat() -> None:
 
 def test_the_best_reading_so_far_says_so() -> None:
     mod = _load()
-    rows = [_row("v52", "history", clean_pct="90"), _row("v53", "history", clean_pct="100")]
-    card = next(c for c in mod.headline(rows) if c["key"] == "clean_pct")
+    rows = [_row("v52", "history", true_pct="90"), _row("v53", "history", true_pct="100")]
+    card = next(c for c in mod.headline(rows) if c["key"] == "true_pct")
     assert card["state"] == "best"
     assert card["better"] is True
 
@@ -207,8 +211,8 @@ def test_headline_compares_against_the_worst_value_not_the_first() -> None:
 
 def test_an_unchanged_metric_is_not_a_regression() -> None:
     mod = _load()
-    rows = [_row("v2", "history", magnitude=0), _row("v52", "history", magnitude=0)]
-    card = next(c for c in mod.headline(rows) if c["key"] == "magnitude_pct_of_spoken")
+    rows = [_row("v2", "history", number=0), _row("v52", "history", number=0)]
+    card = next(c for c in mod.headline(rows) if c["key"] == "number_pct_of_spoken")
     assert card["delta"] == 0
     assert card["better"] is None
 
@@ -239,3 +243,51 @@ def test_a_short_game_and_a_long_one_are_comparable_as_ratios() -> None:
     standard = _row("standard", "matrix", plies=44, spoke=18)
     assert italian["spoke_pct_of_plies"] == "35"
     assert standard["spoke_pct_of_plies"] == "41"
+
+
+def test_the_numbers_about_what_the_coach_said_come_from_the_reading_beside_the_transcript(tmp_path: Path) -> None:
+    """B-021. Without a reading those columns are blank, never a number; with one they are its.
+
+    The case this replaced: the old `clean_pct` read 100% on every v62 game because it scored the
+    shipped text with the checker that had already passed it, while the judge's reading found 7
+    of 81 replies false. The checker's verdict survives as `checker_passed_pct`, under its name.
+    """
+    import json
+    import shutil
+
+    mod = _load()
+    run = tmp_path / "coach_review_v62_seed11"
+    run.mkdir()
+    shutil.copy(REPO / "output" / "coach_review_v62_seed11" / "transcript.json", run / "transcript.json")
+    ehm = mod._hard_metrics()
+
+    blank = mod.row_for(run / "transcript.json", ehm)
+    for key in ("read", "true_pct", "false_replies", "reason_reached_pct", "intent_pct_of_spoken", "number"):
+        assert blank[key] == "", key
+    assert blank["checker_passed_pct"] == "100"
+
+    numbers = {
+        "spoken": 8,
+        "read": 8,
+        "unread": 0,
+        "false": [1, 8],
+        "cause": [5, 6],
+        "cue": [7, 7],
+        "theme": [0, 4],
+        "intent": [0, 8],
+        "number": [0, 8],
+        "unresolved": 0,
+        "gate_false_accept": [1, 2],
+        "gate_false_reject": [0, 7],
+    }
+    (run / mod.READING).write_text(json.dumps({"numbers": numbers}), encoding="utf-8")
+    row = mod.row_for(run / "transcript.json", ehm)
+    assert row["read"] == 8
+    assert row["true_pct"] == "88"  # 7 of 8
+    assert row["false_replies"] == 1
+    assert row["reason_reached_pct"] == "83"  # 5 of 6
+    assert row["gate_false_accept"] == "1/2"
+    assert row["gate_false_reject"] == "0/7"
+    assert row["intent"] == 0 and row["intent_pct_of_spoken"] == "0"
+    assert row["checker_passed_pct"] == "100", "the checker still passes what it passed"
+    assert set(mod.COLUMNS) <= set(row), "every column the TSV writes is in the row"

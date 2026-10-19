@@ -1,0 +1,757 @@
+{
+  "reader": "agent",
+  "transcript": "output/coach_review_v62_seed11/transcript.json",
+  "summary": {
+    "false": 1,
+    "clean": 8,
+    "unresolved": 0,
+    "missing": 0
+  },
+  "numbers": {
+    "spoken": 8,
+    "read": 8,
+    "unread": 0,
+    "false": [
+      0,
+      8
+    ],
+    "cause": [
+      6,
+      6
+    ],
+    "cue": [
+      8,
+      8
+    ],
+    "theme": [
+      3,
+      6
+    ],
+    "intent": [
+      0,
+      8
+    ],
+    "number": [
+      0,
+      8
+    ],
+    "unresolved": 0,
+    "gate_false_accept": [
+      0,
+      1
+    ],
+    "gate_false_reject": [
+      0,
+      7
+    ]
+  },
+  "drafts": {
+    "11:3:0": {
+      "ply": 3,
+      "fen_before": "r1bqkb1r/ppp2ppp/2n2n2/3pp1N1/2B1P3/8/PPPP1PPP/RNBQK2R w KQkq - 0 6",
+      "student_move_san": "Bxd5",
+      "text": "After your move, the opponent plays Nxd5, capturing your bishop on d5. The check that was skipped: before moving, what of theirs attacks the square you are going to? The opponent's knight on f6 was already attacking d5. Next time you see a capture, ask yourself: what is the opponent\u2019s best reply, and does it win material or threaten something?",
+      "shipped": true,
+      "is_draft": true,
+      "facts": {
+        "F1": {
+          "label": "How this came about",
+          "text": "The opponent was already attacking d5 before you moved there. The check that was skipped: before I move, what of theirs attacks the square I am going to?"
+        },
+        "F2": {
+          "label": "What was available here",
+          "text": "capturing their pawn on d5 (material gain \u2014 winning capture)."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "After your move, the opponent plays Nxd5, capturing your bishop on d5.",
+          "after": [
+            "Bxd5"
+          ],
+          "kind": "legal",
+          "move": "Nxd5",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "After your move, the opponent plays Nxd5, capturing your bishop on d5.",
+          "after": [
+            "Bxd5"
+          ],
+          "kind": "capture",
+          "move": "Nxd5",
+          "piece": "bishop",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "After your move, the opponent plays Nxd5, capturing your bishop on d5.",
+          "after": [
+            "Bxd5"
+          ],
+          "kind": "piece",
+          "square": "d5",
+          "piece": "bishop",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's knight on f6 was already attacking d5.",
+          "after": [],
+          "kind": "piece",
+          "square": "f6",
+          "piece": "knight",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's knight on f6 was already attacking d5.",
+          "after": [],
+          "kind": "attacks",
+          "square": "f6",
+          "target": "d5",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [],
+      "stated": [
+        "F1"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "clean"
+    },
+    "11:7:0": {
+      "ply": 7,
+      "fen_before": "r1b1kb1r/ppp2ppp/2n5/3Pp1q1/8/8/PPPP1PPP/RNBQK2R w KQkq - 0 8",
+      "student_move_san": "Qf3",
+      "text": "By moving your queen to f3, you allowed your bishop on c1 to become undefended. The check that was skipped: after your move, is everything you were defending still defended? The move let something concrete happen \u2014 a discovered attack is available, revealing your bishop hitting their queen on g5. Next time you see a capture that wins material, ask yourself: is the piece I\u2019m using to capture still protected after I move?",
+      "shipped": true,
+      "is_draft": true,
+      "facts": {
+        "F1": {
+          "label": "How this came about",
+          "text": "Before Qf3 your bishop on c1 was defended; after it, it is not. The check that was skipped: after my move, is everything I was defending still defended?"
+        },
+        "F2": {
+          "label": "Missed Tactics",
+          "text": "White has a discovered attack: moving d2 reveals Bc1 hitting Qg5."
+        },
+        "F3": {
+          "label": "What was available here",
+          "text": "capturing their knight on c6 (material win \u2014 captures a minor piece)."
+        },
+        "F4": {
+          "label": "Guidance",
+          "text": "a capture is available that wins material."
+        },
+        "F5": {
+          "label": "Guidance",
+          "text": "you threaten their knight on c6."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "By moving your queen to f3, you allowed your bishop on c1 to become undefended.",
+          "after": [
+            "Qf3"
+          ],
+          "kind": "piece",
+          "square": "f3",
+          "piece": "queen",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "By moving your queen to f3, you allowed your bishop on c1 to become undefended.",
+          "after": [
+            "Qf3"
+          ],
+          "kind": "piece",
+          "square": "c1",
+          "piece": "bishop",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "By moving your queen to f3, you allowed your bishop on c1 to become undefended.",
+          "after": [
+            "Qf3"
+          ],
+          "kind": "defended",
+          "square": "c1",
+          "negated": true,
+          "holds": true
+        },
+        {
+          "sentence": "By moving your queen to f3, you allowed your bishop on c1 to become undefended.",
+          "after": [],
+          "kind": "defended",
+          "square": "c1",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The move let something concrete happen \u2014 a discovered attack is available, revealing your bishop hitting their queen on g5.",
+          "after": [
+            "Qf3"
+          ],
+          "kind": "piece",
+          "square": "g5",
+          "piece": "queen",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [
+        "The move let something concrete happen \u2014 a discovered attack is available, revealing your bishop hitting their queen on g5."
+      ],
+      "stated": [
+        "F1",
+        "F2"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "clean"
+    },
+    "11:11:0": {
+      "ply": 11,
+      "fen_before": "r1b1kbr1/ppp2ppp/8/3Pp1q1/3nQ3/8/PPPP1PPP/RNB1K2R w KQq - 4 10",
+      "student_move_san": "h4",
+      "text": "You missed a chance to capture material. The data shows a capture is available that wins material. The pin on e5 and the discovered attack on Qg5 are both in the data \u2014 these are concrete opportunities you didn\u2019t use. Next time you see a pinned piece or a discovered attack, ask yourself: can I take advantage of this to win material?",
+      "shipped": true,
+      "is_draft": true,
+      "facts": {
+        "F1": {
+          "label": "Missed Tactics",
+          "text": "White has a pin: Qe4 pins e5 to Ke8. White has a discovered attack: moving d2 reveals Bc1 hitting Qg5."
+        },
+        "F2": {
+          "label": "What was available here",
+          "text": "castling short to tuck your king onto g1 and connect your rooks (king safety \u2014 castling to a safer position)."
+        },
+        "F3": {
+          "label": "Guidance",
+          "text": "a capture is available that wins material."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "The pin on e5 and the discovered attack on Qg5 are both in the data \u2014 these are concrete opportunities you didn\u2019t use.",
+          "after": [],
+          "kind": "pinned",
+          "square": "e5",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The pin on e5 and the discovered attack on Qg5 are both in the data \u2014 these are concrete opportunities you didn\u2019t use.",
+          "after": [],
+          "kind": "piece",
+          "square": "g5",
+          "piece": "queen",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [
+        "You missed a chance to capture material.",
+        "The data shows a capture is available that wins material.",
+        "The pin on e5 and the discovered attack on Qg5 are both in the data \u2014 these are concrete opportunities you didn\u2019t use."
+      ],
+      "stated": [
+        "F1",
+        "F3"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "clean"
+    },
+    "11:17:0": {
+      "ply": 17,
+      "fen_before": "1rb1kbr1/ppp2ppp/8/3Pp2q/4Q2P/8/PPPPnPPK/RNB2R2 w - - 5 13",
+      "student_move_san": "Re1",
+      "text": "Your move left your pawn on f2 undefended. The cue is the knight on e2 \u2014 your move attacked it, but you didn\u2019t check if your pawn was still defended afterward. Before moving, ask yourself: does this move leave any of my pieces without support? Next time you see a piece that seems vulnerable, ask yourself: is it defended, and if so, by what?",
+      "shipped": true,
+      "is_draft": true,
+      "facts": {
+        "F1": {
+          "label": "How this came about",
+          "text": "Before Re1 your pawn on f2 was defended; after it, it is not. The check that was skipped: after my move, is everything I was defending still defended?"
+        },
+        "F2": {
+          "label": "What was available here",
+          "text": "attacking their knight on e2 (piece development \u2014 activating a minor piece)."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "Your move left your pawn on f2 undefended.",
+          "after": [
+            "Re1"
+          ],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your move left your pawn on f2 undefended.",
+          "after": [
+            "Re1"
+          ],
+          "kind": "defended",
+          "square": "f2",
+          "negated": true,
+          "holds": true
+        },
+        {
+          "sentence": "The cue is the knight on e2 \u2014 your move attacked it, but you didn\u2019t check if your pawn was still defended afterward.",
+          "after": [
+            "Re1"
+          ],
+          "kind": "piece",
+          "square": "e2",
+          "piece": "knight",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The cue is the knight on e2 \u2014 your move attacked it, but you didn\u2019t check if your pawn was still defended afterward.",
+          "after": [
+            "Re1"
+          ],
+          "kind": "attacks",
+          "square": "e1",
+          "target": "e2",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The cue is the knight on e2 \u2014 your move attacked it, but you didn\u2019t check if your pawn was still defended afterward.",
+          "after": [],
+          "kind": "defended",
+          "square": "f2",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [],
+      "stated": [
+        "F1",
+        "F2"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "clean"
+    },
+    "11:25:0": {
+      "ply": 25,
+      "fen_before": "1rbk2r1/ppp2ppp/8/3PR3/7b/8/PPPP1PPK/RNB5 w - - 1 17",
+      "student_move_san": "d3",
+      "text": "The opponent's strongest reply is Bxf2, capturing your pawn on f2.  \n\nThe check you skipped was: is anything of yours already under attack?  \n\nYour pawn on f2 was already attacked and undefended before this move.  \n\nNext time you see a piece under attack, ask yourself: is it defended, and if not, where can I move it to safety?",
+      "shipped": true,
+      "is_draft": true,
+      "facts": {
+        "F1": {
+          "label": "How this came about",
+          "text": "Your pawn on f2 was already attacked and undefended before this move, and the move went elsewhere. The check that was skipped: is anything of mine already under attack, before I look for something to improve?"
+        },
+        "F2": {
+          "label": "What was available here",
+          "text": "moving your pawn off f2 where it was attacked (pawn structure \u2014 improving pawn position)."
+        },
+        "F3": {
+          "label": "Guidance",
+          "text": "your pawn on f2 is undefended."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "The opponent's strongest reply is Bxf2, capturing your pawn on f2.",
+          "after": [
+            "d3"
+          ],
+          "kind": "legal",
+          "move": "Bxf2",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's strongest reply is Bxf2, capturing your pawn on f2.",
+          "after": [
+            "d3"
+          ],
+          "kind": "capture",
+          "move": "Bxf2",
+          "piece": "pawn",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's strongest reply is Bxf2, capturing your pawn on f2.",
+          "after": [
+            "d3"
+          ],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "attacked",
+          "square": "f2",
+          "by": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "defended",
+          "square": "f2",
+          "negated": true,
+          "holds": true
+        }
+      ],
+      "unchecked": [
+        "The opponent's strongest reply is Bxf2, capturing your pawn on f2."
+      ],
+      "stated": [
+        "F1",
+        "F3"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "clean"
+    },
+    "11:27:0": {
+      "ply": 27,
+      "fen_before": "1rbk2r1/ppp3pp/5p2/3PR3/7b/3P4/PPP2PPK/RNB5 w - - 0 18",
+      "student_move_san": "Rh5",
+      "text": "After your move, the opponent plays Bxf2, capturing your pawn on f2. The pawn on f2 was already attacked and undefended before this move. The check that was skipped: is anything of mine already under attack, before I look for something to improve? The e-file is open, and rooks on open files are powerful. Next time you see an open file, ask yourself: are my pieces defending key squares on that file?",
+      "shipped": true,
+      "is_draft": true,
+      "facts": {
+        "F1": {
+          "label": "How this came about",
+          "text": "Your pawn on f2 was already attacked and undefended before this move, and the move went elsewhere. The check that was skipped: is anything of mine already under attack, before I look for something to improve? This same piece already came up on move 17."
+        },
+        "F2": {
+          "label": "What was available here",
+          "text": "moving your rook off e5 where it was attacked (rook activity \u2014 rook on the seventh rank)."
+        },
+        "F3": {
+          "label": "Guidance",
+          "text": "the e-file is open."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "After your move, the opponent plays Bxf2, capturing your pawn on f2.",
+          "after": [
+            "Rh5"
+          ],
+          "kind": "legal",
+          "move": "Bxf2",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "After your move, the opponent plays Bxf2, capturing your pawn on f2.",
+          "after": [
+            "Rh5"
+          ],
+          "kind": "capture",
+          "move": "Bxf2",
+          "piece": "pawn",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "After your move, the opponent plays Bxf2, capturing your pawn on f2.",
+          "after": [
+            "Rh5"
+          ],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "piece",
+          "square": "f2",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "attacked",
+          "square": "f2",
+          "by": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The pawn on f2 was already attacked and undefended before this move.",
+          "after": [],
+          "kind": "defended",
+          "square": "f2",
+          "negated": true,
+          "holds": true
+        }
+      ],
+      "unchecked": [
+        "The e-file is open, and rooks on open files are powerful."
+      ],
+      "stated": [
+        "F1",
+        "F3"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "clean"
+    },
+    "11:1000:0": {
+      "ply": 1000,
+      "fen_before": "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1",
+      "student_move_san": "e5",
+      "text": "The opponent's strongest reply is Kxe5, capturing your pawn on e5. This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it. The check that was skipped: before I commit, is the piece I am moving attacked on the square I am moving it to? Next time you see a pawn move, ask yourself: is this square safe for the piece I\u2019m moving it to?",
+      "shipped": true,
+      "is_draft": true,
+      "facts": {
+        "F1": {
+          "label": "How this came about",
+          "text": "After e5 nothing of yours defends e5, and e6 attacks it. The check that was skipped: before I commit, is the piece I am moving attacked on the square I am moving it to?"
+        },
+        "F2": {
+          "label": "Guidance",
+          "text": "you have a passed pawn on the e-file."
+        },
+        "F3": {
+          "label": "Guidance",
+          "text": "you have a passed pawn on the e-file."
+        },
+        "F4": {
+          "label": "Guidance",
+          "text": "your e-file pawn is isolated."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.",
+          "after": [
+            "e5"
+          ],
+          "kind": "legal",
+          "move": "Kxe5",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.",
+          "after": [
+            "e5"
+          ],
+          "kind": "capture",
+          "move": "Kxe5",
+          "piece": "pawn",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "The opponent's strongest reply is Kxe5, capturing your pawn on e5.",
+          "after": [
+            "e5"
+          ],
+          "kind": "piece",
+          "square": "e5",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [],
+          "kind": "piece",
+          "square": "e4",
+          "piece": "pawn",
+          "color": "white",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [
+            "e5"
+          ],
+          "kind": "defended",
+          "square": "e5",
+          "negated": true,
+          "holds": true
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [
+            "e5"
+          ],
+          "kind": "piece",
+          "square": "e6",
+          "piece": "king",
+          "color": "black",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "This move let something concrete happen because the pawn on e4 had no defender when you moved it to e5, and Black\u2019s king on e6 attacked it.",
+          "after": [
+            "e5"
+          ],
+          "kind": "attacks",
+          "square": "e6",
+          "target": "e5",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [
+        "The opponent's strongest reply is Kxe5, capturing your pawn on e5."
+      ],
+      "stated": [
+        "F1"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "clean"
+    },
+    "11:1003:0": {
+      "ply": 1003,
+      "fen_before": "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+      "student_move_san": "Ra8#",
+      "text": "Your move, Ra8#, is a strong check that activates your rook. The key idea here is that checks force the opponent to respond immediately. Next time you see a check, ask yourself: does it buy me time to develop or improve another piece?",
+      "shipped": false,
+      "is_draft": true,
+      "facts": {
+        "F1": {
+          "label": "What was available here",
+          "text": "giving check (rook activity \u2014 improving rook placement)."
+        },
+        "F2": {
+          "label": "Guidance",
+          "text": "you are ahead in material."
+        },
+        "F3": {
+          "label": "Guidance",
+          "text": "you are ahead in material."
+        },
+        "F4": {
+          "label": "Guidance",
+          "text": "you threaten the a8 square."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "Your move, Ra8#, is a strong check that activates your rook.",
+          "after": [],
+          "kind": "check",
+          "move": "Ra8#",
+          "negated": false,
+          "holds": true
+        },
+        {
+          "sentence": "Your move, Ra8#, is a strong check that activates your rook.",
+          "after": [],
+          "kind": "mate",
+          "move": "Ra8#",
+          "negated": true,
+          "holds": false
+        }
+      ],
+      "unchecked": [
+        "Your move, Ra8#, is a strong check that activates your rook."
+      ],
+      "stated": [
+        "F1"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "false"
+    },
+    "11:1003:f": {
+      "ply": 1003,
+      "fen_before": "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+      "student_move_san": "Ra8#",
+      "text": "That's checkmate \u2014 Ra8# ends the game. Worth remembering: to mate with a rook, cut the enemy king off from the squares it could run to, then bring your own king up to take away the rest.",
+      "shipped": true,
+      "is_draft": false,
+      "facts": {
+        "F1": {
+          "label": "What was available here",
+          "text": "giving check (rook activity \u2014 improving rook placement)."
+        },
+        "F2": {
+          "label": "Guidance",
+          "text": "you are ahead in material."
+        },
+        "F3": {
+          "label": "Guidance",
+          "text": "you are ahead in material."
+        },
+        "F4": {
+          "label": "Guidance",
+          "text": "you threaten the a8 square."
+        }
+      },
+      "claims": [
+        {
+          "sentence": "That's checkmate \u2014 Ra8# ends the game.",
+          "after": [],
+          "kind": "mate",
+          "move": "Ra8#",
+          "negated": false,
+          "holds": true
+        }
+      ],
+      "unchecked": [],
+      "stated": [
+        "F1"
+      ],
+      "intent": [],
+      "numbers": [],
+      "verdict": "clean"
+    }
+  }
+}

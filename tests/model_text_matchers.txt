@@ -37,22 +37,15 @@ scripts/eval_coaching.py	strings	['winning', 'rook']
 scripts/eval_game_coaching.py	in	'--uci'
 scripts/eval_game_coaching.py	strings	['on', 'off']
 scripts/eval_game_coaching_pairwise.py	in	'--uci'
-scripts/eval_hard_metrics.py	pattern-use	MIND_READING_RE.finditer
 scripts/eval_hard_metrics.py	pattern-use	_ACHIEVEMENT_CLAUSE.findall
 scripts/eval_hard_metrics.py	pattern-use	_CAUSE_OWN_PIECE.search
 scripts/eval_hard_metrics.py	pattern-use	_CAUSE_SECTION.search
 scripts/eval_hard_metrics.py	pattern-use	_LESSON_OPEN.search
-scripts/eval_hard_metrics.py	pattern-use	_SAID_FILE.findall
-scripts/eval_hard_metrics.py	pattern-use	_SQUARE_LOOSE.findall
 scripts/eval_hard_metrics.py	pattern-use	_SQUARE_STRICT.findall
 scripts/eval_hard_metrics.py	pattern-use	_SQUARE_STRICT.findall
 scripts/eval_hard_metrics.py	pattern-use	_SQUARE_STRICT.findall
 scripts/eval_hard_metrics.py	pattern-use	_THEME_FACT.findall
-scripts/eval_hard_metrics.py	pattern-use	_THEME_FACT.findall
 scripts/eval_hard_metrics.py	pattern-use	_THEME_FILE.findall
-scripts/eval_hard_metrics.py	pattern-use	_THEME_FILE.findall
-scripts/eval_hard_metrics.py	regex	"\\b(?:i (?:can )?see (?:that )?you|i notice (?:that )?you|(?:it )?(?:looks|sounds|seems) like you|(?:it )?seems (?:that )?you|you(?:'re| are| were) (?:trying|looking|hoping|aiming|planning|going for)|you (?:tried|wanted|intended|hoped|aimed|meant|planned)|your (?:move|plan|idea|intention|goal|aim)s? (?:was|were|is|aimed|tried|intended|wanted|sought|hoped))\\b"
-scripts/eval_hard_metrics.py	regex	'(?<![a-h0-9])([a-h][1-8])(?![0-9])'
 scripts/eval_hard_metrics.py	regex	'--- How this came about ---\\s*\\n(.+?)(?=\\n---|\\n\\n|\\Z)'
 scripts/eval_hard_metrics.py	regex	'Before \\S+ your (?:\\w+) on ([a-h][1-8]) was defended; after it, it is not'
 scripts/eval_hard_metrics.py	regex	'CLOSE by pointing out that this is the SAME idea as earlier[^\\u2014]*\\u2014\\s*(.+?)\\.\\s'
@@ -60,15 +53,12 @@ scripts/eval_hard_metrics.py	regex	'CLOSE with one transferable takeaway on THIS
 scripts/eval_hard_metrics.py	regex	'CLOSE with one transferable takeaway, and use THIS one[^:]*:\\s*(.+?)\\.\\s'
 scripts/eval_hard_metrics.py	regex	'CLOSE with one transferable takeaway, not a generic maxim'
 scripts/eval_hard_metrics.py	regex	'\\b([a-h])-file\\b'
-scripts/eval_hard_metrics.py	regex	'\\b([a-h])[- ]file\\b'
 scripts/eval_hard_metrics.py	regex	'\\b([a-h][1-8])\\b'
 scripts/eval_hard_metrics.py	regex	'^(?:What was available here|The best move \\([^)]*\\)|Your move) does (?:this|the same thing here[^:]*): (.+)$'
 scripts/eval_hard_metrics.py	regex	'^\\s*HERE:\\s*(.+)$'
 scripts/eval_hard_metrics.py	regex	f'--- {re.escape(header)} ---\\s*\\n(.+?)(?=\\n---|\\n\\n|\\Z)'
 scripts/eval_hard_metrics.py	strings	('How this came about', 'Missed Tactics', 'Undefended AFTER your move', 'Already undefended before your move (your move did not cause this)', 'Threats AFTER your move', 'Threats', 'Hanging Pieces')
 scripts/eval_hard_metrics.py	strings	('attacked on the square', 'only thing guarding', 'check that was skipped', 'thinking that went wrong')
-scripts/eval_hard_metrics.py	strings	('centipawn', 'cp)', ' cp ', '+0.', '-0.', 'eval of', 'score of')
-scripts/eval_hard_metrics.py	strings	('next time', 'whenever', 'when ', 'if ', 'should ', 'always ', 'before you')
 scripts/eval_models.py	strings	['bishop', 'f7', 'castle', 'center']
 scripts/eval_models.py	strings	['bishop', 'pin', 'castle']
 scripts/eval_models.py	strings	['center', 'develop', 'e5', 'd5']

@@ -48,8 +48,13 @@ from typing import Any
 REPO = Path(__file__).resolve().parent.parent
 
 #: Bump when any metric's MEANING changes. 1 = cause% board-anchored (row 139) and
-#: lesson-conc% composition-derived (row 140).
-DETECTOR_VERSION = 1
+#: lesson-conc% composition-derived (row 140). 2 = B-021: every number about what the coach SAID
+#: comes from the judge's reading (`claims_judge_r1.json` beside the transcript), not from
+#: matching its words; runs with no reading are blank in those columns, never zero.
+DETECTOR_VERSION = 2
+
+#: The reading `eval_coach_rejudge.py --claims` writes beside a transcript.
+READING = "claims_judge_r1.json"
 
 #: Raw counts AND ratios are both emitted, on purpose.
 #:
@@ -71,15 +76,19 @@ COLUMNS = (
     "plies",
     "spoke",
     "spoke_pct_of_plies",
-    "clean_pct",
-    "bad_turns",
-    "gating",
+    "read",
+    "true_pct",
+    "false_replies",
+    "checker_passed_pct",
+    "gate_false_accept",
+    "gate_false_reject",
     "cause_given_pct",
-    "cause_voiced_pct",
-    "mind_reading",
-    "mind_reading_pct_of_spoken",
-    "magnitude",
-    "magnitude_pct_of_spoken",
+    "reason_reached_pct",
+    "cue_stated_pct",
+    "intent",
+    "intent_pct_of_spoken",
+    "number",
+    "number_pct_of_spoken",
     "words_per_turn",
     "lesson_conc_pct",
     "lesson_open",
@@ -154,6 +163,56 @@ def discover(root: Path) -> list[tuple[str, Path]]:
     return found
 
 
+def _pct(pair: list[int] | None) -> str:
+    """``[hits, of]`` as a whole-number share, blank when nothing applies."""
+    if not pair or not pair[1]:
+        return ""
+    return f"{100.0 * pair[0] / pair[1]:.0f}"
+
+
+def _reading_columns(path: Path) -> dict[str, Any]:
+    """The columns that come from the judge's reading, blank when the run has none.
+
+    Shares are of the replies the student received that the reader saw (`read`). `true_pct` is
+    the share with no board claim the board contradicts. The gate's two rates are kept as
+    ``hits/of`` so the small denominators stay visible: at v62 they were 7/16 and 1/66.
+    """
+    blank = {
+        "read": "",
+        "true_pct": "",
+        "false_replies": "",
+        "gate_false_accept": "",
+        "gate_false_reject": "",
+        "reason_reached_pct": "",
+        "cue_stated_pct": "",
+        "intent": "",
+        "intent_pct_of_spoken": "",
+        "number": "",
+        "number_pct_of_spoken": "",
+    }
+    reading = path.parent / READING
+    if not reading.exists():
+        return blank
+    n = json.loads(reading.read_text(encoding="utf-8")).get("numbers") or {}
+    read = int(n.get("read") or 0)
+    false, _of = n.get("false") or [0, 0]
+    accept = n.get("gate_false_accept") or [0, 0]
+    reject = n.get("gate_false_reject") or [0, 0]
+    return {
+        "read": read,
+        "true_pct": _pct([read - false, read]),
+        "false_replies": false,
+        "gate_false_accept": f"{accept[0]}/{accept[1]}",
+        "gate_false_reject": f"{reject[0]}/{reject[1]}",
+        "reason_reached_pct": _pct(n.get("cause")),
+        "cue_stated_pct": _pct(n.get("cue")),
+        "intent": (n.get("intent") or [0, 0])[0],
+        "intent_pct_of_spoken": _pct(n.get("intent")),
+        "number": (n.get("number") or [0, 0])[0],
+        "number_pct_of_spoken": _pct(n.get("number")),
+    }
+
+
 def row_for(path: Path, ehm: Any, group: str = "history") -> dict[str, Any]:
     m = ehm.measure(path)
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -186,16 +245,13 @@ def row_for(path: Path, ehm: Any, group: str = "history") -> dict[str, Any]:
         "plies": m.plies,
         "spoke": m.spoken,
         "spoke_pct_of_plies": f"{100.0 * m.spoken / m.plies:.0f}" if m.plies else "",
-        "mind_reading_pct_of_spoken": f"{100.0 * m.mind_reading / m.spoken:.0f}" if m.spoken else "",
-        "magnitude_pct_of_spoken": f"{100.0 * m.magnitude / m.spoken:.0f}" if m.spoken else "",
         "lesson_open_pct_of_spoken": f"{100.0 * m.lesson_open / m.spoken:.0f}" if m.spoken else "",
-        "clean_pct": f"{m.clean_rate:.0f}",
-        "bad_turns": m.turns_with_violation,
-        "gating": m.gating,
+        # The live checker's own verdict on what shipped. Not "is it true": it scores the text
+        # with the checker that already passed it, so it reads 100% while the judge's reading
+        # finds false replies (v62: 100% against 7 of 81). Kept so the gap stays visible.
+        "checker_passed_pct": f"{m.clean_rate:.0f}",
         "cause_given_pct": f"{m.cause_given_rate:.0f}",
-        "cause_voiced_pct": f"{m.cause_voiced_rate:.0f}",
-        "mind_reading": m.mind_reading,
-        "magnitude": m.magnitude,
+        **_reading_columns(path),
         "words_per_turn": f"{m.words_per_turn:.0f}",
         # Empty, never 0: nothing composed means the question does not apply.
         "lesson_conc_pct": "" if conc is None else f"{conc:.0f}",
@@ -232,15 +288,19 @@ def render_legend() -> str:
         "That needs the pairwise comparison against a frozen reference build, which is the other",
         "half of the tracker (see BACKLOG).",
         "",
-        "## Three traps already sprung, kept here so they are not re-sprung",
+        "## Four traps already sprung, kept here so they are not re-sprung",
         "",
         "**An empty cell is not a zero.** `lesson_conc_pct` is blank before v22 because no lesson",
         "was composed then — the question did not apply. Rendering that as 0% would read as",
-        "perfect variety.",
+        "perfect variety. The same holds for every column from the judge's reading before v62.",
+        "",
+        "**A counter that scores text with the checker that passed it cannot see what it missed.**",
+        "The old `clean_pct` read 100% on all five v62 games while the judge's reading found 7 of",
+        "81 replies false. It survives only as `checker_passed_pct`, under its real name.",
         "",
         "**`spoke` changes what the other columns mean.** It drops from 44 to 18 at v31 when the",
-        "silence gates landed. `clean_pct` rising to 100% around there is partly the coach",
-        "declining to comment on turns it would have got wrong, not only getting more accurate.",
+        "silence gates landed. The old `clean_pct` rising to 100% around there was partly the",
+        "coach declining to comment on turns it would have got wrong.",
         "",
         "**Never append rows to the TSV.** It is regenerated whole, every time, from the",
         "transcripts. Appending would mix rows computed by different detector versions, and the",
@@ -262,14 +322,17 @@ def render_legend() -> str:
 #: Every panel is a RATIO, so panels stay comparable between games of different lengths. An
 #: earlier version charted raw counts with a hardcoded "of 44 turns" label, which is only true
 #: of the standard-start game; the five openings run 23 to 51 plies.
+#:
+#: The four questions about what the coach SAID come from the judge's reading (B-021): runs
+#: before v62 have none, so those panels start at v62 rather than reading as a flat history.
 _PANELS = (
-    ("clean_pct", "Is everything it says true?", "% of spoken turns", 100.0, "up"),
+    ("true_pct", "Is everything it says true?", "% of replies, judge's reading", 100.0, "up"),
     ("cause_given_pct", "Did we compose a reason WHY?", "% of spoken turns", 100.0, "up"),
-    ("cause_voiced_pct", "Did that reason reach the student?", "% of composed", 100.0, "up"),
+    ("reason_reached_pct", "Did that reason reach the student?", "% of composed, judge's reading", 100.0, "up"),
     ("lesson_conc_pct", "Same lesson over and over?", "% on the top lesson", 40.0, "down"),
     ("lesson_open_pct_of_spoken", "Did the MODEL pick the topic?", "% of spoken turns", 100.0, "down"),
-    ("mind_reading_pct_of_spoken", "Does it invent the student's intent?", "% of spoken turns", 40.0, "down"),
-    ("magnitude_pct_of_spoken", "Does it leak an evaluation number?", "% of spoken, must be 0", 10.0, "down"),
+    ("intent_pct_of_spoken", "Does it invent the student's intent?", "% of replies, judge's reading", 40.0, "down"),
+    ("number_pct_of_spoken", "Does it leak an evaluation number?", "% of replies, must be 0", 10.0, "down"),
     ("words_per_turn", "How long is each turn?", "words", 200.0, "flat"),
     ("spoke_pct_of_plies", "How often does it speak at all?", "% of the game's turns", 100.0, "flat"),
 )
@@ -278,13 +341,20 @@ _PANELS = (
 #: Column -> the question it answers, in plain English. Emitted as the legend so the TSV is
 #: readable without reading this file.
 LEGEND = (
-    ("clean_pct", "Is everything it says true? (% of spoken turns with nothing the board contradicts)"),
-    ("bad_turns", "How many turns contained something false?"),
-    ("gating", "How many were false enough to block the response?"),
+    ("read", "Replies the student received that the judge read (blank: no reading for this run)"),
+    ("true_pct", "Is everything it says true? (% of read replies with no board claim the board contradicts)"),
+    ("false_replies", "How many read replies contained a false board claim?"),
+    (
+        "checker_passed_pct",
+        "What the live checker said about what shipped. NOT a truth measure: it passes what it passed",
+    ),
+    ("gate_false_accept", "Live checker: false drafts it let through, of all false drafts"),
+    ("gate_false_reject", "Live checker: drafts it blocked with nothing false in them, of all such drafts"),
     ("cause_given_pct", "Did WE compose a reason why the move failed? (% of spoken turns)"),
-    ("cause_voiced_pct", "Of those reasons, how many reached the student?"),
-    ("mind_reading", "Does it invent the student's intent? (turns; see the _pct column to compare games)"),
-    ("magnitude", "Does it leak an evaluation number? (turns; must stay 0)"),
+    ("reason_reached_pct", "Of those reasons, how many did the reply tell the student? (judge's reading)"),
+    ("cue_stated_pct", "Of replies given any composed fact, how many stated one? (judge's reading)"),
+    ("intent", "Replies saying what the student was thinking (judge's reading; see the _pct column)"),
+    ("number", "Replies giving a number that rates the position or move (judge's reading; must stay 0)"),
     ("words_per_turn", "How long is each turn?"),
     ("lesson_conc_pct", "Is it teaching one lesson over and over? (% of composed lessons that are the top one)"),
     ("lesson_open", "Did the MODEL pick the topic instead of us? (turns)"),
@@ -548,13 +618,14 @@ _TABLE_COLS = (
     ("run", "run"),
     ("model", "model"),
     ("spoke", "spoke"),
-    ("clean_pct", "true%"),
-    ("bad_turns", "bad"),
-    ("gating", "gated"),
+    ("true_pct", "true%"),
+    ("checker_passed_pct", "checker passed%"),
+    ("gate_false_accept", "gate passed false"),
+    ("gate_false_reject", "gate blocked true"),
     ("cause_given_pct", "cause giv%"),
-    ("cause_voiced_pct", "cause voi%"),
-    ("mind_reading", "mind-rd"),
-    ("magnitude", "magn"),
+    ("reason_reached_pct", "reason reached%"),
+    ("intent", "intent"),
+    ("number", "numbers"),
     ("lesson_conc_pct", "lesson conc%"),
     ("lesson_open", "model picked"),
     ("words_per_turn", "words"),
@@ -798,7 +869,7 @@ def guard(rows: list[dict[str, Any]]) -> tuple[int, list[str]]:
     if not paired_on_model:
         out.append(
             "  NOTE: at least one side does not record its model, so a difference below could be "
-            "a model change. Model affects words_per_turn and cause_voiced_pct; it does not "
+            "a model change. Model affects words_per_turn and what the reply says; it does not "
             "affect cause_given_pct, lesson_conc_pct or spoke at all (measured)."
         )
 

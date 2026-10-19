@@ -1,13 +1,11 @@
-"""The cause metric must stay anchored to the board, not to our phrasing.
+"""What `eval_hard_metrics` reads off OUR prompt: the composed cause, the cue, the guidance theme.
 
-Ledger row 137. The version this replaces matched literal fragments lifted from our own
-composed clauses, so it scored whether the model echoed our sentences: 50%/50% for qwen3:14b
-against 17%/12% for gemma4:12b-it-qat, while every gemma turn it scored zero on did explain
-why the move failed. One missed on a single word — "check that was skipped" versus "check was
-skipped".
-
-These tests exist so that class of metric cannot come back. The paraphrase test is the load
-bearing one: it fails if anyone reintroduces phrase matching.
+Ledger row 137 retired a cause metric that matched fragments of our own clauses in the model's
+reply. B-021 (2026-10-16) retired its successor too, which pulled squares out of the reply with a
+regex: whether the reply told the student the cause is now the judge's reading
+(`chess_coach.eval.claims`). What is left here reads only text we composed, so these tests pin
+which squares and facts our prompt hands the coach — the half of "did it reach the student" that
+is ours.
 """
 
 from __future__ import annotations
@@ -51,18 +49,6 @@ def test_cause_squares_ignores_the_moves_destination() -> None:
     assert mod._cause_squares(_PROMPT) == {"b2"}
 
 
-def test_a_square_inside_a_SAN_token_counts_on_the_coach_side() -> None:
-    """Asymmetric on purpose, and measured.
-
-    At ply 8 of seed 13 the cause was "their bishop on c3 was attacked and undefended, and
-    bxc3 does not take it" and the coach answered "the stronger move was Bxc3, capturing their
-    bishop". Strict matching scored that a miss, which it is not.
-    """
-    mod = _load()
-    assert mod._voices_the_cause("The stronger move was Bxc3, capturing their bishop.", {"c3"})
-    assert mod._voices_the_cause("the opponent plays Rxb2, taking it", {"b2"})
-
-
 def test_no_composed_cause_is_None_not_empty() -> None:
     """None means "we composed nothing"; empty set means "composed, no square to anchor on".
 
@@ -76,48 +62,13 @@ def test_no_composed_cause_is_None_not_empty() -> None:
     assert mod._cause_squares(repeat_only) == set()
 
 
-def test_a_paraphrase_scores_THE_SAME_as_an_echo() -> None:
-    """The regression this whole change exists to prevent.
+def test_cause_given_is_a_share_of_spoken_turns() -> None:
+    """Given is ours to fix: ~70% of spoken turns are handed a composed cause.
 
-    Both turns convey the same cause. The retired metric scored the first and missed the
-    second, purely on wording — which is how a second model appeared 35 points worse while
-    teaching the same thing.
+    Its other half, "did the cause reach the student", is the judge's reading since B-021.
     """
     mod = _load()
-    squares = mod._cause_squares(_PROMPT)
-    assert squares is not None
-
-    echo = "The check that was skipped: your pawn on b2 was defended before Bd2 and is not now."
-    paraphrase = "You left b2 unprotected — it had a defender before, and after your move it has none."
-
-    assert mod._voices_the_cause(echo, squares)
-    assert mod._voices_the_cause(paraphrase, squares)
-
-    # And the retired phrasing must not be what decides it: a turn quoting our sentence but
-    # naming no square from the cause does NOT count.
-    wrong_square = "The check that was skipped: your rook on h8 is loose."
-    assert not mod._voices_the_cause(wrong_square, squares)
-
-
-def test_a_turn_that_never_mentions_the_cause_square_is_a_miss() -> None:
-    mod = _load()
-    squares = mod._cause_squares(_PROMPT)
-    assert squares is not None
-    assert not mod._voices_the_cause("A stronger move was Nf3, developing a piece.", squares)
-
-
-def test_given_and_voiced_are_reported_separately() -> None:
-    """One number conflated composition with delivery and reported neither.
-
-    Measured: ~70% given, 90-100% voiced. Collapsed into one figure that reads as ~65% and
-    hides that the gap is ours, not the model's.
-    """
-    mod = _load()
-    m = mod.Metrics(name="t", spoken=10, cause_given=7, cause_anchorable=6, cause_voiced=6)
-    assert m.cause_given_rate == 70.0
-    assert m.cause_voiced_rate == 100.0
-    # Voiced is a share of ANCHORABLE, not of spoken: unscorable causes must not dilute it.
-    assert mod.Metrics(name="t", spoken=10, cause_given=7, cause_anchorable=0).cause_voiced_rate == 0.0
+    assert mod.Metrics(name="t", spoken=10, cause_given=7).cause_given_rate == 70.0
 
 
 # ---------------------------------------------------------------------------
@@ -167,15 +118,6 @@ def test_the_cue_measures_both_sides_of_the_b012_change_identically() -> None:
     assert mod._cue_squares(_CUE_PROMPT_OLD) == mod._cue_squares(_CUE_PROMPT_NEW)
 
 
-def test_voicing_the_cue_is_anchored_on_squares_not_wording() -> None:
-    """Same contract as the cause: paraphrase counts, echoing our sentence is not required."""
-    mod = _load()
-    cue = mod._cue_squares(_CUE_PROMPT_NEW)
-    assert mod._voices_the_cause("Your bishop on b4 was there for the taking.", cue)
-    assert mod._voices_the_cause("Bxb4 was on.", cue), "loose matching must see the square in SAN"
-    assert not mod._voices_the_cause("Think about your development and the centre.", cue)
-
-
 # ---------------------------------------------------------------------------
 # The THEME counters (B-013): does an injected guidance fact displace the cue?
 # ---------------------------------------------------------------------------
@@ -190,58 +132,30 @@ _THEME_PROMPT = (
 )
 
 
-def test_the_theme_is_voiced_by_file_as_well_as_by_square() -> None:
-    """The model answers in the vocabulary the theme used, and that vocabulary is often a file.
-
-    Handed "your a-file pawn is passed" the coach writes "the passed pawn on the a-file", with
-    no square in the sentence. Square-only matching scored two such turns as unexplained and
-    made the theme look like a 1-turn problem when it accounts for 4 of the 5 turns B-012 lost.
-    """
+def test_a_theme_file_expands_to_its_squares() -> None:
+    """The theme often names a FILE ("your a-file pawn is passed") where the cue names a square,
+    so comparing the two needs one vocabulary: a file expands to its eight squares."""
     mod = _load()
     squares = mod._theme_squares(_THEME_PROMPT)
-    files = mod._theme_files(_THEME_PROMPT)
-    assert files == {"a"}
-    assert "a5" in squares, "a file expands to its squares so it can be compared with a cue"
-
-    by_file = "You missed the chance to push your passed pawn on the a-file."
-    assert not mod._voices_the_cause(by_file, squares), "no square appears, so square matching misses it"
-    assert mod._voices_the_theme(by_file, squares, files), "but the theme WAS voiced, by file"
-
-    by_square = "Push the pawn to a5."
-    assert mod._voices_the_theme(by_square, squares, files)
-
-    assert not mod._voices_the_theme("Your king is doing nothing useful.", squares, files)
+    assert {f"a{rank}" for rank in range(1, 9)} <= squares
 
 
 def test_theme_competition_is_keyed_on_the_cue_not_the_cause() -> None:
-    """Keyed to the cause, this counter reported 1 displaced turn where the truth was 4.
+    """Keyed to the cause, this counter reported 1 competing turn where the truth was 4.
 
     A turn can keep the CAUSE and still lose the CUE — the cue is the wider set, including the
-    achievement clause, and it is what B-012's criterion is about. Anchoring the competition
-    check to the narrower set silently excluded the turns that had no composed cause at all.
+    achievement clause, and it is what B-012's criterion is about. Both sides are our prompt.
     """
     mod = _load()
-    turns = [
-        {
-            "ply": 87,
-            "fen_before": "8/6p1/8/8/5K2/8/P7/7k w - - 0 1",
-            "student_move_san": "Kf4",
-            "best_move_san": "a4",
-            "classification": "mistake",
-            "eval_drop_cp": 120,
-            "coach_feedback": "You missed the chance to push your passed pawn on the a-file.",
-            "prompt": _THEME_PROMPT,
-            "latency_s": 1.0,
-            "fidelity_kinds": {},
-        }
-    ]
-    m = mod.measure_turns("probe", turns) if hasattr(mod, "measure_turns") else None
-    if m is None:  # measure() reads a file; exercise the pieces directly instead
-        cue = mod._cue_squares(_THEME_PROMPT)
-        theme_sq = mod._theme_squares(_THEME_PROMPT)
-        theme_f = mod._theme_files(_THEME_PROMPT)
-        text = turns[0]["coach_feedback"]
-        assert cue == {"g7"}
-        assert theme_sq and not (theme_sq & cue), "the theme points away from the cue"
-        assert not mod._voices_the_cause(text, cue), "the cue was not voiced"
-        assert mod._voices_the_theme(text, theme_sq, theme_f), "the theme was"
+    cue = mod._cue_squares(_THEME_PROMPT)
+    theme_sq = mod._theme_squares(_THEME_PROMPT)
+    assert cue == {"g7"}
+    assert theme_sq and not (theme_sq & cue), "the theme points away from the cue"
+
+
+def test_supplied_facts_label_the_guidance_apart_from_the_cue() -> None:
+    """What the judge's reader is handed (B-021): every composed fact, with the guidance labelled."""
+    mod = _load()
+    facts = mod.supplied_facts(_THEME_PROMPT)
+    assert facts[0] == ("How this came about", "Before Kf4 your pawn on g7 was defended; after it, it is not.")
+    assert (mod.GUIDANCE, "your a-file pawn is passed.") in facts
