@@ -175,8 +175,8 @@ def main() -> None:
     print("=" * 68)
     print(
         "\nNote: this measures the PROMPT only. Whether the model still grades or prices\n"
-        "a move out of its own vocabulary is a separate question, measured by\n"
-        "ReviewStats.graded_or_priced on the next report card with the series model."
+        "a move out of its own vocabulary is a separate question, answered by the judge's\n"
+        "claim reading (scripts/eval_coach_rejudge.py --claims, the `numbers` question)."
     )
 
 

@@ -19,7 +19,6 @@ from chess_coach.eval.coach_review import (
     aggregate_review,
     build_architecture_review_prompt,
     build_coach_review_prompt,
-    grades_or_prices_the_move,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -69,24 +68,12 @@ def test_aggregate_counts_and_latency() -> None:
     assert stats.latency_mean_s <= stats.latency_p90_s <= stats.latency_max_s
 
 
-def test_aggregate_reports_rates_and_phase_breakdown() -> None:
-    from dataclasses import replace
-
+def test_aggregate_reports_the_phase_breakdown() -> None:
     turns = [
-        replace(
-            _turn(0, PHASE_OPENING, played="Bc4", best="Bc4", feedback="Bc4 eyes the f7 pawn."),
-            prompt="Best move: Bc4, which pressures f7.",
-        ),
-        replace(
-            _turn(
-                2, PHASE_ENDGAME, played="Kg3", best="Kg3", feedback="Focus on king safety.", fidelity={"off_menu": 1}
-            ),
-            prompt="Best move: Kg3.",
-        ),
+        _turn(0, PHASE_OPENING, played="Bc4", best="Bc4", feedback="Bc4 eyes the f7 pawn."),
+        _turn(2, PHASE_ENDGAME, played="Kg3", best="Kg3", feedback="Focus on king safety.", fidelity={"off_menu": 1}),
     ]
     stats = aggregate_review(turns)
-    assert stats.composed_fact_rate == 0.5  # only the first names a square we supplied
-    assert stats.unsourced_square_rate == 0.0
     assert stats.fidelity_by_phase == {PHASE_ENDGAME: {"off_menu": 1}}
 
 
@@ -102,8 +89,6 @@ def test_stats_round_trip_keeps_every_metric() -> None:
     ]
     original = aggregate_review(turns)
     restored = ReviewStats.from_dict(original.to_dict())
-    assert restored.composed_fact_rate == original.composed_fact_rate
-    assert restored.unsourced_square_rate == original.unsourced_square_rate
     assert restored.fidelity_by_phase == original.fidelity_by_phase
     assert restored.prompt_uci_leaks == original.prompt_uci_leaks
     assert restored.to_dict() == original.to_dict()
@@ -207,245 +192,20 @@ def test_unknown_rubric_is_rejected() -> None:
         build_coach_review_prompt(turns, aggregate_review(turns), rubric="v3")
 
 
-def test_square_detection_sees_squares_inside_san_tokens() -> None:
-    # Regression: `\b[a-h][1-8]\b` found NO square in "Ra8#", "Rxc8#", "Nf3" or
-    # "cxd5" — the leading piece/file letter kills the word boundary. That broke
-    # both metrics silently: coaching that named a square only in SAN was scored
-    # as naming none, and `is_specific`'s discount set (built from the move SANs)
-    # was empty for every piece move, so it discounted nothing and over-credited.
-    from chess_coach.eval.coach_review import _SQUARE_RE
-
-    assert _SQUARE_RE.findall("The best move is Ra8#, delivering mate") == ["a8"]
-    assert _SQUARE_RE.findall("Rxc8# exploits the back rank") == ["c8"]
-    assert _SQUARE_RE.findall("Nf3 develops toward the center") == ["f3"]
-    assert _SQUARE_RE.findall("cxd5 wins a pawn") == ["d5"]
-    assert _SQUARE_RE.findall("your rook on a1 can move to a8") == ["a1", "a8"]
-    assert _SQUARE_RE.findall("e8=Q promotes") == ["e8"]
-    # Disambiguated SAN, where a file or rank precedes the destination square.
-    # A tighter lookbehind attempt rejected these, which cost 1.1% of all legal
-    # moves — and these forms really do occur in the coach's output ("Nfg4",
-    # "Rae1+", "Rgg1").
-    assert _SQUARE_RE.findall("the opponent plays Nfg4") == ["g4"]
-    assert _SQUARE_RE.findall("Rae1+ is a strong choice") == ["e1"]
-    assert _SQUARE_RE.findall("R1e2 holds the rank") == ["e2"]
-    # Not a square reference: a file name, and the second half of a coordinate
-    # pair (so a UCI token still reads as one square, not two).
-    assert _SQUARE_RE.findall("the a-file is open") == []
-    assert _SQUARE_RE.findall("f6g4") == ["f6"]
-
-
-def test_square_detection_covers_every_legal_san() -> None:
-    # The property the regex has to hold, checked against the move generator
-    # rather than against hand-picked strings. Two earlier versions passed
-    # eyeball tests and still missed 76.1% and 1.1% of legal moves respectively.
-    import chess
-
-    from chess_coach.eval.coach_review import _SQUARE_RE
-
-    board = chess.Board()
-    for uci in ("e4", "e5", "Nf3", "Nc6", "Bb5", "Nf6", "d4", "exd4", "e5", "Nd5"):
-        board.push_san(uci)
-    for move in board.legal_moves:
-        san = board.san(move)
-        if san.startswith("O-O"):  # castling names no square, by design
-            continue
-        assert chess.square_name(move.to_square) in _SQUARE_RE.findall(san), san
-
-
-def test_squares_named_only_by_the_moves_are_discounted() -> None:
-    # The point of the discount: repeating the move you were handed says nothing
-    # about the position. This could not have passed before the regex fix, because
-    # "Ra8#" contributed nothing to either side of the comparison.
-    from chess_coach.eval.coach_review import _extra_squares
-
-    echo = _turn(0, PHASE_ENDGAME, played="Rb8", best="Ra8", feedback="Ra8 is better than Rb8.")
-    assert _extra_squares(echo) == set()
-    beyond = _turn(0, PHASE_ENDGAME, played="Rb8", best="Ra8", feedback="Ra8 mates; your king on g1 is safe.")
-    assert _extra_squares(beyond) == {"g1"}
-
-
-def test_composed_fact_and_unsourced_square_split_specificity() -> None:
-    from dataclasses import replace
-
-    from chess_coach.eval.coach_review import names_unsourced_square, voices_composed_fact
-
-    prompt = "Best move: Be2. What the best move achieves: defending your knight on d4."
-    # Voicing a square we supplied: the architecture working as intended.
-    voiced = _turn(0, PHASE_OPENING, played="Bc4", best="Be2", feedback="Be2 defends your knight on d4.")
-    voiced = replace(voiced, prompt=prompt)
-    assert voices_composed_fact(voiced)
-    assert not names_unsourced_square(voiced)
-
-    # A square we never mentioned: where fabrication would show up.
-    invented = _turn(0, PHASE_OPENING, played="Bc4", best="Be2", feedback="Be2 covers the h7 square.")
-    invented = replace(invented, prompt=prompt)
-    assert names_unsourced_square(invented)
-    assert not voices_composed_fact(invented)
-
-    # Echoing only the moves counts as neither.
-    echo = _turn(0, PHASE_OPENING, played="Bc4", best="Be2", feedback="Be2 is better than Bc4.")
-    echo = replace(echo, prompt=prompt)
-    assert not voices_composed_fact(echo)
-    assert not names_unsourced_square(echo)
-
-    # No captured prompt means the question cannot be answered, so neither fires.
-    assert not voices_composed_fact(_turn(0, PHASE_OPENING, feedback="Be2 defends the knight on d4."))
-
-
-def test_stats_block_tells_the_reviewer_which_direction_is_good() -> None:
-    # Regression: labelled neutrally, "names a square we did not supply: 0%" was
-    # read by a frontier reviewer as the coach being blind to the position, and it
-    # built its top recommendation on that misreading — when 0% is the intended
-    # result. A metric handed over without its sign invites the wrong conclusion.
-    from chess_coach.eval.coach_review import build_coach_review_prompt
-
-    turns = [_turn(0, PHASE_OPENING, played="Bc4", best="Bc4", feedback="Bc4 eyes f7.")]
-    prompt = build_coach_review_prompt(turns, aggregate_review(turns))
-    assert "HIGHER IS BETTER" in prompt
-    assert "LOWER IS BETTER" in prompt
-    assert "not a weakness" in prompt
-
-
-def test_recycled_phrasing_is_zero_for_fresh_wording() -> None:
-    from chess_coach.eval.coach_review import recycled_phrase_rates
-
-    turns = [
-        _turn(0, PHASE_OPENING, feedback="Your knight on b1 has nowhere useful to go yet."),
-        _turn(2, PHASE_OPENING, feedback="Trading the bishop pair away hands over long-term pressure."),
-        _turn(4, PHASE_OPENING, feedback="A rook belongs behind the passed pawn, escorting it forward."),
-    ]
-    assert recycled_phrase_rates(turns) == [0.0, 0.0, 0.0]
-
-
-def test_recycled_phrasing_catches_a_verbatim_repeat() -> None:
-    from chess_coach.eval.coach_review import recycled_phrase_rates
-
-    line = "Next time you see an undefended piece, ask yourself whether you can attack it."
-    rates = recycled_phrase_rates([_turn(i, PHASE_OPENING, feedback=line) for i in range(3)])
-    assert rates[0] == 0.0  # nothing to repeat yet
-    assert rates[1] == 1.0  # every phrase seen before
-    assert rates[2] == 1.0
-
-
-def test_recycled_phrasing_is_partial_for_a_shared_template() -> None:
-    # The real failure mode: a fresh first clause bolted onto the same closing
-    # maxim. Neither 0 nor 1 — it should land in between.
-    from chess_coach.eval.coach_review import recycled_phrase_rates
-
-    hook = " Next time you see an undefended piece, ask yourself whether you can attack it first."
-    turns = [
-        _turn(0, PHASE_OPENING, feedback="Bc4 pressures f7 and opens the way to castle." + hook),
-        _turn(2, PHASE_MIDDLEGAME, feedback="Rd1 lines the rook up against the queen on d8." + hook),
-    ]
-    rate = recycled_phrase_rates(turns)[1]
-    assert 0.2 < rate < 0.9, rate
-
-
-def test_repetition_metrics_survive_the_round_trip() -> None:
-    from chess_coach.eval.coach_review import ReviewStats
-
-    hook = "Next time you see an undefended piece, ask yourself whether you can attack it."
-    turns = [_turn(i, PHASE_OPENING, feedback=f"Move {i}. {hook}") for i in range(3)]
-    original = aggregate_review(turns)
-    assert original.recycled_phrase_rate > 0
-    restored = ReviewStats.from_dict(original.to_dict())
-    # to_dict rounds to 4 decimal places, so the trip is lossy by design.
-    assert restored.recycled_phrase_rate == round(original.recycled_phrase_rate, 4)
-    assert restored.to_dict() == original.to_dict()
-
-
-# ---------------------------------------------------------------------------
-# grades_or_priced: the falsifier for "stop asserting magnitude"
-# ---------------------------------------------------------------------------
-#
-# This metric exists to be able to say the change FAILED, so it is worth more scrutiny
-# than most. Two earlier metrics in this module were deleted for being unable to fail:
-# `principle_connection_rate` passed on all 44 real responses and on prose written
-# specifically to break it, and an earlier lesson-concentration design was rebuilt
-# three times. A counter that only ever reports 0 is worse than no counter, because
-# someone will cite it. So both halves are pinned: the sentences it must catch, and
-# the coaching it must not flag.
-
-
-@pytest.mark.parametrize(
-    "feedback",
-    [
-        # The grade, in the forms the coach actually used before this change.
-        "That was a blunder — you left the knight on g5.",
-        "That was a serious mistake.",
-        "That's a small inaccuracy.",
-        "This is an inaccuracy, not a disaster.",
-        "It was a mistake to move the rook.",
-        # A grade with hedging words in between.
-        "That was really quite a bad blunder.",
-        # The price, in every unit it appeared in.
-        "The evaluation drop was 90 centipawns.",
-        "It costs about 2.0 pawns.",
-        "You lost about 1.2 pawns of advantage.",
-        "That drops 140 cp.",
-    ],
-)
-def test_grades_or_prices_catches_what_it_must(feedback: str) -> None:
-    assert grades_or_prices_the_move(_turn(1, PHASE_MIDDLEGAME, feedback=feedback)) is True
-
-
-@pytest.mark.parametrize(
-    "feedback",
-    [
-        # The replacement shape: a stronger move plus what it does. No grade, no price.
-        "There was a stronger move here. Nd5 hits the bishop on b4.",
-        "Good move. It develops the knight and takes aim at d5.",
-        # Board facts that mention pawns without pricing anything — the case a
-        # digits-only pattern would have flagged and the reason this is anchored on
-        # units and grammar instead.
-        "Your pawn on e4 is undefended.",
-        "You have 3 pawns on the queenside and the opponent has 2.",
-        # A square name immediately before the word "pawn". THE bug in the first
-        # version of this metric: the rank digit reads as a quantity, so these three
-        # real v32 turns were reported as pricing the move when none of them did.
-        "The better move was exd4, gaining a strong central e5 pawn.",
-        "Your a2 pawn is isolated, so keeping your king safe matters.",
-        "The stronger option was Rxh7, capturing the h7 pawn.",
-        # A whole number of pawns is a material count, not a price.
-        "Rxh7 wins 2 pawns and opens the file.",
-        "After your move the opponent plays Bb7+, winning your rook on a8.",
-        # "blunder" in a legitimate warning about a square, not a verdict on the move.
-        "Careful — that square invites a blunder later on.",
-        "Counting defenders first is how you avoid a blunder like that.",
-        # The composed takeaway.
-        "Worth remembering: count the defenders before you capture.",
-        "",
-    ],
-)
-def test_grades_or_prices_does_not_flag_ordinary_coaching(feedback: str) -> None:
-    assert grades_or_prices_the_move(_turn(1, PHASE_MIDDLEGAME, feedback=feedback)) is False
-
-
-def test_aggregate_reports_graded_and_prompt_magnitude_counts() -> None:
+def test_aggregate_reports_prompt_magnitude_leaks() -> None:
+    # Reads OUR prompt, not the coach's words, so it stays (B-021).
     turns = [
         _turn(1, PHASE_MIDDLEGAME, feedback="There was a stronger move here."),
-        _turn(2, PHASE_MIDDLEGAME, feedback="That was a blunder."),
-        _turn(3, PHASE_MIDDLEGAME, feedback="It costs about 1.5 pawns."),
+        _turn(2, PHASE_MIDDLEGAME, feedback="Nd5 hits the bishop."),
     ]
-    # One prompt still carrying a magnitude; the others clean.
+    # One prompt still carrying a magnitude; the other clean.
     turns[0] = dataclasses.replace(turns[0], prompt="Best move: Nd5\nEvaluation drop: 90 centipawns")
     turns[1] = dataclasses.replace(turns[1], prompt="Best move: Nd5")
     stats = aggregate_review(turns)
-    assert stats.graded_or_priced == 2
     assert stats.prompt_magnitude_leaks == 1
-    # Both survive a serialization round-trip: the from_dict path silently dropped
-    # newer fields once already, and a reviewer was then shown 0 for a real number.
-    assert ReviewStats.from_dict(stats.to_dict()).graded_or_priced == 2
+    # Survives a serialization round-trip: the from_dict path silently dropped newer fields
+    # once already, and a reviewer was then shown 0 for a real number.
     assert ReviewStats.from_dict(stats.to_dict()).prompt_magnitude_leaks == 1
-
-
-def test_stats_block_states_which_direction_is_good() -> None:
-    # A number handed to a reviewer without its sign is an invitation to misread it,
-    # which is exactly what happened with the composed-fact rate (ledger row 17).
-    stats = aggregate_review([_turn(1, PHASE_MIDDLEGAME, feedback="That was a blunder.")])
-    block = build_coach_review_prompt([_turn(1, PHASE_MIDDLEGAME)], stats)
-    assert "grading the move or pricing it (should be 0): 1" in block
-    assert "LOWER IS BETTER" in block
 
 
 # ---------------------------------------------------------------------------
@@ -509,4 +269,59 @@ def test_no_judge_surface_shows_a_lesson_repetition_figure() -> None:
         assert "recurring lessons" not in low, f"{name} still shows the lesson-concentration line"
         assert "count it by hand" not in low, f"{name} still tells the judge not to count"
         # Guard against fixing this by blanking the whole block: the other stats must survive.
-        assert "Recycled phrasing:" in prompt, f"{name} lost the rest of the stats block"
+        assert "Prompts still containing raw UCI" in prompt, f"{name} lost the rest of the stats block"
+
+
+# ---------------------------------------------------------------------------
+# B-021: the judge is not shown numbers our Python got by matching the coach's words
+# ---------------------------------------------------------------------------
+
+_V62_SEED23 = REPO / "output" / "coach_review_v62_seed23" / "transcript.json"
+
+#: The lines removed (owner's approval, 2026-10-19), each computed by matching the coach's words;
+#: the checker's violation count renders as two of them, total and by phase. On v62 seed 23 the
+#: first read "none" while the judge's claim reading found 2 of the 20 replies false, one of them
+#: "allowing Black to capture it with Kf8", which captures nothing.
+_WORD_MATCHED_LINES = (
+    "Deterministic fidelity violations:",
+    "Fidelity by phase:",
+    "Turns voicing a board fact we composed",
+    "Turns naming a square we never supplied",
+    "Recycled phrasing:",
+    "Turns grading the move or pricing it",
+)
+
+#: Lines that read our own prompt or plain counts, and stay.
+_KEPT_LINES = (
+    "Coached moves:",
+    "Phase coverage:",
+    "Move quality (engine):",
+    "Empty feedback turns:",
+    "Prompts still containing raw UCI (should be 0):",
+    "Prompts still containing an eval magnitude (should be 0):",
+    "Generation latency (s):",
+)
+
+
+@pytest.mark.skipif(not _V62_SEED23.exists(), reason="committed v62 seed-23 transcript absent")
+def test_no_judge_surface_shows_a_number_got_by_matching_the_coachs_words() -> None:
+    """Every surface that renders the stats block, including the two that read STORED stats."""
+    data = json.loads(_V62_SEED23.read_text(encoding="utf-8"))
+    rejudge_turns, rejudge_stats = _load_rejudge_script()._load(_V62_SEED23)
+    surfaces = {
+        "report card": build_coach_review_prompt(rejudge_turns, aggregate_review(rejudge_turns)),
+        "re-judge": build_coach_review_prompt(rejudge_turns, rejudge_stats),
+        "architecture review": build_architecture_review_prompt(
+            architecture="-",
+            constraints="-",
+            lever_log="-",
+            sample_prompt="-",
+            sample_turns=rejudge_turns[:3],
+            stats=ReviewStats.from_dict(data["stats"]),
+        ),
+    }
+    for name, prompt in surfaces.items():
+        for line in _WORD_MATCHED_LINES:
+            assert line not in prompt, f"{name} still shows {line!r}"
+        for line in _KEPT_LINES:
+            assert line in prompt, f"{name} lost {line!r}, which reads our prompt and stays"

@@ -1,119 +1,119 @@
-run	group	detector	model	seed	opening	engine_sha	plies	spoke	spoke_pct_of_plies	read	true_pct	false_replies	checker_passed_pct	gate_false_accept	gate_false_reject	cause_given_pct	reason_reached_pct	cue_stated_pct	intent	intent_pct_of_spoken	number	number_pct_of_spoken	words_per_turn	lesson_conc_pct	lesson_open	lesson_open_pct_of_spoken
-v2	history	2		7	standard start		44	44	100				93			0							71		0	0
-v3	history	2		7	standard start		44	44	100				95			0							70		0	0
-v4	history	2		7	standard start		44	44	100				93			0							58		0	0
-v5	history	2		7	standard start		44	44	100				91			0							47		0	0
-v6	history	2		7	standard start		44	44	100				84			0							48		0	0
-v7	history	2		7	standard start		44	44	100				84			0							48		0	0
-v8	history	2		7	standard start		44	44	100				84			0							47		0	0
-v9	history	2		7	standard start		44	44	100				84			0							49		0	0
-v10	history	2		7	standard start		44	44	100				86			0							48		0	0
-v11	history	2		7	standard start		44	44	100				89			0							49		0	0
-v12	history	2		7	standard start		44	44	100				93			0							55		0	0
-v13	history	2		7	standard start		44	44	100				93			0							55		44	100
-v14	history	2		7	standard start		44	44	100				93			0							55		44	100
-v15	history	2		7	standard start		44	44	100				84			0							55		44	100
-v16	history	2		7	standard start		44	44	100				84			0							54		44	100
-v17	history	2		7	standard start		44	44	100				91			0							56		44	100
-v18	history	2		7	standard start		44	44	100				89			0							54		44	100
-v19	history	2		7	standard start		44	44	100				86			0							53		44	100
-v20	history	2		7	standard start		44	44	100				80			0							54		44	100
-v21	history	2		7	standard start		44	44	100				91			0							56		44	100
-v22	history	2		7	standard start		44	44	100				89			0							56	23	5	11
-v23	history	2		7	standard start		44	44	100				89			0							55	18	5	11
-v24	history	2		7	standard start		44	44	100				86			0							55	18	6	14
-v25	history	2		7	standard start		44	44	100				89			0							55	18	6	14
-v26	history	2		7	standard start		44	44	100				84			0							54	18	6	14
-v27	history	2		7	standard start		44	44	100				86			0							52	19	7	16
-v28	history	2		7	standard start		44	44	100				86			0							52	19	7	16
-v29	history	2		7	standard start		44	44	100				91			0							50	19	7	16
-v30	history	2		7	standard start		44	44	100				95			0							49	19	7	16
-v31	history	2		7	standard start		44	18	41				100			0							56	33	3	17
-v32	history	2		7	standard start		44	12	27				100			0							57	30	2	17
-v33	history	2		7	standard start		44	18	41				89			0							51	33	3	17
-v34	history	2		7	standard start		44	18	41				89			0							51	17	3	17
-v35	history	2		7	standard start		44	18	41				83			0							51	17	3	17
-v36	history	2		7	standard start		44	18	41				89			0							49	17	3	17
-v37	history	2		7	standard start		44	18	41				100			0							50	17	3	17
-v38	history	2		7	standard start		44	18	41				100			0							51	17	3	17
-v39	history	2		7	standard start		44	18	41				100			11							53	17	3	17
-v40	history	2		7	standard start		44	18	41				94			6							47	17	3	17
-v41	history	2		7	standard start		44	18	41				94			72							57	17	3	17
-v42	history	2		7	standard start		44	18	41				100			72							48	17	3	17
-v43	history	2		7	standard start		44	18	41				100			72							53	14	2	11
-v44	history	2		7	standard start		44	18	41				89			72							33	14	2	11
-v48	history	2		7	standard start		44	18	41				100			72							64	14	2	11
-v49	history	2		7	standard start		44	18	41				100			56							50	14	2	11
-v50	history	2		7	standard start		44	18	41				100			56							60	14	2	11
-v51	history	2		7	standard start		44	18	41				100			56							66	14	2	11
-v52	history	2		7	standard start		44	18	41				100			72							66	14	2	11
-v53_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							60	12	0	0
-v53_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							73	12	0	0
-v53_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				89			63							65	12	3	16
-v53_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			90							62	10	0	0
-v53_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							63	12	2	11
-v54_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							62	12	0	0
-v54_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							72	12	0	0
-v54_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				95			63							65	12	3	16
-v54_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			90							65	10	0	0
-v54_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							62	12	2	11
-v55_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							62	12	0	0
-v55_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							72	12	0	0
-v55_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				95			63							64	12	3	16
-v55_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			75							65	10	0	0
-v55_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							62	12	2	11
-v56_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							62	12	0	0
-v56_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							64	12	0	0
-v56_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				95			63							62	12	3	16
-v56_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			75							61	10	0	0
-v56_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							59	12	2	11
-v57_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							62	12	0	0
-v57_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							64	12	0	0
-v57_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				95			63							61	12	3	16
-v57_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			75							61	10	0	0
-v57_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							59	12	2	11
-v58_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							62	12	0	0
-v58_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							57	12	0	0
-v58_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				95			63							59	12	3	16
-v58_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			75							54	10	0	0
-v58_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							56	12	2	11
-v59_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							62	12	0	0
-v59_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							57	12	0	0
-v59_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				95			63							60	12	3	16
-v59_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			75							56	10	0	0
-v59_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							58	12	2	11
-v60_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							63	12	0	0
-v60_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							54	13	0	0
-v60_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				100			63							61	12	3	16
-v60_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			75							56	15	0	0
-v60_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							54	14	2	11
-v61_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							63	12	0	0
-v61_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							52	13	0	0
-v61_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				100			63							60	12	3	16
-v61_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			75							56	15	0	0
-v61_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							55	14	2	11
-v62_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35	8	100	0	100	0/1	0/7	75	100	100	0	0	0	0	63	12	0	0
-v62_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64	16	94	1	100	1/4	1/13	69	82	88	0	0	0	0	52	13	0	0
-v62_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37	19	95	1	100	1/2	0/17	63	100	95	0	0	0	0	60	12	3	16
-v62_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50	20	90	2	100	2/5	0/15	75	100	100	0	0	0	0	56	15	0	0
-v62_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41	18	94	1	100	1/2	0/16	72	100	100	0	0	0	0	55	14	2	11
-gemma12_seed11	matrix	2	gemma4:12b-it-qat	11	Italian	29cc3f3a751b	23	8	35				100			75							86	12	0	0
-gemma12_seed13	matrix	2	gemma4:12b-it-qat	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							92	31	0	0
-gemma12_seed17	matrix	2	gemma4:12b-it-qat	17	Sicilian	29cc3f3a751b	51	19	37				100			63							76	12	3	16
-gemma12_seed23	matrix	2	gemma4:12b-it-qat	23	French	29cc3f3a751b	40	20	50				100			90							79	15	0	0
-gemma12_seed7	matrix	2	gemma4:12b-it-qat	7	standard start	29cc3f3a751b	44	18	41				100			72							79	25	2	11
-hermes8_seed11	matrix	2	hermes3:8b	11	Italian	29cc3f3a751b	23	8	35				100			75							144	12	0	0
-hermes8_seed13	matrix	2	hermes3:8b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							181	31	0	0
-hermes8_seed17	matrix	2	hermes3:8b	17	Sicilian	29cc3f3a751b	51	19	37				95			63							134	12	3	16
-hermes8_seed23	matrix	2	hermes3:8b	23	French	29cc3f3a751b	40	20	50				100			90							142	15	0	0
-hermes8_seed7	matrix	2	hermes3:8b	7	standard start	29cc3f3a751b	44	18	41				100			72							100	25	2	11
-qwen14_seed11	matrix	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35				100			75							60	12	0	0
-qwen14_seed13	matrix	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							71	31	0	0
-qwen14_seed17	matrix	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37				89			63							65	12	3	16
-qwen14_seed23	matrix	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50				100			90							61	15	0	0
-qwen14_seed7	matrix	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41				100			72							62	25	2	11
-qwen8_seed11	matrix	2	qwen3:8b	11	Italian	29cc3f3a751b	23	8	35				100			75							76	12	0	0
-qwen8_seed13	matrix	2	qwen3:8b	13	Queen's Gambit	29cc3f3a751b	25	16	64				100			69							76	31	0	0
-qwen8_seed17	matrix	2	qwen3:8b	17	Sicilian	29cc3f3a751b	51	19	37				95			63							68	12	3	16
-qwen8_seed23	matrix	2	qwen3:8b	23	French	29cc3f3a751b	40	20	50				100			90							70	15	0	0
-qwen8_seed7	matrix	2	qwen3:8b	7	standard start	29cc3f3a751b	44	18	41				100			72							73	25	2	11
+run	group	detector	model	seed	opening	engine_sha	plies	spoke	spoke_pct_of_plies	read	found_false_pct	checker_passed_pct	gate_false_accept	gate_false_reject	cause_given_pct	reason_reached_pct	cue_stated_pct	intent	intent_pct_of_spoken	number	number_pct_of_spoken	words_per_turn	lesson_conc_pct	lesson_open	lesson_open_pct_of_spoken
+v2	history	2		7	standard start		44	44	100			93			0							71		0	0
+v3	history	2		7	standard start		44	44	100			95			0							70		0	0
+v4	history	2		7	standard start		44	44	100			93			0							58		0	0
+v5	history	2		7	standard start		44	44	100			91			0							47		0	0
+v6	history	2		7	standard start		44	44	100			84			0							48		0	0
+v7	history	2		7	standard start		44	44	100			84			0							48		0	0
+v8	history	2		7	standard start		44	44	100			84			0							47		0	0
+v9	history	2		7	standard start		44	44	100			84			0							49		0	0
+v10	history	2		7	standard start		44	44	100			86			0							48		0	0
+v11	history	2		7	standard start		44	44	100			89			0							49		0	0
+v12	history	2		7	standard start		44	44	100			93			0							55		0	0
+v13	history	2		7	standard start		44	44	100			93			0							55		44	100
+v14	history	2		7	standard start		44	44	100			93			0							55		44	100
+v15	history	2		7	standard start		44	44	100			84			0							55		44	100
+v16	history	2		7	standard start		44	44	100			84			0							54		44	100
+v17	history	2		7	standard start		44	44	100			91			0							56		44	100
+v18	history	2		7	standard start		44	44	100			89			0							54		44	100
+v19	history	2		7	standard start		44	44	100			86			0							53		44	100
+v20	history	2		7	standard start		44	44	100			80			0							54		44	100
+v21	history	2		7	standard start		44	44	100			91			0							56		44	100
+v22	history	2		7	standard start		44	44	100			89			0							56	23	5	11
+v23	history	2		7	standard start		44	44	100			89			0							55	18	5	11
+v24	history	2		7	standard start		44	44	100			86			0							55	18	6	14
+v25	history	2		7	standard start		44	44	100			89			0							55	18	6	14
+v26	history	2		7	standard start		44	44	100			84			0							54	18	6	14
+v27	history	2		7	standard start		44	44	100			86			0							52	19	7	16
+v28	history	2		7	standard start		44	44	100			86			0							52	19	7	16
+v29	history	2		7	standard start		44	44	100			91			0							50	19	7	16
+v30	history	2		7	standard start		44	44	100			95			0							49	19	7	16
+v31	history	2		7	standard start		44	18	41			100			0							56	33	3	17
+v32	history	2		7	standard start		44	12	27			100			0							57	30	2	17
+v33	history	2		7	standard start		44	18	41			89			0							51	33	3	17
+v34	history	2		7	standard start		44	18	41			89			0							51	17	3	17
+v35	history	2		7	standard start		44	18	41			83			0							51	17	3	17
+v36	history	2		7	standard start		44	18	41			89			0							49	17	3	17
+v37	history	2		7	standard start		44	18	41			100			0							50	17	3	17
+v38	history	2		7	standard start		44	18	41			100			0							51	17	3	17
+v39	history	2		7	standard start		44	18	41			100			11							53	17	3	17
+v40	history	2		7	standard start		44	18	41			94			6							47	17	3	17
+v41	history	2		7	standard start		44	18	41			94			72							57	17	3	17
+v42	history	2		7	standard start		44	18	41			100			72							48	17	3	17
+v43	history	2		7	standard start		44	18	41			100			72							53	14	2	11
+v44	history	2		7	standard start		44	18	41			89			72							33	14	2	11
+v48	history	2		7	standard start		44	18	41			100			72							64	14	2	11
+v49	history	2		7	standard start		44	18	41			100			56							50	14	2	11
+v50	history	2		7	standard start		44	18	41			100			56							60	14	2	11
+v51	history	2		7	standard start		44	18	41			100			56							66	14	2	11
+v52	history	2		7	standard start		44	18	41			100			72							66	14	2	11
+v53_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							60	12	0	0
+v53_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							73	12	0	0
+v53_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			89			63							65	12	3	16
+v53_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			90							62	10	0	0
+v53_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							63	12	2	11
+v54_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							62	12	0	0
+v54_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							72	12	0	0
+v54_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			95			63							65	12	3	16
+v54_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			90							65	10	0	0
+v54_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							62	12	2	11
+v55_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							62	12	0	0
+v55_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							72	12	0	0
+v55_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			95			63							64	12	3	16
+v55_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			75							65	10	0	0
+v55_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							62	12	2	11
+v56_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							62	12	0	0
+v56_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							64	12	0	0
+v56_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			95			63							62	12	3	16
+v56_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			75							61	10	0	0
+v56_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							59	12	2	11
+v57_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							62	12	0	0
+v57_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							64	12	0	0
+v57_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			95			63							61	12	3	16
+v57_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			75							61	10	0	0
+v57_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							59	12	2	11
+v58_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							62	12	0	0
+v58_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							57	12	0	0
+v58_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			95			63							59	12	3	16
+v58_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			75							54	10	0	0
+v58_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							56	12	2	11
+v59_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							62	12	0	0
+v59_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							57	12	0	0
+v59_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			95			63							60	12	3	16
+v59_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			75							56	10	0	0
+v59_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							58	12	2	11
+v60_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							63	12	0	0
+v60_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							54	13	0	0
+v60_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			100			63							61	12	3	16
+v60_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			75							56	15	0	0
+v60_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							54	14	2	11
+v61_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							63	12	0	0
+v61_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							52	13	0	0
+v61_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			100			63							60	12	3	16
+v61_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			75							56	15	0	0
+v61_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							55	14	2	11
+v62_seed11	history	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35	8	0	100	0/1	0/7	75	100	100	0	0	0	0	63	12	0	0
+v62_seed13	history	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64	16	6	100	1/4	1/13	69	82	88	0	0	0	0	52	13	0	0
+v62_seed17	history	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37	19	5	100	1/2	0/17	63	100	95	0	0	0	0	60	12	3	16
+v62_seed23	history	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50	20	10	100	2/5	0/15	75	100	100	0	0	0	0	56	15	0	0
+v62_seed7	history	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41	18	6	100	1/2	0/16	72	100	100	0	0	0	0	55	14	2	11
+gemma12_seed11	matrix	2	gemma4:12b-it-qat	11	Italian	29cc3f3a751b	23	8	35			100			75							86	12	0	0
+gemma12_seed13	matrix	2	gemma4:12b-it-qat	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							92	31	0	0
+gemma12_seed17	matrix	2	gemma4:12b-it-qat	17	Sicilian	29cc3f3a751b	51	19	37			100			63							76	12	3	16
+gemma12_seed23	matrix	2	gemma4:12b-it-qat	23	French	29cc3f3a751b	40	20	50			100			90							79	15	0	0
+gemma12_seed7	matrix	2	gemma4:12b-it-qat	7	standard start	29cc3f3a751b	44	18	41			100			72							79	25	2	11
+hermes8_seed11	matrix	2	hermes3:8b	11	Italian	29cc3f3a751b	23	8	35			100			75							144	12	0	0
+hermes8_seed13	matrix	2	hermes3:8b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							181	31	0	0
+hermes8_seed17	matrix	2	hermes3:8b	17	Sicilian	29cc3f3a751b	51	19	37			95			63							134	12	3	16
+hermes8_seed23	matrix	2	hermes3:8b	23	French	29cc3f3a751b	40	20	50			100			90							142	15	0	0
+hermes8_seed7	matrix	2	hermes3:8b	7	standard start	29cc3f3a751b	44	18	41			100			72							100	25	2	11
+qwen14_seed11	matrix	2	qwen3:14b	11	Italian	29cc3f3a751b	23	8	35			100			75							60	12	0	0
+qwen14_seed13	matrix	2	qwen3:14b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							71	31	0	0
+qwen14_seed17	matrix	2	qwen3:14b	17	Sicilian	29cc3f3a751b	51	19	37			89			63							65	12	3	16
+qwen14_seed23	matrix	2	qwen3:14b	23	French	29cc3f3a751b	40	20	50			100			90							61	15	0	0
+qwen14_seed7	matrix	2	qwen3:14b	7	standard start	29cc3f3a751b	44	18	41			100			72							62	25	2	11
+qwen8_seed11	matrix	2	qwen3:8b	11	Italian	29cc3f3a751b	23	8	35			100			75							76	12	0	0
+qwen8_seed13	matrix	2	qwen3:8b	13	Queen's Gambit	29cc3f3a751b	25	16	64			100			69							76	31	0	0
+qwen8_seed17	matrix	2	qwen3:8b	17	Sicilian	29cc3f3a751b	51	19	37			95			63							68	12	3	16
+qwen8_seed23	matrix	2	qwen3:8b	23	French	29cc3f3a751b	40	20	50			100			90							70	15	0	0
+qwen8_seed7	matrix	2	qwen3:8b	7	standard start	29cc3f3a751b	44	18	41			100			72							73	25	2	11

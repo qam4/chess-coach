@@ -46,8 +46,7 @@ def _row(run: str, group: str, **over: Any) -> dict[str, Any]:
         "plies": 44,
         "spoke": 18,
         "read": 18,
-        "true_pct": "100",
-        "false_replies": 0,
+        "found_false_pct": "0",
         "checker_passed_pct": "100",
         "gate_false_accept": "0/0",
         "gate_false_reject": "0/18",
@@ -112,8 +111,8 @@ def test_guard_refuses_to_compare_different_games() -> None:
     """
     mod = _load()
     rows = [
-        _row("v52_seed7", "history", seed=7, true_pct="100"),
-        _row("v53_seed17", "history", seed=17, true_pct="80"),
+        _row("v52_seed7", "history", seed=7, cause_given_pct="100"),
+        _row("v53_seed17", "history", seed=17, cause_given_pct="80"),
     ]
     code, lines = mod.guard(rows)
     assert code == 1
@@ -132,12 +131,26 @@ def test_guard_fails_on_a_real_regression_in_a_paired_cell() -> None:
     """Same seed, same model, temperature 0 — so a difference is the build, not sampling."""
     mod = _load()
     rows = [
-        _row("v52_seed7", "history", seed=7, true_pct="100"),
-        _row("v53_seed7", "history", seed=7, true_pct="88"),
+        _row("v52_seed7", "history", seed=7, cause_given_pct="100"),
+        _row("v53_seed7", "history", seed=7, cause_given_pct="88"),
     ]
     code, lines = mod.guard(rows)
     assert code == 1
-    assert any("FAIL" in ln and "true_pct" in ln for ln in lines)
+    assert any("FAIL" in ln and "cause_given_pct" in ln for ln in lines)
+
+
+def test_more_replies_found_false_is_a_regression() -> None:
+    """The reading can prove a reply false but never prove one true (B-021, 2026-10-19), so the
+    dashboard reports the share FOUND false, a minimum, where lower is better. As a share of the
+    replies read, not a count: replies per game ran 8 to 20 at v62."""
+    mod = _load()
+    rows = [
+        _row("v62_seed23", "history", seed=23, found_false_pct="10"),
+        _row("v63_seed23", "history", seed=23, found_false_pct="15"),
+    ]
+    code, lines = mod.guard(rows)
+    assert code == 1
+    assert any("FAIL" in ln and "found_false_pct" in ln for ln in lines)
 
 
 def test_guard_ignores_an_improvement() -> None:
@@ -158,10 +171,10 @@ def test_several_runs_of_one_version_collapse_to_one_point() -> None:
     row happened to sort last as "now".
     """
     mod = _load()
-    rows = [_row("v52", "history", true_pct="100")]
-    rows += [_row("v53", "history", seed=s, true_pct=c) for s, c in ((7, "100"), (11, "90"), (13, "95"))]
+    rows = [_row("v52", "history", cause_given_pct="100")]
+    rows += [_row("v53", "history", seed=s, cause_given_pct=c) for s, c in ((7, "100"), (11, "90"), (13, "95"))]
 
-    agg = mod._agg(rows, "true_pct")
+    agg = mod._agg(rows, "cause_given_pct")
     assert [a[0] for a in agg] == [52, 53], "one point per version"
     v53 = next(a for a in agg if a[0] == 53)
     assert v53[1] == 95.0  # mean of 100, 90, 95
@@ -176,8 +189,8 @@ def test_a_decline_is_not_reported_as_flat() -> None:
     flattering reading, and flattering-while-blind is the recurring defect in this project.
     """
     mod = _load()
-    rows = [_row("v52", "history", true_pct="100"), _row("v53", "history", true_pct="97")]
-    card = next(c for c in mod.headline(rows) if c["key"] == "true_pct")
+    rows = [_row("v52", "history", cause_given_pct="100"), _row("v53", "history", cause_given_pct="97")]
+    card = next(c for c in mod.headline(rows) if c["key"] == "cause_given_pct")
     assert card["state"] == "worst"
     assert card["better"] is False
     assert card["best"] == 100.0 and card["from_run"] == "v52"
@@ -185,8 +198,8 @@ def test_a_decline_is_not_reported_as_flat() -> None:
 
 def test_the_best_reading_so_far_says_so() -> None:
     mod = _load()
-    rows = [_row("v52", "history", true_pct="90"), _row("v53", "history", true_pct="100")]
-    card = next(c for c in mod.headline(rows) if c["key"] == "true_pct")
+    rows = [_row("v52", "history", cause_given_pct="90"), _row("v53", "history", cause_given_pct="100")]
+    card = next(c for c in mod.headline(rows) if c["key"] == "cause_given_pct")
     assert card["state"] == "best"
     assert card["better"] is True
 
@@ -262,7 +275,7 @@ def test_the_numbers_about_what_the_coach_said_come_from_the_reading_beside_the_
     ehm = mod._hard_metrics()
 
     blank = mod.row_for(run / "transcript.json", ehm)
-    for key in ("read", "true_pct", "false_replies", "reason_reached_pct", "intent_pct_of_spoken", "number"):
+    for key in ("read", "found_false_pct", "reason_reached_pct", "intent_pct_of_spoken", "number"):
         assert blank[key] == "", key
     assert blank["checker_passed_pct"] == "100"
 
@@ -283,8 +296,10 @@ def test_the_numbers_about_what_the_coach_said_come_from_the_reading_beside_the_
     (run / mod.READING).write_text(json.dumps({"numbers": numbers}), encoding="utf-8")
     row = mod.row_for(run / "transcript.json", ehm)
     assert row["read"] == 8
-    assert row["true_pct"] == "88"  # 7 of 8
-    assert row["false_replies"] == 1
+    assert row["found_false_pct"] == "12"  # 1 of 8, a minimum
+    # Neither a "% true" (the reading cannot prove a reply true) nor a raw count (replies per
+    # game vary): B-021, the owner, 2026-10-19.
+    assert "true_pct" not in mod.COLUMNS and "false_replies" not in mod.COLUMNS
     assert row["reason_reached_pct"] == "83"  # 5 of 6
     assert row["gate_false_accept"] == "1/2"
     assert row["gate_false_reject"] == "0/7"

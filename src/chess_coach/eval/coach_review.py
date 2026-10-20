@@ -123,26 +123,13 @@ class ReviewStats:
     in the opening." Whether the coaching actually teaches is what the frontier
     review's written critique is for; a keyword list cannot stand in for it.
 
-    What is left is of two kinds:
-
-    * **Checked against the position.** ``fidelity_totals`` and
-      ``fidelity_by_phase`` come from :mod:`chess_coach.verify`, which pulls move
-      tokens out of the text and parses them against the real board, so it can
-      say the coach was *wrong*. ``prompt_uci_leaks`` checks our own rendered
-      prompt.
-    * **Checked against our own prompt.** ``composed_fact_rate`` and
-      ``unsourced_square_rate``: did the coach name a square we gave it, or one
-      we did not. Both are facts about our data, not guesses about meaning — but
-      neither says whether the sentence around the square is true or worth
-      reading.
-
-    Plus plain counts: ``empty_feedback``, latency, and the phase and move-quality
-    mixes.
-
-    None of these is a target. Every one can be moved by padding the output with
-    square names, which would make the coaching worse while the numbers improved.
-    They anchor the frontier review in facts and catch regressions; a rate that
-    moves is a reason to go and read the output, not a result.
+    What is left reads our own prompt or is a plain count: ``prompt_uci_leaks`` and
+    ``prompt_magnitude_leaks`` check the prompt we rendered, and ``empty_feedback``,
+    latency and the phase and move-quality mixes are counts. ``fidelity_totals`` and
+    ``fidelity_by_phase`` are the live checker's verdict on what shipped, kept as data and not
+    shown to the reviewer. Since B-021 (2026-10-19) nothing here is computed by matching the
+    coach's words: what the coach said is the reviewer's to read and the claim reading's to
+    measure (`chess_coach.eval.claims`).
     """
 
     n_turns: int
@@ -153,45 +140,19 @@ class ReviewStats:
     latency_mean_s: float
     latency_p90_s: float
     latency_max_s: float
-    # Squares the coach names beyond the played and best moves, split by where
-    # they came from. These replaced a single `specificity_rate`, which lumped
-    # them together and so could rise for either a good reason or a bad one.
-    # `composed_fact_rate`: it voiced a square we gave it — the architecture
-    # working as designed (compose the fact, let the model say it).
-    # `unsourced_square_rate`: it named a square that was nowhere in its prompt.
-    # Not automatically wrong, but this is where fabrication would show up.
-    # Both are 0.0 when the transcript did not capture prompts.
-    composed_fact_rate: float = 0.0
-    unsourced_square_rate: float = 0.0
-    # Repetition, the one thing a frontier reviewer has now complained about
-    # twice and counted by hand while we had no measurement for it at all.
-    # `recycled_phrase_rate`: mean share of each turn's five-word windows that
-    # already appeared in an earlier turn (0 = always fresh wording). Measures
-    # repeated WORDING.
-    #
-    # A `lesson_concentration_rate` used to sit beside it, meant to measure repeated
-    # MEANING, and the judge was shown it with "you do not need to count it by hand".
-    # Deleted 2026-10-12 (B-005, ledger row 169). It counted the three commonest
-    # content WORDS of the model's last sentence, over all turns including silent
-    # ones, and an alphabetical tie-break decided which repetition counted. On v54
-    # seed 23 it read 20% and counted none of the four "undefended piece" closings
-    # the review was describing — the review that called it "the number to trust".
-    # The judge counts repeated lessons from the transcript, which all five v54
-    # reviews did anyway. Old transcripts still carry the key; `from_dict` ignores it.
-    recycled_phrase_rate: float = 0.0
-    # Fidelity violations broken down by phase (where to focus composer work).
+    # Removed, all computed by matching the coach's words: `composed_fact_rate` and
+    # `unsourced_square_rate` (squares pulled out of the reply), `recycled_phrase_rate`
+    # (five-word windows of the reply), `graded_or_priced` (grade and price phrases), and
+    # before them `lesson_concentration_rate` (B-005). B-021, 2026-10-19. Old transcripts still
+    # carry the keys; `from_dict` ignores them.
+    # Fidelity violations broken down by phase: the live checker's verdict on what shipped, kept
+    # as data and no longer shown to the reviewer.
     fidelity_by_phase: dict[str, dict[str, int]] = field(default_factory=dict)
     # Turns whose PROMPT still contained a raw UCI token (e.g. "f6g4"). SAN
     # conversion degrades to raw UCI silently when handed the wrong base
     # position; a log warning is not a guard, so this is surfaced in the stats
     # block of every run (and to the frontier reviewer). Should be 0.
     prompt_uci_leaks: int = 0
-    # Turns where the coach pronounced a grade on the move ("that was a blunder") or
-    # put a number on what it cost. Both were withheld from the prompt once the eval
-    # magnitude was measured as indefensible, so a non-zero count here is the model
-    # supplying them out of its own vocabulary — the falsifier for that change rather
-    # than a restatement of it. Should be 0.
-    graded_or_priced: int = 0
     # Turns whose PROMPT still carried an eval magnitude. The same guard one level up:
     # a rendered figure is one f-string from returning, and two of this project's
     # recorded drops turned out to be live on a second path. Should be 0.
@@ -207,12 +168,8 @@ class ReviewStats:
             "latency_mean_s": round(self.latency_mean_s, 2),
             "latency_p90_s": round(self.latency_p90_s, 2),
             "latency_max_s": round(self.latency_max_s, 2),
-            "composed_fact_rate": round(self.composed_fact_rate, 4),
-            "unsourced_square_rate": round(self.unsourced_square_rate, 4),
-            "recycled_phrase_rate": round(self.recycled_phrase_rate, 4),
             "fidelity_by_phase": {k: dict(v) for k, v in self.fidelity_by_phase.items()},
             "prompt_uci_leaks": self.prompt_uci_leaks,
-            "graded_or_priced": self.graded_or_priced,
             "prompt_magnitude_leaks": self.prompt_magnitude_leaks,
         }
 
@@ -236,12 +193,8 @@ class ReviewStats:
             latency_mean_s=d.get("latency_mean_s", 0.0),
             latency_p90_s=d.get("latency_p90_s", 0.0),
             latency_max_s=d.get("latency_max_s", 0.0),
-            composed_fact_rate=d.get("composed_fact_rate", 0.0),
-            unsourced_square_rate=d.get("unsourced_square_rate", 0.0),
-            recycled_phrase_rate=d.get("recycled_phrase_rate", 0.0),
             fidelity_by_phase={k: dict(v) for k, v in (d.get("fidelity_by_phase") or {}).items()},
             prompt_uci_leaks=d.get("prompt_uci_leaks", 0),
-            graded_or_priced=d.get("graded_or_priced", 0),
             prompt_magnitude_leaks=d.get("prompt_magnitude_leaks", 0),
         )
 
@@ -256,25 +209,13 @@ def _percentile(sorted_vals: list[float], pct: float) -> float:
     return sorted_vals[rank]
 
 
-# A square reference (a1..h8) anywhere in the text, INCLUDING inside a SAN token.
-# The single rule is "not the second half of a coordinate pair", so a UCI token
-# like "f6g4" reads as one square rather than two, and everything else matches.
+# REMOVED 2026-10-19 (B-021, the owner's approval): every stat here computed by matching the
+# coach's words — squares pulled out of the reply (composed-fact and unsourced-square rates),
+# five-word windows of the reply (recycled phrasing), and grade or price phrases in the reply.
+# The judge's stats block no longer shows any of them; what the coach SAID is the frontier
+# reviewer's to read, and the claim reading's to measure (`chess_coach.eval.claims`). What is left
+# reads our own prompt.
 #
-# Validated rather than eyeballed: over 128,411 legal-move SANs generated with
-# python-chess across 60 random games, this finds the destination square of every
-# single one. Two earlier attempts did not, which is why the rule is this plain:
-#   `\b[a-h][1-8]\b`                        missed 76.1% — a leading piece or
-#       file letter kills the word boundary, so "Nf3", "Ra8#" and "cxd5" matched
-#       NOTHING. That silently broke both metrics below: coaching that named a
-#       square only in SAN scored as naming none, and `is_specific`'s discount
-#       set (built from the move SANs) was empty for every piece move, so it
-#       discounted nothing and over-credited.
-#   `(?<![a-h])(?<![0-9])[a-h][1-8](?![0-9])`  missed 1.1% — the lookbehinds also
-#       reject disambiguated SAN, where a file or rank precedes the destination:
-#       "Nbd7", "Rae1+", "Rgg1", "R1e2".
-# Known, deliberate gap: castling ("O-O") names no square and so contributes
-# none, in the text or in the discount set.
-_SQUARE_RE = re.compile(r"(?<![a-h][1-8])[a-h][1-8]")
 # A bare UCI move token ("f6g4"): should never appear in a rendered prompt, since
 # every move is meant to be SAN. Detects silent SAN-conversion fallbacks.
 _UCI_TOKEN_RE = re.compile(r"\b[a-h][1-8][a-h][1-8][qrbn]?\b")
@@ -294,51 +235,6 @@ _PROMPT_MAGNITUDE_RE = re.compile(
 # the ReviewStats docstring; that question belongs to the frontier review.
 
 
-#: Length of the word window used to detect recycled phrasing. Five words is long
-#: enough that ordinary chess vocabulary ("your knight on") does not match by
-#: accident, and short enough to catch a reworded template.
-_SHINGLE_N = 5
-
-
-def _normalise_words(text: str) -> list[str]:
-    """Lowercased word list with markdown and punctuation stripped."""
-    return re.findall(r"[a-z0-9]+", text.lower())
-
-
-def _shingles(text: str, n: int = _SHINGLE_N) -> set[str]:
-    """The set of n-word windows in ``text``."""
-    words = _normalise_words(text)
-    if len(words) < n:
-        return {" ".join(words)} if words else set()
-    return {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
-
-
-def recycled_phrase_rates(turns: list[ReviewTurn]) -> list[float]:
-    """Per turn: the fraction of its phrasing that already appeared earlier.
-
-    Answers the complaint a frontier reviewer raised twice and counted by hand —
-    that the coaching is "wallpaper", the same few sentences regardless of the
-    position. For each turn, what share of its five-word windows occurred in any
-    PREVIOUS turn: 0.0 is all fresh wording, 1.0 is a verbatim rehash. The first
-    turn has nothing to repeat and is always 0.0.
-
-    Deterministic, needs no model, and unlike the square-based screens it cannot
-    be improved by padding the output with board references. It IS gameable by
-    padding with *novel* words, so read it next to the word-count limits rather
-    than alone.
-    """
-    seen: set[str] = set()
-    rates: list[float] = []
-    for turn in turns:
-        current = _shingles(turn.coach_feedback)
-        if not current:
-            rates.append(0.0)
-            continue
-        rates.append(len(current & seen) / len(current) if seen else 0.0)
-        seen |= current
-    return rates
-
-
 # No repeated-LESSON counter lives here any more, and none should be rebuilt over the
 # model's wording. Counting distinct closing sentences saturated at 95-100% and was
 # deleted; `lesson_concentration`, the three commonest content words of the last
@@ -346,101 +242,6 @@ def recycled_phrase_rates(turns: list[ReviewTurn]) -> list[float]:
 # review that called it "the number to trust". What WE composed is counted exactly by
 # `scripts/eval_hard_metrics.py` (`lesson_conc_pct`); what the student actually read is
 # the reviewer's to count from the transcript.
-
-
-def _extra_squares(turn: ReviewTurn) -> set[str]:
-    """Squares the response names beyond the played and best moves.
-
-    Discounting the two moves is the point: repeating the move you were handed is
-    not saying anything about the position.
-    """
-    text = turn.coach_feedback
-    if not text.strip():
-        return set()
-    own = {s.lower() for s in _SQUARE_RE.findall(turn.student_move_san + " " + turn.best_move_san)}
-    return {s.lower() for s in _SQUARE_RE.findall(text)} - own
-
-
-def voices_composed_fact(turn: ReviewTurn) -> bool:
-    """True if the coach voiced a square we put in its prompt.
-
-    This is the architecture working as intended — compose the fact, let the
-    model say it — so this is the rate worth watching. Needs a captured prompt;
-    without one it cannot be judged and returns False.
-    """
-    if not turn.prompt:
-        return False
-    prompt = turn.prompt.lower()
-    return any(sq in prompt for sq in _extra_squares(turn))
-
-
-def names_unsourced_square(turn: ReviewTurn) -> bool:
-    """True if the coach named a square that was NOT anywhere in its prompt.
-
-    Not automatically wrong — the model can legitimately read the board
-    description — but this is where fabrication would surface, so it belongs
-    beside the fidelity counts rather than among the prose metrics. Measured at
-    1 turn in 44 on v19.
-    """
-    if not turn.prompt:
-        return False
-    prompt = turn.prompt.lower()
-    return any(sq not in prompt for sq in _extra_squares(turn))
-
-
-# A grade pronounced on the move, or a price put on it. The prompt no longer supplies
-# either, so anything matching here came out of the model's own vocabulary.
-#
-# Grade words are matched only where they describe the MOVE ("that was a blunder",
-# "this is an inaccuracy"), not in general chess talk, because "a blunder" can appear
-# in a legitimate warning ("that square invites a blunder"). The price patterns are
-# unambiguous: a centipawn figure or a pawn-valued cost has no innocent reading in
-# coaching text.
-#
-# Shape: a subject pronoun, a copula (including the contraction), then up to four
-# filler words before the grade word. The copula is what keeps it honest — "that
-# square invites a blunder" is a warning about a square and has none, while "that
-# was a blunder" is a verdict on the move and does.
-_GRADE_RE = re.compile(
-    r"\b(?:that|this|it|which)(?:'s|’s|\s+(?:was|is|wasn't|isn't|was\s+not))\s+"
-    r"(?:\w+[\s-]+){0,4}?(?:blunder|inaccuracy|mistake|error)\b",
-    re.IGNORECASE,
-)
-#
-# The pawn forms are the fiddly half, and a first version got them wrong: it flagged
-# three real turns for "the e5 pawn", "your a2 pawn" and "the h7 pawn", because the
-# rank digit of a square sits immediately before the word. Hence the ``(?<![a-h])``
-# guard on every digit. The mirror image of the square-regex bug in _SQUARE_RE, and it
-# would have reported the change as failing when it had not.
-#
-# A bare whole number of pawns is NOT a price: "wins two pawns" or "wins 2 pawns" is a
-# material count, checkable on the board, and legitimate coaching. What is a price is a
-# FRACTIONAL pawn figure (which only ever came from dividing an eval drop by 100) or any
-# pawn figure attached to cost language, which is how the old templates phrased it.
-_COST_VERB = r"(?:lost|lose|loses|losing|costs?|costing|drops?|dropping|gave up|gives up|throws? away)"
-_PRICE_RE = re.compile(
-    r"[-+]?(?<![a-h])\d+(?:\.\d+)?\s*(?:centipawns?|cp)\b"
-    r"|(?<![a-h])\d+\.\d+\s*pawns?\b"
-    rf"|{_COST_VERB}\s+(?:about\s+|roughly\s+|around\s+|approximately\s+)?(?<![a-h])\d+(?:\.\d+)?\s*pawns?\b",
-    re.IGNORECASE,
-)
-
-
-def grades_or_prices_the_move(turn: ReviewTurn) -> bool:
-    """True if the coach pronounced a grade on the move or put a number on its cost.
-
-    The thing "stop asserting magnitude" is supposed to have stopped, measured on the
-    output rather than assumed from the prompt. Both halves were withheld from the
-    prompt — no eval, no drop, no engine classification, no NAG — but a 14B model can
-    still produce "that was a blunder" from its own pretraining, and this project's
-    own ledger records three separate occasions where an instruction alone did not
-    change what the model wrote (rows 2, 39, and the phase-gated lesson table in 20).
-
-    So this is the falsifier. If it sits at zero on the next report card, withholding
-    was sufficient. If it does not, the instruction is not carrying the weight and the
-    next lever is a gating check in :mod:`chess_coach.verify`, not more prompt text.
-    """
-    return bool(_GRADE_RE.search(turn.coach_feedback) or _PRICE_RE.search(turn.coach_feedback))
 
 
 def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
@@ -462,12 +263,8 @@ def aggregate_review(turns: list[ReviewTurn]) -> ReviewStats:
         latency_mean_s=(sum(latencies) / n) if n else 0.0,
         latency_p90_s=_percentile(latencies, 90),
         latency_max_s=(latencies[-1] if latencies else 0.0),
-        composed_fact_rate=(sum(1 for t in turns if voices_composed_fact(t)) / n) if n else 0.0,
-        unsourced_square_rate=(sum(1 for t in turns if names_unsourced_square(t)) / n) if n else 0.0,
-        recycled_phrase_rate=(sum(recycled_phrase_rates(turns)) / n) if n else 0.0,
         fidelity_by_phase={k: dict(v) for k, v in by_phase.items()},
         prompt_uci_leaks=sum(1 for t in turns if t.prompt and _UCI_TOKEN_RE.search(t.prompt)),
-        graded_or_priced=sum(1 for t in turns if grades_or_prices_the_move(t)),
         prompt_magnitude_leaks=sum(1 for t in turns if t.prompt and _PROMPT_MAGNITUDE_RE.search(t.prompt)),
     )
 
@@ -650,45 +447,17 @@ Return, in this order:
 def _fmt_stats(stats: ReviewStats) -> str:
     phases = ", ".join(f"{_PHASE_LABEL.get(k, k)}: {v}" for k, v in sorted(stats.phase_counts.items()))
     cls = ", ".join(f"{k}: {v}" for k, v in sorted(stats.classification_counts.items()))
-    fid = ", ".join(f"{k}: {v}" for k, v in sorted(stats.fidelity_totals.items())) or "none"
-    by_phase = (
-        "; ".join(
-            f"{_PHASE_LABEL.get(ph, ph)}: " + ", ".join(f"{k} {v}" for k, v in sorted(kinds.items()))
-            for ph, kinds in sorted(stats.fidelity_by_phase.items())
-        )
-        or "none"
-    )
+    # No figure about what the coach SAID (B-021, the owner's approval 2026-10-19). Six lines
+    # stood here, each computed by matching the coach's words: the checker's violation counts
+    # (total and by phase), composed-fact and unsourced-square rates, recycled phrasing, and grading or pricing. On
+    # v62 the first read "none" on every game while the claim reading found 5 false replies.
+    # The reviewer reads the transcript itself, as it already does for repeated lessons (B-005).
     return (
         f"Coached moves: {stats.n_turns}\n"
         f"Phase coverage: {phases or 'none'}\n"
         f"Move quality (engine): {cls or 'none'}\n"
-        f"Deterministic fidelity violations: {fid}\n"
-        f"Fidelity by phase: {by_phase}\n"
-        # Spell out which direction is good. Labelled neutrally, a reviewer read
-        # "names a square we did not supply: 0%" as the coach being blind to the
-        # position and made it the headline recommendation — when 0% is the design
-        # working as intended. A number handed to a reader without its sign is an
-        # invitation to misread it.
-        f"Turns voicing a board fact we composed for it: {stats.composed_fact_rate:.0%} "
-        f"(HIGHER IS BETTER — by design the engine/composer derives the facts and the "
-        f"coach's job is to voice them, so this is the architecture working)\n"
-        f"Turns naming a square we never supplied: {stats.unsourced_square_rate:.0%} "
-        f"(LOWER IS BETTER — the model has no way to verify a square we did not give "
-        f"it, so this is where fabrication appears; 0% is the target, not a weakness)\n"
-        f"Recycled phrasing: {stats.recycled_phrase_rate:.0%} of an average turn's "
-        f"five-word phrases already appeared in an earlier turn "
-        f"(LOWER IS BETTER — repeated wording)\n"
-        # No repeated-LESSON figure, on purpose (B-005). The one that stood here was wrong
-        # in three ways and told the reviewer not to count; the reviewer's own count was
-        # the better evidence on every v54 run.
         f"Empty feedback turns: {stats.empty_feedback}\n"
         f"Prompts still containing raw UCI (should be 0): {stats.prompt_uci_leaks}\n"
-        # Spelled out for the reviewer, because a reviewer once read a neutrally
-        # labelled rate backwards and built its headline recommendation on it.
-        f"Turns grading the move or pricing it (should be 0): {stats.graded_or_priced} "
-        f"(LOWER IS BETTER — the engine's eval magnitude is not in centipawns and is "
-        f"off by a signed +122cp where the coach speaks, so no grade or cost is "
-        f"supplied to the coach at all; anything here is the model's own invention)\n"
         f"Prompts still containing an eval magnitude (should be 0): {stats.prompt_magnitude_leaks}\n"
         f"Generation latency (s): mean {stats.latency_mean_s:.1f}, "
         f"p90 {stats.latency_p90_s:.1f}, max {stats.latency_max_s:.1f}"

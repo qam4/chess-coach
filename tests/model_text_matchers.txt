@@ -13,27 +13,6 @@ scripts/eval_coach_review.py	strings	('8/8/8/4k3/8/8/R7/4K3 w - - 0 1', 'a2a5')
 scripts/eval_coach_review.py	strings	('French', 'rnbqkbnr/pppp1ppp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 0 2')
 scripts/eval_coach_review.py	strings	('Italian', 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 5 4')
 scripts/eval_coach_review.py	strings	('Sicilian', 'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2')
-scripts/eval_coaching.py	strings	['bishop', 'castl']
-scripts/eval_coaching.py	strings	['bishop', 'f7', 'castl']
-scripts/eval_coaching.py	strings	['blunder', 'mistake']
-scripts/eval_coaching.py	strings	['blunder', 'mistake']
-scripts/eval_coaching.py	strings	['center', 'develop']
-scripts/eval_coaching.py	strings	['complex', 'unbalanced']
-scripts/eval_coaching.py	strings	['develop', 'castle', 'opening']
-scripts/eval_coaching.py	strings	['equal', 'bishop']
-scripts/eval_coaching.py	strings	['equal', 'develop']
-scripts/eval_coaching.py	strings	['good', 'inaccuracy', 'mistake', 'blunder']
-scripts/eval_coaching.py	strings	['good', 'inaccuracy', 'mistake']
-scripts/eval_coaching.py	strings	['inaccuracy', 'mistake', 'blunder']
-scripts/eval_coaching.py	strings	['inaccuracy', 'mistake', 'blunder']
-scripts/eval_coaching.py	strings	['inaccuracy', 'mistake', 'blunder']
-scripts/eval_coaching.py	strings	['inaccuracy', 'mistake']
-scripts/eval_coaching.py	strings	['inaccuracy', 'mistake']
-scripts/eval_coaching.py	strings	['opening', 'develop', 'castle']
-scripts/eval_coaching.py	strings	['pawn', 'king']
-scripts/eval_coaching.py	strings	['winning', 'blunder', 'castle']
-scripts/eval_coaching.py	strings	['winning', 'blunder']
-scripts/eval_coaching.py	strings	['winning', 'rook']
 scripts/eval_game_coaching.py	in	'--uci'
 scripts/eval_game_coaching.py	strings	['on', 'off']
 scripts/eval_game_coaching_pairwise.py	in	'--uci'
@@ -59,24 +38,9 @@ scripts/eval_hard_metrics.py	regex	'^\\s*HERE:\\s*(.+)$'
 scripts/eval_hard_metrics.py	regex	f'--- {re.escape(header)} ---\\s*\\n(.+?)(?=\\n---|\\n\\n|\\Z)'
 scripts/eval_hard_metrics.py	strings	('How this came about', 'Missed Tactics', 'Undefended AFTER your move', 'Already undefended before your move (your move did not cause this)', 'Threats AFTER your move', 'Threats', 'Hanging Pieces')
 scripts/eval_hard_metrics.py	strings	('attacked on the square', 'only thing guarding', 'check that was skipped', 'thinking that went wrong')
-scripts/eval_models.py	strings	['bishop', 'f7', 'castle', 'center']
-scripts/eval_models.py	strings	['bishop', 'pin', 'castle']
-scripts/eval_models.py	strings	['center', 'develop', 'e5', 'd5']
-scripts/eval_models.py	strings	['complex', 'unbalanced', 'poor coordination']
-scripts/eval_models.py	strings	['opening', 'develop', 'castle']
-scripts/eval_models.py	strings	['pawn', 'king', 'rook']
-scripts/eval_models.py	strings	['qwen3:1.7b', 'qwen3:4b', 'qwen3:8b']
 scripts/eval_run.py	in	'--uci'
 scripts/eval_run.py	strings	['on', 'off']
 scripts/eval_run.py	strings	{'hanging_piece', 'tactic', 'free', 'eval_direction'}
-scripts/probe_llm_chess.py	strings	('white', 'black')
-scripts/probe_llm_chess.py	strings	["Does it see Qxf7# (Scholar's mate)?", 'Or at least that Qh5 threatens f7?', 'Does it correctly read the board from the FEN?', "Does it invent threats that don't exist?"]
-scripts/probe_llm_chess.py	strings	['Does it explain the diagonal weakness (e8-h5)?', 'Does it mention that f6 blocks the knight?', 'Does it suggest Qh5+ as a punishing idea?', "Or does it just say 'bad move' without explaining why?"]
-scripts/probe_llm_chess.py	strings	['Does it identify the key tension (d4/d5 pawn structure)?', 'Does it suggest a plan (e4 break, minority attack, etc)?', 'Does it prioritize 1-2 ideas or dump everything?', 'Is the advice actionable or just descriptive?']
-scripts/probe_llm_chess.py	strings	['Does it notice the knight on e4 is undefended?', 'Does it notice the knight on e5 is in the center?', 'Does it suggest capturing or defending?', 'Does it correctly identify which pieces are where?']
-scripts/probe_llm_chess.py	strings	['Does it recognize this is a basic winning endgame?', 'Does it mention the technique (push king to edge)?', 'Does it avoid mentioning development, castling, openings?', 'Does it know the rook + king vs king technique?']
-scripts/probe_llm_chess.py	strings	['Does it suggest reasonable responses (e5, c5, e6, d5)?', 'Does it mention center control?', 'Does it give actionable advice vs generic fluff?', 'Does it hallucinate pieces or squares?']
-scripts/probe_llm_chess.py	strings	['quiet_opening', 'hanging_piece', 'after_blunder']
 scripts/profile_model.py	in	'--uci'
 src/chess_coach/cli.py	in	'--uci'
 src/chess_coach/cli.py	in	'--xboard'
@@ -84,18 +48,10 @@ src/chess_coach/cli.py	in	'~'
 src/chess_coach/cli.py	strings	('llm_prompt', 'llm_response')
 src/chess_coach/cli.py	strings	['beginner', 'intermediate', 'advanced']
 src/chess_coach/eval/__init__.py	strings	['AgreementReport', 'AggregatedModel', 'BenchmarkError', 'BenchmarkPosition', 'CapabilityProfile', 'ConfigRecommendation', 'ConfigSuggestion', 'DimensionResult', 'GroundTruthPoint', 'JudgeRubric', 'JudgeVerdict', 'MetricComparison', 'MetricStats', 'ModelSummary', 'MoveFeedbackError', 'MoveFeedbackScenario', 'ObjectiveResult', 'PairwiseSummary', 'ProfileThresholds', 'ResponseEval', 'ReviewStats', 'ReviewTurn', 'RunConfig', 'Scoreboard', 'VerdictParseError', 'aggregate_model', 'aggregate_review', 'aggregate_runs', 'aggregate_values', 'build_coach_review_prompt', 'build_judge_prompt', 'build_move_feedback_pairwise_prompt', 'compare_metric', 'compare_off_on', 'compute_agreement', 'default_move_feedback_path', 'evaluate_objective', 'judge_response', 'load_benchmark', 'load_move_feedback_scenarios', 'load_rubric', 'load_seed_ratings', 'pairwise_compare_move', 'parse_verdict', 'persist_results', 'recommend', 'render_aggregate', 'render_comparison', 'render_pairwise', 'render_profile', 'render_recommendation', 'run_move_feedback_pairwise', 'summarize_pairwise', 'summarize_skips']
-src/chess_coach/eval/coach_review.py	pattern-use	_GRADE_RE.search
-src/chess_coach/eval/coach_review.py	pattern-use	_PRICE_RE.search
 src/chess_coach/eval/coach_review.py	pattern-use	_PROMPT_MAGNITUDE_RE.search
-src/chess_coach/eval/coach_review.py	pattern-use	_SQUARE_RE.findall
-src/chess_coach/eval/coach_review.py	pattern-use	_SQUARE_RE.findall
 src/chess_coach/eval/coach_review.py	pattern-use	_UCI_TOKEN_RE.search
-src/chess_coach/eval/coach_review.py	regex	"\\b(?:that|this|it|which)(?:'s|’s|\\s+(?:was|is|wasn't|isn't|was\\s+not))\\s+(?:\\w+[\\s-]+){0,4}?(?:blunder|inaccuracy|mistake|error)\\b"
-src/chess_coach/eval/coach_review.py	regex	'(?<![a-h][1-8])[a-h][1-8]'
-src/chess_coach/eval/coach_review.py	regex	'[a-z0-9]+'
 src/chess_coach/eval/coach_review.py	regex	'\\b[a-h][1-8][a-h][1-8][qrbn]?\\b'
 src/chess_coach/eval/coach_review.py	regex	'centipawns?\\b|[-+]?\\d+\\s*cp\\b|\\bevaluation drop\\b|\\bclassification:|\\bannotation:|\\boverall evaluation\\b'
-src/chess_coach/eval/coach_review.py	regex	f'[-+]?(?<![a-h])\\d+(?:\\.\\d+)?\\s*(?:centipawns?|cp)\\b|(?<![a-h])\\d+\\.\\d+\\s*pawns?\\b|{_COST_VERB}\\s+(?:about\\s+|roughly\\s+|around\\s+|approximately\\s+)?(?<![a-h])\\d+(?:\\.\\d+)?\\s*pawns?\\b'
 src/chess_coach/eval/coach_review.py	strings	('v1', 'v2')
 src/chess_coach/eval/game_coaching.py	strings	('illegal_move', 'off_menu')
 src/chess_coach/eval/judge.py	in	'criterion'

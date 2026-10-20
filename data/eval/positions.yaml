@@ -14,7 +14,8 @@
 # coverage but not penalized if missed).
 #
 # Seeded from scripts/eval_coaching.py POSITION_TESTS and
-# scripts/probe_llm_chess.py PROBE_POSITIONS. Grow freely — the loader
+# scripts/probe_llm_chess.py PROBE_POSITIONS (both removed 2026-10-19, B-021;
+# in git history at f85f470). Grow freely — the loader
 # reads this file, no code change needed.
 
 version: 1

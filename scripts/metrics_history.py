@@ -77,8 +77,7 @@ COLUMNS = (
     "spoke",
     "spoke_pct_of_plies",
     "read",
-    "true_pct",
-    "false_replies",
+    "found_false_pct",
     "checker_passed_pct",
     "gate_false_accept",
     "gate_false_reject",
@@ -173,14 +172,17 @@ def _pct(pair: list[int] | None) -> str:
 def _reading_columns(path: Path) -> dict[str, Any]:
     """The columns that come from the judge's reading, blank when the run has none.
 
-    Shares are of the replies the student received that the reader saw (`read`). `true_pct` is
-    the share with no board claim the board contradicts. The gate's two rates are kept as
-    ``hits/of`` so the small denominators stay visible: at v62 they were 7/16 and 1/66.
+    Shares are of the replies the student received that the reader saw (`read`).
+    `found_false_pct` is the share with a board claim the board contradicts, and it is a MINIMUM:
+    the reading can prove a reply false, never prove one true, because nothing shows the reader
+    wrote down every claim. At v62 seed 23 ply 63 all six readings missed two false sentences
+    (B-021, ledger row 175). So there is no "% true", and no raw count either, since replies per
+    game ran 8 to 20 at v62 (the owner, 2026-10-19). The gate's two rates are kept as ``hits/of``
+    so the small denominators stay visible: at v62 they were 7/16 and 1/66.
     """
     blank = {
         "read": "",
-        "true_pct": "",
-        "false_replies": "",
+        "found_false_pct": "",
         "gate_false_accept": "",
         "gate_false_reject": "",
         "reason_reached_pct": "",
@@ -200,8 +202,7 @@ def _reading_columns(path: Path) -> dict[str, Any]:
     reject = n.get("gate_false_reject") or [0, 0]
     return {
         "read": read,
-        "true_pct": _pct([read - false, read]),
-        "false_replies": false,
+        "found_false_pct": _pct([false, read]),
         "gate_false_accept": f"{accept[0]}/{accept[1]}",
         "gate_false_reject": f"{reject[0]}/{reject[1]}",
         "reason_reached_pct": _pct(n.get("cause")),
@@ -326,7 +327,7 @@ def render_legend() -> str:
 #: The four questions about what the coach SAID come from the judge's reading (B-021): runs
 #: before v62 have none, so those panels start at v62 rather than reading as a flat history.
 _PANELS = (
-    ("true_pct", "Is everything it says true?", "% of replies, judge's reading", 100.0, "up"),
+    ("found_false_pct", "Found saying something false (at least)", "% of replies, judge's reading", 25.0, "down"),
     ("cause_given_pct", "Did we compose a reason WHY?", "% of spoken turns", 100.0, "up"),
     ("reason_reached_pct", "Did that reason reach the student?", "% of composed, judge's reading", 100.0, "up"),
     ("lesson_conc_pct", "Same lesson over and over?", "% on the top lesson", 40.0, "down"),
@@ -342,8 +343,11 @@ _PANELS = (
 #: readable without reading this file.
 LEGEND = (
     ("read", "Replies the student received that the judge read (blank: no reading for this run)"),
-    ("true_pct", "Is everything it says true? (% of read replies with no board claim the board contradicts)"),
-    ("false_replies", "How many read replies contained a false board claim?"),
+    (
+        "found_false_pct",
+        "Found saying something false: % of read replies with a board claim the board contradicts. "
+        "A MINIMUM: the reading can miss a false sentence, so the real share can only be higher",
+    ),
     (
         "checker_passed_pct",
         "What the live checker said about what shipped. NOT a truth measure: it passes what it passed",
@@ -618,7 +622,7 @@ _TABLE_COLS = (
     ("run", "run"),
     ("model", "model"),
     ("spoke", "spoke"),
-    ("true_pct", "true%"),
+    ("found_false_pct", "found false% (min)"),
     ("checker_passed_pct", "checker passed%"),
     ("gate_false_accept", "gate passed false"),
     ("gate_false_reject", "gate blocked true"),

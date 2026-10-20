@@ -51,4 +51,5 @@ Tested 6 prompt styles (A-F). Only E and F matter:
 - Comparison report: `output/llm_probe/probe_comparison.md`
 - Per-model reports: `output/llm_probe/probe_*.md`
 - Raw JSON: `output/llm_probe/probe_raw.json`
-- Probe script: `scripts/probe_llm_chess.py`
+- Probe script: `scripts/probe_llm_chess.py`, removed 2026-10-19 (B-021); recover it with
+  `git show f85f470:scripts/probe_llm_chess.py`

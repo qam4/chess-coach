@@ -39,7 +39,8 @@ ROOTS = ("src", "scripts")
 #: receiving it from a provider or from the Coach, the fidelity gate's input, the coach's reply as
 #: stored in a transcript, or a judge's reply. Deliberately wide. A file swept in that only matches
 #: strings of its own costs one question to the owner; a file left out is unguarded. The first
-#: version missed `eval_coaching.py` and `eval_models.py`, which keyword-match the model's reply.
+#: version missed `eval_coaching.py` and `eval_models.py`, which keyword-matched the model's reply
+#: (both removed in B-021, 2026-10-19).
 MARKERS = (
     "def generate(",
     ".generate(",
@@ -147,8 +148,7 @@ def test_the_files_the_audit_found_are_in_scope() -> None:
         "src/chess_coach/eval/objective.py",
         "src/chess_coach/eval/judge.py",
         "scripts/eval_hard_metrics.py",
-        "scripts/eval_coaching.py",
-        "scripts/eval_models.py",
+        "scripts/eval_run.py",
     ):
         assert path in scope, f"{path} handles model text and is not being guarded"
 

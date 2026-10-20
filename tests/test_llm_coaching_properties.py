@@ -15,8 +15,6 @@ Tests the correctness properties defined in the design document:
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import chess
@@ -38,6 +36,10 @@ from chess_coach.coaching_templates import (
     CoachingSection,
     generate_position_coaching_structured,
 )
+
+# The hallucination detector, from where it lives: it used to come through
+# `scripts/probe_llm_chess.py`, which re-exported it and was removed in B-021.
+from chess_coach.eval.objective import check_piece_hallucinations
 from chess_coach.models import (
     ComparisonReport,
     EvalBreakdown,
@@ -56,10 +58,6 @@ from chess_coach.prompts import (
     build_rich_coaching_prompt,
     build_rich_move_evaluation_prompt,
 )
-
-# Add scripts dir to path for hallucination detector
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from probe_llm_chess import check_piece_hallucinations
 
 # ---------------------------------------------------------------------------
 # Hypothesis strategies for data models

@@ -191,9 +191,18 @@ The harness is covered by property-based and unit tests plus
 mock-judge integration tests, so the whole pipeline is verifiable
 without an engine or live tokens.
 
-## Superseded scripts
+## Removed scripts
 
-`scripts/eval_coaching.py` and `scripts/eval_models.py` are the older
-keyword-matching evaluators. They're kept for reference but superseded
-by this harness, which checks correctness against the engine instead
-of grepping for vocabulary.
+`scripts/eval_coaching.py` and `scripts/eval_models.py`, the older
+keyword-matching evaluators, and `scripts/probe_llm_chess.py`, the April
+model and prompt-style probe, were removed on 2026-10-19 (B-021): they
+scored the model's reply by matching its words, and the report card
+(`scripts/eval_coach_review.py`) with the judge's claim reading
+(`scripts/eval_coach_rejudge.py --claims`) measures the same things
+better. Recover any of them with `git show f85f470:scripts/<name>`.
+
+This harness (`eval_run.py`, `profile_model.py`, `eval/objective.py`)
+stays for now: it is the only tool that has scored the position-analysis
+prompt behind `chess-coach explain` and the play UI's analysis panel.
+Its factual score reuses the live gate's word lists, so retire it once
+B-022 gives those texts a measure.
